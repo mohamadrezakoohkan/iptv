@@ -1,5 +1,5 @@
 ---
-status: draft
+status: current
 ---
 
 # Project
@@ -10,22 +10,42 @@ status: draft
 
 ## Overview
 
-_Not yet defined. The first build prompt's SPEC phase defines the product here
-and decides the stack via ADRs._
+**IPTV Broadcast Console** — a single-page web application that connects to
+an Xtream-compatible IPTV portal and lets the user browse live channels by
+category, search by name, mark favourites, and stream the selected channel via
+HLS (hls.js) directly in the browser.
+
+The product ships as a Node.js + Express server that serves the static client
+files and proxies Xtream API calls to avoid browser CORS restrictions. The
+client is pure vanilla JS (no framework), styled with CSS custom properties,
+and uses a flat state machine (CONVENTIONS.md §6) instead of reactive
+component hooks.
+
+A built-in **demo mode** (enter "demo" as portal URL) loads a curated playlist
+of publicly accessible HLS test streams, so the app works out of the box
+without real credentials.
 
 ## Stack
 
-_Not yet decided (requires an ADR)._
+| Layer   | Technology                                                  |
+|---------|-------------------------------------------------------------|
+| Runtime | Node.js >= 18 (ESM forbidden — use CommonJS `require`)      |
+| Server  | Express 4                                                   |
+| Client  | Vanilla JS (ES2020, no transpiler, no bundler, no framework)|
+| Player  | hls.js 1.5 (CDN) + native HLS fallback (Safari)            |
+| CSS     | Plain CSS, custom properties, no preprocessor               |
+| Fonts   | Space Grotesk + IBM Plex Mono (Google Fonts CDN)            |
+| Testing | Vitest (unit) + Playwright (UI/e2e)                         |
 
 ## Canonical commands
 
-| Purpose | Command |
-|---|---|
-| Setup | _not yet decided_ |
-| Build / run | _not yet decided_ |
-| Unit test suite | _not yet decided_ |
-| UI test suite | _not yet decided_ |
+| Purpose        | Command                                    |
+|----------------|--------------------------------------------|
+| Setup          | `npm install`                              |
+| Build / run    | `node server/srv.js`                       |
+| Unit test suite| `npx vitest run`                           |
+| UI test suite  | `npx playwright test`                      |
 
 ## Feature specs
 
-_None yet. One `specs/<feature-slug>.md` per feature area._
+- `specs/iptv-player.md` — full IPTV player broadcast console feature spec
