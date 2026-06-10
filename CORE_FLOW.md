@@ -40,12 +40,17 @@ agents, plus one harness maintainer that runs outside the pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
-| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections | write specs, ADRs, code, tests, or product docs itself |
-| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/` | write source code or tests |
-| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done` |
-| **validate-agent** | 3 — VALIDATE | task status + attempt count only | fix code or tests (it reports, never repairs) |
-| **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md` | change product code, tests, specs, or ADRs |
-| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, the three templates, `.claude/settings.json` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`) or run pipeline phases |
+| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5) | write specs, ADRs, code, tests, or product docs itself |
+| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
+| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
+| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, and PR description update (§3) | fix code or tests (it reports, never repairs) |
+| **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
+| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, the three templates, `.claude/settings.json` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
+
+Git is part of the contract: **no actor — orchestrator included — ever commits
+to `main`, pushes to `main`, force-pushes, or merges a pull request.** All run
+work lands on the run's `ai/` branch and reaches `main` only through a PR
+merged by the human (§3, Git & pull-request contract).
 
 The subagents are defined in `.claude/agents/<name>.md` and are spawned by the
 orchestrator via the Agent tool with `subagent_type` set to the agent name.
@@ -136,6 +141,67 @@ the single exception to "implement-agent never edits `adrs/`": it may update
 `governs:` and set `status: deleted`, never decision content. `review-agent`
 audits traceability every run (§4.2 Phase 4).
 
+### Git & pull-request contract
+
+`main` is protected. The harness never commits to `main`, never pushes to
+`main`, never force-pushes anywhere, and never merges or closes a pull
+request — `main` advances **only** when the human merges a run's PR. Deny
+rules in `.claude/settings.json` block the common command forms as a
+backstop, but this contract — not the patterns — is the canonical
+protection.
+
+One build run = one branch = one pull request:
+
+1. **Branch.** At the start of Phase 1, `spec-agent` creates the run branch
+   from the current HEAD: `ai/e<E>-<slug>` (the evolution number plus 2–5
+   kebab-case words condensing the prompt). No build work ever happens on
+   `main`. If `git` or an authenticated `gh` CLI is unavailable, that is a
+   `PHASE-FAILURE` — the harness does not build outside a run branch.
+2. **First commit, then PR.** `spec-agent` commits the Phase 1 artifacts as
+   the run's first commit (`E<N> spec: <prompt, condensed>`), pushes the
+   branch (`git push -u origin <run-branch>`), and immediately opens the run
+   PR against `main` (`gh pr create`) with the description structure below.
+3. **One commit per concluded task.** On PASS, `validate-agent` commits all
+   working-tree changes of the task (`TASK-NNNN: <title>`), pushes, and
+   updates the PR description. On terminal failure, the **orchestrator**
+   commits the working-tree state together with the failure record
+   (`FAIL-NNNN: TASK-NNNN failed terminally`) and pushes — failures are
+   visible in the PR, never hidden. `implement-agent` never commits; review
+   remediation rounds follow the same per-task mechanics.
+4. **Final commit.** `review-agent` commits its CHANGELOG/README updates
+   (`E<N>: review`), pushes, and finalizes the PR description. The run ends
+   with the PR open; merging — or closing — it is the human's decision.
+
+Pushes are always explicit — `git push origin <run-branch>`, never a bare
+`git push` — and run-branch history is append-only, like everything else in
+this harness: no force pushes, no rebases, no amending pushed commits.
+
+**PR description** — created by `spec-agent`, task lines updated by
+`validate-agent` as tasks conclude, statuses and outcome finalized by
+`review-agent`:
+
+```
+## Evolution #E — <prompt, one line>
+
+### ADRs
+- ADR-NNNN — <title>
+
+### Tasks
+- [ ] TASK-NNNN — <title> — pending
+
+### Outcome
+_Run in progress._
+```
+
+A task's line becomes `- [x] … — done` when validated, or `- [ ] … — failed
+(FAIL-NNNN)` / `- [ ] … — blocked` at finalization. The final Outcome states
+shipped / partial / failed, the rules earned, and `Recorded as CHANGELOG #E`.
+
+The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
+changes in the working tree, and the human decides when harness changes land.
+(Rule-ledger appends during a build run are different: the orchestrator's
+terminal-failure commit carries them, as part of the run's record.)
+
 ## 4. The pipeline
 
 ### 4.1 Routing
@@ -162,22 +228,25 @@ intent is ambiguous, ask the human rather than guess.
         │ E = next evolution number;  Rule Pack = Learned Rules from CLAUDE.md │
         └────────────────────────────────────────────────────────────────────┘
                                         │
-Phase 1  SPEC        spec-agent: prompt → specs + ADRs + tasks (manifest)
+Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch → specs + ADRs + tasks
+                                  → first commit + push → open PR (manifest)
                                         │
 Phase 2+3 per task   ┌─► implement-agent (task, rule pack, last failure report)
 (in manifest order)  │            │
                      │   validate-agent: run FULL unit + UI suites
                      │            │
-                     │       PASS ─► task done, next task
+                     │       PASS ─► task done → commit + push + PR update
                      │       FAIL ─► attempt < 4 ? ──yes──┐
                      │                                    │ (loop back with report)
                      └────────────────────────────────────┘
                               attempt = 4 (1 initial + 3 retries) and still FAIL
                                         │
-                          FAILURE PROTOCOL (§5): FAIL record + rule,
-                          task → failed, dependents → blocked, continue others
+                          FAILURE PROTOCOL (§5): FAIL record + rule
+                          + failure commit, task → failed,
+                          dependents → blocked, continue others
                                         │
 Phase 4  REVIEW      review-agent: coherence check → CHANGELOG #E → README sync
+                                   → final commit + push → PR finalized
                                         │
                      Run Report to the human (§6)
 ```
@@ -189,15 +258,20 @@ it MUST be included in the prompt of every agent spawned during the run.
 **Phase 1 — SPEC.** Spawn `spec-agent` with: the user prompt verbatim, `E`, and
 the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `specs/`, and
 everything in `adrs/` to understand the project, then:
-1. aligns the prompt with the existing project (or defines the project, on the
+1. creates the run branch `ai/e<E>-<slug>` from the current HEAD and checks
+   it out (§3 Git contract) — build work never happens on `main`,
+2. aligns the prompt with the existing project (or defines the project, on the
    first run),
-2. creates or updates spec files in `specs/`,
-3. writes one ADR per significant decision the prompt forces, seeding its
+3. creates or updates spec files in `specs/`,
+4. writes one ADR per significant decision the prompt forces, seeding its
    `governs:` list with the code paths its tasks will create or shape,
-4. derives an ordered set of tasks for each ADR — each task small enough to
+5. derives an ordered set of tasks for each ADR — each task small enough to
    implement and validate in one agent run, with acceptance criteria and
    explicit test requirements (unit; UI where user-facing),
-5. returns a JSON manifest of ADRs and tasks.
+6. commits the Phase 1 artifacts as the run's first commit, pushes the
+   branch, and opens the run PR against `main` (§3 Git contract),
+7. returns a JSON manifest of ADRs and tasks, plus the run branch name and
+   the PR URL.
 
 The orchestrator verifies every file in the manifest exists before proceeding.
 If `spec-agent` reports `PHASE-FAILURE` (e.g. the prompt contradicts accepted
@@ -218,11 +292,14 @@ For each task:
 2. Spawn `validate-agent` with the task ID. It reads the canonical commands
    from `specs/project.md` and executes the **full** unit suite and the
    **full** UI suite (full, not task-scoped — this is the regression gate).
-   It returns PASS or FAIL with the failing tests and a suspected cause.
+   It returns PASS or FAIL with the failing tests and a suspected cause. On
+   PASS it also makes the task's commit, pushes the run branch, and updates
+   the PR description (§3 Git contract); on FAIL nothing is committed — the
+   retry reworks the tree in place.
 3. On FAIL: increment `attempts`. If `attempts < 4`, loop to step 1. After the
-   3rd failed retry (`attempts = 4`), run the failure protocol (§5), mark the
-   task `failed`, mark tasks that depend on it `blocked`, and continue with the
-   remaining independent tasks.
+   3rd failed retry (`attempts = 4`), run the failure protocol (§5, including
+   the failure commit), mark the task `failed`, mark tasks that depend on it
+   `blocked`, and continue with the remaining independent tasks.
 
 **Phase 4 — REVIEW.** Always runs, even if some tasks failed. Spawn
 `review-agent` with `E`, the manifest, per-task outcomes, and the Rule Pack.
@@ -231,7 +308,10 @@ tasks have real code and real passing tests, ADR ↔ code traceability holds
 (§3), nothing in the manifest was silently skipped — then:
 1. appends Evolution entry `#E` to `CHANGELOG.md` (prompt condensed, outcome,
    artifacts, failures if any),
-2. updates `README.md` if the product's identity, setup, or commands changed.
+2. updates `README.md` if the product's identity, setup, or commands changed,
+3. commits its updates as the run's final commit, pushes the run branch, and
+   finalizes the PR description — final task statuses, outcome, rules earned,
+   CHANGELOG reference (§3 Git contract).
 
 If review finds discrepancies that require code changes, the orchestrator
 dispatches **one remediation round** through the standard implement→validate
@@ -262,6 +342,10 @@ definitions → templates), because drift between layers is how a harness rots.
 Changes to agent definitions or settings take effect at the next session
 start; the agent's report says so whenever that applies.
 
+The harness path never touches git history: `coreflow-agent` commits nothing
+and pushes nothing. Its changes stay in the working tree until the human
+commits them — committing harness changes is always the human's decision.
+
 ## 5. Failure → Rule protocol
 
 A **terminal failure** is any phase ending beyond its retry budget, or any
@@ -276,7 +360,14 @@ orchestrator (never the agents) then:
 2. Appends the rule to the Learned Rules section of `CLAUDE.md`, between the
    `LEARNED-RULES` markers, as:
    `- **R-NNNN** (FAIL-NNNN, E<N>): <rule text>`
-3. Reports the new rule in the Run Report.
+3. Commits the working-tree state together with the failure record and the
+   rule append to the run branch and pushes
+   (`FAIL-NNNN: TASK-NNNN failed terminally`, §3 Git contract) — the failure
+   is visible in the PR, never hidden. If no run branch exists yet (Phase 1
+   failed before branching, or the failure is on the harness path), the
+   record stays uncommitted and the Run Report says so. Never commit to
+   `main`.
+4. Reports the new rule in the Run Report.
 
 Because the Rule Pack is injected into every agent prompt of every future run,
 an earned rule is a permanent behavior change — the harness must never make
@@ -290,10 +381,10 @@ the root cause generalizes (e.g. a toolchain quirk, not a one-off typo);
 ## 6. Run Report
 
 After Phase 4 the orchestrator reports to the human, in this order: evolution
-number and one-line outcome; ADRs created; tasks done / failed / blocked;
-rules earned (verbatim); CHANGELOG/README updates; anything requiring a human
-decision. The report is conversation output, not a file — the files already
-hold the durable record.
+number and one-line outcome; the run branch and PR URL; ADRs created; tasks
+done / failed / blocked; rules earned (verbatim); CHANGELOG/README updates;
+anything requiring a human decision — merging the PR always is. The report is
+conversation output, not a file — the files already hold the durable record.
 
 ## 7. Invariants
 
@@ -312,3 +403,6 @@ Report:
 7. ADR ↔ code traceability holds (§3): every non-deleted ADR's governed paths
    exist and reference it, and no ADR whose governed code is gone is still
    marked `accepted`.
+8. The harness wrote nothing to `main` (§3 Git contract): every build-run
+   commit sits on its `ai/e<E>-<slug>` branch, no actor force-pushed or
+   merged a PR, and `main` has advanced only through human-merged PRs.

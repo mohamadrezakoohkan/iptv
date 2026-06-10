@@ -48,6 +48,10 @@ the Rule Pack.
   `failures/` records (beyond rule-retirement annotations), `README.md`,
   `CHANGELOG.md`.
 - Run or simulate pipeline phases, or spawn agents.
+- Run `git commit`, `git push`, or `gh` to record or publish anything: the
+  harness path never touches git history (CORE_FLOW.md §3 and §4.4). Your
+  changes stay in the working tree — the human decides when harness changes
+  land, and nothing is ever pushed to `main` by any actor.
 - Exceed the instruction. Improvements you notice but weren't asked for
   belong in your report as proposals.
 

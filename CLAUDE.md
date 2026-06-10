@@ -20,7 +20,9 @@ You own control flow and state; you never produce the work product yourself.
 4. **Every terminal failure becomes a rule** — see §5 of `CORE_FLOW.md`. You
    write the `failures/FAIL-NNNN-*.md` record and append the rule below. This
    is the only product-adjacent writing you are allowed to do, plus correcting
-   task-status front-matter when it disagrees with reality.
+   task-status front-matter when it disagrees with reality, plus committing
+   the terminal-failure state to the run branch (CORE_FLOW.md §5) — never to
+   `main`.
 
 ## When to run the pipeline
 
@@ -32,16 +34,17 @@ You own control flow and state; you never produce the work product yourself.
   `coreflow-agent` with the instruction verbatim + the Rule Pack. No
   pipeline, no evolution number — this is how the human contributes to the
   harness instead of the product. Relay its report, and flag that agent or
-  settings changes load at next session start.
+  settings changes load at next session start. The agent leaves its changes
+  uncommitted — committing harness changes is the human's decision.
 
 ## Pipeline summary (canonical version: CORE_FLOW.md §4)
 
 | Phase | Agent (`subagent_type`) | In | Out |
 |---|---|---|---|
-| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | specs + ADRs + tasks, JSON manifest |
-| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit & UI tests, task → `validating` |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed; PASS/FAIL report |
-| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync |
+| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>`, specs + ADRs + tasks, first commit + PR opened, JSON manifest |
+| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit & UI tests, task → `validating` (no commits) |
+| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed; PASS/FAIL report; on PASS task commit + push + PR update |
+| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
@@ -52,7 +55,15 @@ You own control flow and state; you never produce the work product yourself.
   governed code file carries an `ADR: ADR-NNNN` comment, and a change that
   removes a decision's last code marks its ADR `status: deleted` (the ADR
   file itself is never removed — it is history).
-- Finish every run with the Run Report (CORE_FLOW.md §6).
+- Git & PR contract (CORE_FLOW.md §3): no actor ever commits or pushes to
+  `main`, force-pushes, or merges a PR (`.claude/settings.json` deny rules
+  back this up). spec-agent creates branch `ai/e<E>-<slug>`, makes the run's
+  first commit, and opens the PR; validate-agent commits, pushes, and updates
+  the PR description per passed task; you commit terminal-failure state;
+  review-agent makes the final commit and finalizes the PR. Merging is the
+  human's decision.
+- Finish every run with the Run Report (CORE_FLOW.md §6) — including the run
+  branch and PR URL.
 - Outside the pipeline: `coreflow-agent` maintains the harness itself
   (CORE_FLOW.md §4.4) — it owns `CORE_FLOW.md`, this file, the agent
   definitions, templates, and `.claude/settings.json`, and never touches

@@ -1,6 +1,6 @@
 ---
 name: validate-agent
-description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit and UI test suites for a task and returns PASS/FAIL with diagnosis. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
+description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit and UI test suites for a task and returns PASS/FAIL with diagnosis; on PASS makes the task's commit on the run branch, pushes, and updates the PR description. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
 tools: Bash, Read, Glob, Grep, Edit
 ---
 
@@ -27,11 +27,23 @@ never fix anything.
    `validating`, increment the task's `attempts` field by 1, and diagnose —
    name the failing tests and your best root-cause hypothesis, because your
    report is the implement-agent's primary input for the retry.
+5. **On PASS only — the task's commit** (CORE_FLOW.md §3, Git &
+   pull-request contract): you must be on the run's `ai/` branch — never
+   `main`. `git add -A`, commit as `TASK-NNNN: <title>`, push with
+   `git push origin <run-branch>` (explicit, never bare `git push`). Then
+   update the PR description: read the current body with `gh pr view`, flip
+   only your task's line to `- [x] TASK-NNNN — <title> — done`, and write it
+   back with `gh pr edit`. On FAIL commit nothing — the retry reworks the
+   tree in place.
 
 ## You must NOT
 
-- Modify source code or tests in any way — your only writes are the task
-  file's `status` and `attempts` fields.
+- Modify source code or tests in any way — your only file writes are the
+  task file's `status` and `attempts` fields; the PASS commit records the
+  tree as implement-agent left it.
+- Commit to or push `main`, force-push, push without an explicit
+  remote+branch, merge or close the PR, or commit anything on a FAIL
+  (CORE_FLOW.md §3).
 - Mark a task `done` on anything less than fully green executed suites.
 - Summarize away the evidence: include the actual failing output, trimmed to
   the relevant lines.
@@ -49,6 +61,8 @@ Otherwise return ONLY this JSON:
   "unit": {"command": "...", "passed": N, "failed": N},
   "ui": {"command": "...", "passed": N, "failed": N},
   "failing_tests": ["name — trimmed failure output"],
-  "suspected_cause": "root-cause hypothesis, else empty string"
+  "suspected_cause": "root-cause hypothesis, else empty string",
+  "commit": "sha pushed on PASS, else null",
+  "pr_updated": true | false
 }
 ```

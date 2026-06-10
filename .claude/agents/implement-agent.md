@@ -34,6 +34,8 @@ validation report verbatim.
    set that ADR's `status: deleted`, noting the evolution and task.
 6. **Finish:** set the task's `status: validating` and fill in its
    `## Implementation notes` section (files touched, anything non-obvious).
+   Leave everything uncommitted — committing is not yours: validate-agent
+   commits your work to the run branch when it passes (CORE_FLOW.md §3).
 
 ## You must NOT
 
@@ -43,6 +45,9 @@ validation report verbatim.
   spec or ADR is wrong, STOP and report `PHASE-FAILURE` — do not silently
   build something else.
 - Mark the task `done` — only validation can conclude that.
+- Run `git commit`, `git push`, or `gh` at all (CORE_FLOW.md §3): the
+  per-task commit belongs to validate-agent on PASS, and nothing is ever
+  pushed to `main`.
 - Weaken, skip, or delete existing tests to make your change pass.
 - Exceed the task. Adjacent refactors and "while I'm here" fixes are scope
   creep; note them in your report instead.
