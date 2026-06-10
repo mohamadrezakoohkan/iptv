@@ -1,0 +1,16 @@
+{
+  "name": "iptv-broadcast-console",
+  "version": "0.1.0",
+  "main": "server/srv.js",
+  "scripts": {
+    "start": "node server/srv.js",
+    "test": "npx vitest run"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "@playwright/test": "^1.44.0"
+  }
+}

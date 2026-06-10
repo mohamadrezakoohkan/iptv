@@ -2,8 +2,8 @@
 id: TASK-0001
 adr: ADR-0002
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -47,3 +47,21 @@ yet — suites can be empty at this point).
   localhost URLs are rejected, missing `url` param returns 400, non-http
   scheme returns 400.
 - **UI:** n/a — server scaffolding only, no user-facing rendering at this task.
+
+## Implementation notes
+
+Files created:
+- `package.json` — declares express, vitest, @playwright/test; scripts.start and scripts.test present.
+- `server/cfg.js` — CFG object with port, timeout, maxChs, maxPrgs, cacheMs, plUrl, epgUrl; reads from process.env.
+- `server/rtr.js` — Express router; GET /api/xtream proxy with isValidUrl() validation; uses native http/https modules; exposes _isValidUrl for unit testing.
+- `server/srv.js` — Express app; mounts rtr; serves client/ static + index.html catch-all at /; exports { app, ST }.
+- `index.html` — placeholder HTML at project root.
+- `client/` — directory created (empty; static assets land in later tasks).
+- `vitest.config.js` — points test runner at tests/unit/.
+- `playwright.config.js` — points Playwright at tests/ui/.
+- `tests/unit/rtr.test.js` — 10 unit tests covering isValidUrl: valid http, valid https, undefined, empty string, ftp scheme, file scheme, localhost, 127.0.0.1, ::1 (IPv6), non-URL string.
+- `tests/ui/placeholder.test.js` — single always-passing Playwright test to keep suite non-empty.
+
+Non-obvious:
+- `new URL('http://[::1]/api').hostname` returns `[::1]` (with brackets) in Node.js, not `::1`. BLOCKED_HOSTS includes both forms.
+- The placeholder UI test exists because `npx playwright test` exits 1 with "No tests found"; a trivially-passing test keeps the command exit 0 per the acceptance criteria.
