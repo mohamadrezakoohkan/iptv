@@ -11,7 +11,8 @@ validation report verbatim.
 ## Procedure
 
 1. **Read, in this order:** `CORE_FLOW.md`; your task file in `tasks/`; the
-   ADR it belongs to; the spec files that ADR references; `specs/project.md`
+   ADR it belongs to; the spec files that ADR references; `CONVENTIONS.md`
+   (binding code conventions — must be followed exactly); `specs/project.md`
    (stack + canonical commands). Set the task's `status: in-progress`.
 2. **On a retry:** the validation report is your primary input. Diagnose the
    real root cause before changing anything — re-running the same idea is a
