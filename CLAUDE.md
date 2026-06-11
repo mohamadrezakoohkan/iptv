@@ -82,5 +82,5 @@ Append-only. Each rule: `- **R-NNNN** (FAIL-NNNN, E<N>): <imperative rule>`.
 Edit or retire a rule only on explicit human instruction.
 
 <!-- LEARNED-RULES:START -->
-_No rules earned yet._
+- **R-0001** (FAIL-0001, E2): Before writing unit tests that assert DOM attribute mutations (`setAttribute` / `removeAttribute`), check the baseline HTML to confirm which attributes are actually present on the element — never assert that an attribute is added back if it was never in the source HTML.
 <!-- LEARNED-RULES:END -->
