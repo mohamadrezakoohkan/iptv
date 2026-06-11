@@ -1,0 +1,276 @@
+---
+status: current
+---
+
+# IPTV Player Broadcast Console
+
+## Purpose
+
+A dark-themed, single-page IPTV channel browser and live-stream player.
+The user can connect via an **Xtream-compatible portal** (URL + username +
+password) or via a **plain M3U/M3U8 playlist URL** (URL only). After
+connecting the user browses channels by category, searches by name, marks
+favourites, and plays a selected channel via HLS directly in the browser.
+Credentials and last-selected channel and favourites persist across sessions
+via localStorage.
+
+---
+
+## 1. Layout
+
+```
+┌──────────────────────────────────────────────────────┐
+│ Header bar (56px)                                    │
+├──────────────┬───────────────────────────────────────┤
+│ Sidebar      │ Content area                          │
+│ (240px)      │   content-head bar                    │
+│              │   player card (16:9, max-h 35vh)      │
+│              │   channel grid                        │
+├──────────────┴───────────────────────────────────────┤
+│ Footer                                               │
+└──────────────────────────────────────────────────────┘
+```
+
+- Root container: `height: 100vh; display: flex; flex-direction: column`.
+- `app-main` is a CSS grid: sidebar (240px fixed) | content (1fr).
+- Mobile breakpoint `< 760px`: sidebar collapses to a horizontal scroll strip;
+  brand/search are hidden; player max-height becomes 40vw.
+
+---
+
+## 2. Design tokens
+
+All colours are CSS custom properties on `:root`:
+
+| Token    | Value     | Usage                        |
+|----------|-----------|------------------------------|
+| `--bg`   | `#0E1216` | page background              |
+| `--sur`  | `#161C22` | sidebar, header surfaces     |
+| `--sur2` | `#1D252D` | cards, inputs                |
+| `--ln`   | `#28323C` | borders, dividers            |
+| `--tx`   | `#E9EEF3` | primary text                 |
+| `--dim`  | `#8C99A6` | secondary / dimmed text      |
+| `--acc`  | `#F2A33C` | accent (amber) — CTA, active |
+| `--live` | `#E5484D` | live indicator red dot       |
+
+Fonts: `Space Grotesk` for UI text; `IBM Plex Mono` for channel numbers and
+mono labels.
+
+---
+
+## 3. Header bar
+
+- Fixed 56px height, background `--sur`, bottom border `--ln`.
+- Left: red live dot + "LIVE" label.
+- Center: optional (empty on first load).
+- Right: reserved for future controls.
+
+---
+
+## 4. Sidebar
+
+- 240px wide, full height, background `--sur`, right border `--ln`.
+- **Brand row**: amber dot + "IPTV" label in Space Grotesk bold.
+- **Search input**: icon + placeholder "Search channels…". Filters channel
+  grid in real time using the `srch` module.
+- **Category list**: scrollable list of buttons, one per category returned by
+  the portal (Xtream or derived from M3U `group-title` values) plus a fixed
+  "All Channels" entry and a "Favourites" entry. Each button shows the
+  category name and a channel-count badge.
+- Active category button has `--acc` left border + text colour.
+- Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
+  brand and search input are hidden.
+
+---
+
+## 5. Content area
+
+### 5a. Content-head bar
+
+- Slim bar (40px) above the player.
+- Left: "ON AIR" badge (red, visible only when a channel is playing), channel
+  name, category chip.
+- Right: format chips — "HLS" (active by default) and "TS" (disabled; planned
+  mpegts.js integration). Clicking HLS/TS chip reloads the player with the
+  appropriate stream URL.
+
+### 5b. Player card
+
+- Aspect ratio 16:9, max-height 35vh (40vw on mobile).
+- Background `--sur2`, border `--ln`, rounded corners.
+- **Idle state** ("NO SIGNAL"): centred antenna SVG icon + "NO SIGNAL" text in
+  `--dim`. Visible when no channel is selected.
+- **Active state**: `<video>` element fills the card; hls.js attaches to it
+  when a channel is selected.
+- **Error overlay**: dim overlay + error message text centred in card.
+- Volume and playback controls are handled by the native browser video element.
+
+### 5c. Channel grid
+
+- CSS grid with `auto-fill minmax(148px, 1fr)`, gap 12px.
+- Shows channels filtered by active category + search query.
+- Each **channel card** (see §6) is one grid cell.
+
+---
+
+## 6. Channel card
+
+- Background `--sur2`, border `--ln`, rounded corners (8px).
+- **Number**: 3-digit zero-padded, top-left, IBM Plex Mono, `--dim`.
+- **Logo**: square logo from `stream_icon` URL. On load error or empty URL,
+  falls back to a coloured letter-tile (first letter of channel name, amber
+  background).
+- **Favourite star**: top-right toggle icon. Filled amber when channel is in
+  favourites; outline when not. Click toggles and persists to localStorage.
+- **Name**: channel name, bottom, Space Grotesk, 2-line truncation.
+- Clicking the card selects the channel, starts HLS playback, and scrolls the
+  page to the player.
+- Active channel card has `--acc` border highlight.
+
+---
+
+## 7. Footer
+
+### Logged-out state
+
+Flex row: Portal URL field (flex-grow 2), Username field, Password field,
+Connect button (amber fill), hint text.
+
+- Portal URL: accepts any `http(s)://host` Xtream URL, any `.m3u` / `.m3u8`
+  URL, or the literal string `"demo"` to load the built-in demo playlist.
+- **M3U adaptation**: when the Portal URL value ends with `.m3u` or `.m3u8`
+  (case-insensitive), the Username and Password fields are hidden and their
+  `required` attribute is removed. The hint text changes to
+  `"M3U URL detected — username and password not needed."`.
+- When the Portal URL value does not look like an M3U URL, Username and
+  Password fields are visible and the hint reverts to
+  `"Type 'demo' to try a sample playlist."`.
+- On Connect click: show loading state (button disabled, spinner), call
+  `IptvApi.connect()`, transition to logged-in state on success or show inline
+  error on failure.
+
+### Logged-in state
+
+Green status dot + "Connected to {host} as {user} · {N} channels ·
+{M} categories" + Disconnect button (outline). For M3U connections `{user}`
+is omitted from the status text. Clicking Disconnect clears session, removes
+stored credentials, resets state to INIT.
+
+---
+
+## 8. Portal connection — Xtream and M3U
+
+`window.IptvApi` (defined in `client/api.js`) handles both connection modes.
+
+### 8a. Xtream mode
+
+`IptvApi.connect(url, user, pass)` — used when `url` is an Xtream portal base
+URL (no `.m3u` / `.m3u8` suffix) and credentials are provided.
+
+The server-side proxy at `/api/xtream?url=<encoded>` forwards
+`player_api.php` calls to the portal, stripping credentials from the URL.
+
+Returns:
+```
+{ server, host, user, categories: Cat[], channels: Ch[] }
+```
+
+### 8b. M3U mode
+
+`IptvApi.connect(url, user, pass)` detects M3U mode when either:
+
+- `url` ends with `.m3u` or `.m3u8` (case-insensitive), **or**
+- `url` is a plain HTTP(S) URL with no `user` and no `pass` (empty or absent).
+
+The M3U file is fetched via the same `/api/xtream?url=<encoded>` proxy to
+bypass CORS. The response text is parsed by `parseM3u(text)`.
+
+`parseM3u(text)` accepts `#EXTM3U` / `#EXTINF` format:
+
+```
+#EXTM3U
+#EXTINF:-1 tvg-id="..." tvg-name="Channel Name" tvg-logo="http://..." group-title="News",Channel Name
+http://stream-url
+```
+
+Extraction rules:
+
+| Field       | Source                                           |
+|-------------|--------------------------------------------------|
+| `name`      | text after the last `,` on the `#EXTINF` line    |
+| `url`       | next non-blank, non-`#` line                     |
+| `img`       | `tvg-logo="..."` attribute                       |
+| `grp`/`cat` | `group-title="..."` attribute (default: `"Other"`) |
+| `id`        | `tvg-id="..."` attribute                         |
+| `num`       | sequential 1-based index                         |
+
+`categories` is derived as the ordered deduplicated list of `group-title`
+values, shaped as `{ category_id, category_name }` to match the Xtream
+contract so the sidebar and channel grid require no changes.
+
+Returns the same shape as Xtream mode:
+```
+{ server: null, host: <url hostname>, user: "", categories: Cat[], channels: Ch[] }
+```
+
+### 8c. Demo mode
+
+When `url === "demo"` (case-insensitive), returns a synthetic playlist of
+7 categories / 34 channels after a 700ms simulated delay.
+
+---
+
+## 9. Persistence (localStorage)
+
+| Key                 | Type   | Contents                                      |
+|---------------------|--------|-----------------------------------------------|
+| `iptv_creds`        | JSON   | `{ url, user, pass }` — auto-reconnect on load|
+| `iptv_sel`          | string | last selected `stream_id`                     |
+| `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)     |
+
+For M3U connections `user` and `pass` are stored as empty strings.
+
+On page load, if `iptv_creds` is present, the app silently calls
+`IptvApi.connect()` with stored credentials. On success the session is
+restored (including last-selected channel and favourites).
+
+---
+
+## 10. Video playback
+
+1. When a channel card is clicked, `client/play.js` is called with the
+   channel's `streamUrl`.
+2. If hls.js is supported (`Hls.isSupported()`) the stream is loaded via
+   `new Hls()`.
+3. If hls.js is not supported but the browser can play HLS natively (Safari),
+   `video.src` is set directly.
+4. If neither is available, show the error overlay with "HLS not supported."
+5. On hls.js `ERROR` events of type `FATAL`, show the error overlay.
+6. The TS format chip is rendered but disabled.
+
+---
+
+## 11. State machine phases (client)
+
+| Phase  | Meaning                                    |
+|--------|--------------------------------------------|
+| INIT   | App loaded, no session                     |
+| LOAD   | Connecting to portal / loading playlist    |
+| READY  | Session active, channel grid shown         |
+| PLAY   | Channel selected and streaming             |
+| SRCH   | Active search query filtering grid         |
+| ERR    | Fatal error; user must retry               |
+
+Valid transitions: INIT→LOAD, LOAD→READY, LOAD→ERR, READY→PLAY, READY→SRCH,
+READY→ERR, PLAY→READY, PLAY→ERR, SRCH→READY, ERR→INIT.
+
+---
+
+## 12. Accessibility and UX
+
+- All interactive elements are keyboard-focusable.
+- Channel cards use `role="button"` and `tabindex="0"`.
+- Favourite star uses `aria-label="Add to favourites"` / `"Remove from favourites"`.
+- Error messages are surfaced as visible text (not console-only).
+- Loading spinner in the Connect button while connecting.
+- On mobile, the channel grid min-width adapts so cards remain tappable.
