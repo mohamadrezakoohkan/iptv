@@ -6,13 +6,11 @@ status: current
 
 ## Purpose
 
-A dark-themed, single-page IPTV channel browser and live-stream player.
-The user can connect via an **Xtream-compatible portal** (URL + username +
-password) or via a **plain M3U/M3U8 playlist URL** (URL only). After
-connecting the user browses channels by category, searches by name, marks
-favourites, and plays a selected channel via HLS directly in the browser.
-Credentials and last-selected channel and favourites persist across sessions
-via localStorage.
+A dark-themed, single-page IPTV channel browser and live-stream player for
+Xtream-compatible portals. The user authenticates once, browses channels by
+category, searches by name, and plays a selected channel via HLS directly in
+the browser. Credentials, last-selected channel, and favourites persist across
+sessions via localStorage.
 
 ---
 
@@ -74,9 +72,8 @@ mono labels.
 - **Search input**: icon + placeholder "Search channels…". Filters channel
   grid in real time using the `srch` module.
 - **Category list**: scrollable list of buttons, one per category returned by
-  the portal (Xtream or derived from M3U `group-title` values) plus a fixed
-  "All Channels" entry and a "Favourites" entry. Each button shows the
-  category name and a channel-count badge.
+  the Xtream API plus a fixed "All Channels" entry and a "Favourites" entry.
+  Each button shows the category name and a channel-count badge.
 - Active category button has `--acc` left border + text colour.
 - Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
   brand and search input are hidden.
@@ -136,87 +133,36 @@ mono labels.
 Flex row: Portal URL field (flex-grow 2), Username field, Password field,
 Connect button (amber fill), hint text.
 
-- Portal URL: accepts any `http(s)://host` Xtream URL, any `.m3u` / `.m3u8`
-  URL, or the literal string `"demo"` to load the built-in demo playlist.
-- **M3U adaptation**: when the Portal URL value ends with `.m3u` or `.m3u8`
-  (case-insensitive), the Username and Password fields are hidden and their
-  `required` attribute is removed. The hint text changes to
-  `"M3U URL detected — username and password not needed."`.
-- When the Portal URL value does not look like an M3U URL, Username and
-  Password fields are visible and the hint reverts to
-  `"Type 'demo' to try a sample playlist."`.
+- Portal URL: accepts any `http(s)://host` Xtream URL or the literal string
+  `"demo"` to load the built-in demo playlist.
 - On Connect click: show loading state (button disabled, spinner), call
   `IptvApi.connect()`, transition to logged-in state on success or show inline
   error on failure.
+- Hint text: "Type 'demo' to try a sample playlist."
 
 ### Logged-in state
 
 Green status dot + "Connected to {host} as {user} · {N} channels ·
-{M} categories" + Disconnect button (outline). For M3U connections `{user}`
-is omitted from the status text. Clicking Disconnect clears session, removes
-stored credentials, resets state to INIT.
+{M} categories" + Disconnect button (outline). Clicking Disconnect clears
+session, removes stored credentials, resets state to INIT.
 
 ---
 
-## 8. Portal connection — Xtream and M3U
+## 8. Xtream API integration
 
-`window.IptvApi` (defined in `client/api.js`) handles both connection modes.
+The design ships `client/api.js` as a self-contained IIFE that exposes
+`window.IptvApi`. The server-side proxy in `server/rtr.js` forwards
+`/api/xtream/*` requests to the target portal, stripping credentials from
+the URL and re-adding them server-side so browser CORS is never an issue.
 
-### 8a. Xtream mode
-
-`IptvApi.connect(url, user, pass)` — used when `url` is an Xtream portal base
-URL (no `.m3u` / `.m3u8` suffix) and credentials are provided.
-
-The server-side proxy at `/api/xtream?url=<encoded>` forwards
-`player_api.php` calls to the portal, stripping credentials from the URL.
-
-Returns:
+`IptvApi.connect(url, user, pass)` returns a Promise that resolves to:
 ```
 { server, host, user, categories: Cat[], channels: Ch[] }
 ```
 
-### 8b. M3U mode
-
-`IptvApi.connect(url, user, pass)` detects M3U mode when either:
-
-- `url` ends with `.m3u` or `.m3u8` (case-insensitive), **or**
-- `url` is a plain HTTP(S) URL with no `user` and no `pass` (empty or absent).
-
-The M3U file is fetched via the same `/api/xtream?url=<encoded>` proxy to
-bypass CORS. The response text is parsed by `parseM3u(text)`.
-
-`parseM3u(text)` accepts `#EXTM3U` / `#EXTINF` format:
-
-```
-#EXTM3U
-#EXTINF:-1 tvg-id="..." tvg-name="Channel Name" tvg-logo="http://..." group-title="News",Channel Name
-http://stream-url
-```
-
-Extraction rules:
-
-| Field       | Source                                           |
-|-------------|--------------------------------------------------|
-| `name`      | text after the last `,` on the `#EXTINF` line    |
-| `url`       | next non-blank, non-`#` line                     |
-| `img`       | `tvg-logo="..."` attribute                       |
-| `grp`/`cat` | `group-title="..."` attribute (default: `"Other"`) |
-| `id`        | `tvg-id="..."` attribute                         |
-| `num`       | sequential 1-based index                         |
-
-`categories` is derived as the ordered deduplicated list of `group-title`
-values, shaped as `{ category_id, category_name }` to match the Xtream
-contract so the sidebar and channel grid require no changes.
-
-Returns the same shape as Xtream mode:
-```
-{ server: null, host: <url hostname>, user: "", categories: Cat[], channels: Ch[] }
-```
-
-### 8c. Demo mode
-
-When `url === "demo"` (case-insensitive), returns a synthetic playlist of
-7 categories / 34 channels after a 700ms simulated delay.
+**Demo mode**: when `url === "demo"` (case-insensitive), `IptvApi.connect()`
+returns a synthetic playlist of 7 categories / 34 channels routed to two
+public HLS test streams after a 700ms simulated delay.
 
 ---
 
@@ -228,11 +174,13 @@ When `url === "demo"` (case-insensitive), returns a synthetic playlist of
 | `iptv_sel`          | string | last selected `stream_id`                     |
 | `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)     |
 
-For M3U connections `user` and `pass` are stored as empty strings.
-
 On page load, if `iptv_creds` is present, the app silently calls
 `IptvApi.connect()` with stored credentials. On success the session is
 restored (including last-selected channel and favourites).
+
+Credentials are stored only after a successful connect; a failed connect
+never writes to localStorage. Disconnect removes `iptv_creds` but preserves
+`iptv_sel` and `iptv_favs`.
 
 ---
 
@@ -241,16 +189,20 @@ restored (including last-selected channel and favourites).
 1. When a channel card is clicked, `client/play.js` is called with the
    channel's `streamUrl`.
 2. If hls.js is supported (`Hls.isSupported()`) the stream is loaded via
-   `new Hls()`.
+   `new Hls()` — this is the CDN-loaded library; `play.js` does not use
+   `new` for application objects, only for the hls.js built-in.
 3. If hls.js is not supported but the browser can play HLS natively (Safari),
    `video.src` is set directly.
 4. If neither is available, show the error overlay with "HLS not supported."
 5. On hls.js `ERROR` events of type `FATAL`, show the error overlay.
-6. The TS format chip is rendered but disabled.
+6. The TS format chip is rendered but disabled (placeholder for future
+   mpegts.js integration).
 
 ---
 
 ## 11. State machine phases (client)
+
+Phases are defined in `client/st.js` per CONVENTIONS.md §6:
 
 | Phase  | Meaning                                    |
 |--------|--------------------------------------------|

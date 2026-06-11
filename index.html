@@ -1,0 +1,101 @@
+<!-- ADR: ADR-0001, ADR-0004 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPTV player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="app">
+    <div class="app-main">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <span class="brand-dot"></span>
+          <span class="brand-name">IPTV</span>
+        </div>
+        <div class="sidebar-search">
+          <div class="search-field">
+            <input id="search" type="text" placeholder="Search channels…" autocomplete="off">
+          </div>
+        </div>
+        <div class="sidebar-list" id="grp-nav"></div>
+      </aside>
+      <main class="content">
+        <div class="content-head">
+          <div class="on-air-badge" id="on-air-badge">
+            <span class="on-air-dot"></span>ON AIR
+          </div>
+          <span class="now-title" id="now-info"></span>
+        </div>
+        <div class="player-wrap" id="player-wrap">
+          <div id="player-card" class="player-card player-idle">
+            <video id="player-video" controls playsinline style="display:none"></video>
+            <div class="player-idle" id="player-idle">
+              <svg class="idle-antenna" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="28" y="32" width="8" height="20" rx="2" fill="currentColor"/>
+                <rect x="20" y="48" width="24" height="4" rx="2" fill="currentColor"/>
+                <line x1="32" y1="32" x2="12" y2="14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                <line x1="32" y1="32" x2="52" y2="14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="12" cy="13" r="3" fill="currentColor"/>
+                <circle cx="52" cy="13" r="3" fill="currentColor"/>
+              </svg>
+              <span class="idle-label">NO SIGNAL</span>
+            </div>
+            <div class="player-err" id="player-err" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ch-section">
+          <div class="ch-bar">
+            <span class="ch-bar-count" id="ch-count"></span>
+          </div>
+          <div class="ch-grid" id="ch-list"></div>
+        </div>
+      </main>
+    </div>
+    <footer class="footer" id="footer">
+      <div class="footer-login" id="footer-login">
+        <form class="footer-form" id="login-form" autocomplete="on">
+          <div class="field grow-2">
+            <label for="f-url">Portal URL</label>
+            <input id="f-url" type="text" placeholder="http://portal.example.com:8080" autocomplete="url" />
+          </div>
+          <div class="field">
+            <label for="f-user">Username</label>
+            <input id="f-user" type="text" placeholder="username" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="f-pass">Password</label>
+            <input id="f-pass" type="password" placeholder="password" autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary" id="btn-conn" disabled>
+            Connect
+          </button>
+        </form>
+        <div class="footer-hint" id="footer-hint">Type "demo" as URL to try with a sample playlist.</div>
+        <div class="footer-error" id="footer-err" style="display:none"></div>
+      </div>
+      <div class="footer-conn" id="footer-conn" style="display:none">
+        <div class="footer-status">
+          <span class="status-dot"></span>
+          <span class="status-text" id="conn-text"></span>
+          <button type="button" class="btn btn-ghost" id="btn-disc">Disconnect</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+  <script src="/cfg.js"></script>
+  <script src="/api.js"></script>
+  <script src="/st.js"></script>
+  <script src="/srch.js"></script>
+  <script src="/play.js"></script>
+  <script src="/ui.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/main.js"></script>
+</body>
+</html>
