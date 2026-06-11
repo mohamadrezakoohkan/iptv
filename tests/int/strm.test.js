@@ -1,4 +1,4 @@
-// ADR: ADR-0007
+// ADR: ADR-0007, ADR-0008
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'module';
 import { readFileSync } from 'fs';
@@ -86,7 +86,7 @@ beforeAll(async function onBoot() {
     });
   });
   const api = loadApi({ fetch: shimFetch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL });
-  res = await api.connect(LIVE_URL, { user: '', pass: '' });
+  res = await api.connect(LIVE_URL, { user: '', pass: '', m3u: true });
 });
 
 afterAll(function onDown() {

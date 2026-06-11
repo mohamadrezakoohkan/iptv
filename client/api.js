@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005
+// ADR: ADR-0001, ADR-0005, ADR-0008
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -149,13 +149,19 @@
 
   /**
    * Connect to a portal, M3U URL, or demo.
+   * Routing (ADR-0008): demo first; explicit opts.m3u boolean alone decides
+   * the path when present; the isM3u heuristic is only the fallback when
+   * opts.m3u is absent (transitional — removed by TASK-0020).
    * @param {string} src  - portal base URL, M3U URL, or "demo"
-   * @param {Object} opts - { user: string, pass: string }
+   * @param {Object} opts - { user: string, pass: string, m3u: boolean }
    */
   async function connect(src, opts) {
     const usr = (opts && opts.user) || '';
     const pss = (opts && opts.pass) || '';
+    const m3u = opts && typeof opts.m3u === 'boolean' ? opts.m3u : null;
     if (isDemo(src)) return loadDemo();
+    if (m3u === true) return loadM3u(src);
+    if (m3u === false) return loadXtream(src, { user: usr, pass: pss });
     if (isM3u(src, usr, pss)) return loadM3u(src);
     return loadXtream(src, { user: usr, pass: pss });
   }

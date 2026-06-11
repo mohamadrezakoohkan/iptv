@@ -2,8 +2,8 @@
 id: TASK-0017
 adr: ADR-0008
 evolution: 4
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -50,5 +50,26 @@ deletes it). Both integration tests state the mode explicitly.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched:**
+
+- `client/api.js` — `connect(src, opts)` now reads `opts.m3u`: routing order
+  is (1) `isDemo(src)`, (2) `m3u === true` → `loadM3u`, (3) `m3u === false`
+  → `loadXtream`, (4) flag absent → `isM3u` heuristic fallback (transitional,
+  removed by TASK-0020). The flag is honoured only when it is a real boolean
+  (`typeof opts.m3u === 'boolean'`), so `undefined`/missing falls through to
+  the E2 heuristic and the not-yet-updated UI keeps working. ADR header now
+  `ADR-0001, ADR-0005, ADR-0008`.
+- `tests/unit/api.test.js` — new `connect — explicit opts.m3u routing` block
+  (6 tests): `m3u: true` forces M3U for a non-playlist URL with credentials
+  (no `player_api.php` request); `m3u: false` forces Xtream for a `.m3u8`
+  URL; demo short-circuits in both modes (no fetch at all); absent flag
+  falls back to the heuristic in both directions.
+- `tests/int/m3u.test.js`, `tests/int/strm.test.js` — `connect(LIVE_URL,
+  { user: '', pass: '', m3u: true })`; ADR headers now `ADR-0007, ADR-0008`.
+
+**Non-obvious:** ADR-0008 `governs:` already listed every file touched here,
+so no governs edits were needed. `isM3u` is still exported on `window.IptvApi`
+and its unit tests are untouched — both are TASK-0020's removal scope.
+
+**Verified locally:** unit 212/212, UI 66/66, integration 10/10 (live
+iptv-org endpoint, 3/5 sampled streams alive).

@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005
+// ADR: ADR-0001, ADR-0005, ADR-0008
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -303,6 +303,96 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
     const api = loadApi(baseGlobals(ftch));
     await api.connect(M3U_URL, {});
     expect(ftch.mock.calls[0][0]).toBe(PROXY_URL);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// connect — explicit opts.m3u routing (ADR-0008)
+// ---------------------------------------------------------------------------
+describe('connect — explicit opts.m3u routing', function () {
+  const M3U_FIXTURE = [
+    '#EXTM3U',
+    '#EXTINF:-1 tvg-id="c1" tvg-name="Channel One" group-title="News",Channel One',
+    'http://stream.example.com/c1',
+  ].join('\n');
+
+  function baseGlobals(ftch) {
+    return { fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL };
+  }
+
+  it('m3u: true forces the M3U path for a non-playlist URL despite credentials', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue(M3U_FIXTURE),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list', { user: 'u', pass: 'p', m3u: true });
+    expect(res.ok).toBe(true);
+    expect(res.val.server).toBeNull();
+    expect(res.val.host).toBe('example.com');
+    expect(ftch).toHaveBeenCalledTimes(1);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).not.toContain('player_api.php');
+  });
+
+  it('m3u: false forces the Xtream path even for a .m3u8 URL', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list.m3u8', { user: '', pass: '', m3u: false });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('action=get_live_categories');
+  });
+
+  it('connect("demo", { m3u: true }) still resolves the demo playlist', async function () {
+    vi.useFakeTimers();
+    const ftch = vi.fn();
+    const api = loadApi(baseGlobals(ftch));
+    const p = api.connect('demo', { m3u: true });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('demo');
+    expect(ftch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('connect("demo", { m3u: false }) still resolves the demo playlist', async function () {
+    vi.useFakeTimers();
+    const ftch = vi.fn();
+    const api = loadApi(baseGlobals(ftch));
+    const p = api.connect('demo', { m3u: false });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('demo');
+    expect(ftch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('absent m3u flag falls back to the heuristic: .m3u URL routes to M3U path', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue(M3U_FIXTURE),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list.m3u', { user: 'u', pass: 'p' });
+    expect(res.ok).toBe(true);
+    expect(res.val.server).toBeNull();
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).not.toContain('player_api.php');
+  });
+
+  it('absent m3u flag falls back to the heuristic: credentialled plain URL routes to Xtream path', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('http://portal.example.com', { user: 'admin', pass: '1234' });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
   });
 });
 
