@@ -40,8 +40,10 @@ function runProxy(req, res) {
   const prx = mod.request(opts, function onProxyRes(upstream) {
     res.writeHead(upstream.statusCode, upstream.headers);
     upstream.pipe(res);
+    upstream.on('error', function onUpErr() { if (!res.headersSent) res.destroy(); });
   });
   prx.on('error', function onProxyErr(err) {
+    if (res.headersSent) { res.destroy(); return; }
     res.status(502).json({ err: err.message });
   });
   prx.end();
@@ -49,6 +51,7 @@ function runProxy(req, res) {
 
 rtr.get('/api/xtream', runProxy);
 
-rtr._isValidUrl = isValidUrl;
+rtr._isValidUrl  = isValidUrl;
+rtr._runProxy    = runProxy;
 
 module.exports = rtr;
