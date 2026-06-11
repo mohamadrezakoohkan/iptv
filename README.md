@@ -42,7 +42,15 @@ npx vitest run
 
 # UI / e2e tests (Playwright)
 npx playwright test
+
+# Integration tests (Vitest, requires live outbound network)
+npx vitest run --config vitest.int.config.js   # alias: npm run test:int
 ```
+
+The integration suite validates real connectivity to the public iptv-org
+playlist (`https://iptv-org.github.io/iptv/index.m3u`): proxy fetch, engine
+connect + parse at real scale, and sampled stream reachability. It fails by
+design when the network is down and is excluded from the unit command.
 
 ## Features
 
