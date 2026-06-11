@@ -97,6 +97,43 @@ function setFavs(arr) {
 }
 
 // ---------------------------------------------------------------------------
+// loadSt — reads all three localStorage keys; populates ST.favs; returns
+// { creds, sel } — called once on page load before any phase transition.
+// ADR: ADR-0003
+// ---------------------------------------------------------------------------
+function loadSt() {
+  const S  = window.S;
+  const ls = window.localStorage;
+  let creds = null;
+  let sel   = null;
+  try { creds = JSON.parse(ls.getItem(S.credsKey)); } catch (e) {}
+  try { sel   = ls.getItem(S.selKey); } catch (e) {}
+  try {
+    const f = JSON.parse(ls.getItem(S.favsKey));
+    if (Array.isArray(f)) ST.favs = f;
+  } catch (e) {}
+  return { creds: creds || null, sel: sel || null };
+}
+
+// ---------------------------------------------------------------------------
+// saveSt — writes one localStorage key after a state mutation.
+// field: 'creds' | 'favs' | 'sel'
+// ADR: ADR-0003
+// ---------------------------------------------------------------------------
+function saveSt(fld) {
+  const S  = window.S;
+  const ls = window.localStorage;
+  if (fld === 'creds') return;
+  if (fld === 'favs') {
+    try { ls.setItem(S.favsKey, JSON.stringify(ST.favs)); } catch (e) {}
+  }
+  if (fld === 'sel') {
+    if (!ST.cur) return;
+    try { ls.setItem(S.selKey, String(ST.cur.id)); } catch (e) {}
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 window.IptvSt = {
@@ -111,4 +148,6 @@ window.IptvSt = {
   setVol,
   setMuted,
   setFavs,
+  loadSt,
+  saveSt,
 };

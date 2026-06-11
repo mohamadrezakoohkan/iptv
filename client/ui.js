@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0004
+// ADR: ADR-0001, ADR-0003, ADR-0004
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -139,6 +139,7 @@ function toggleFav(id) {
   const idx  = st.favs.indexOf(id);
   const nxt  = idx === -1 ? st.favs.concat([id]) : st.favs.filter(function notId(x) { return x !== id; });
   window.IptvSt.setFavs(nxt);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('favs');
   const star = document.querySelector('[data-fav="' + id + '"]');
   if (!star) return;
   star.className = 'ch-fav' + (nxt.includes(id) ? ' on' : '');
@@ -158,6 +159,7 @@ function onGridClick(evt) {
   const ch = st.chs.find(function byId(c) { return String(c.id) === id; });
   if (!ch) return;
   window.IptvSt.setCur(ch);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
   if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
   if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
 }
@@ -291,6 +293,10 @@ function onUrlInput() {
 function onOk(val) {
   window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
   window.IptvSt.go('READY');
+  const src  = EL.url   ? EL.url.value.trim()   : val.host;
+  const user = EL.uname ? EL.uname.value.trim() : val.user;
+  const pass = EL.pwd   ? EL.pwd.value          : '';
+  try { localStorage.setItem(window.S.credsKey, JSON.stringify({ url: src, user, pass })); } catch (e) {}
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
@@ -343,6 +349,7 @@ function onConn(evt) {
 // onDisc — disconnect button handler
 // ---------------------------------------------------------------------------
 function onDisc() {
+  try { localStorage.removeItem(window.S.credsKey); } catch (e) {}
   const cur = window.IptvSt.ST.phase;
   if (window.IptvPlay && cur === 'PLAY') window.IptvPlay.stopPlay();
   window.IptvSt.setChs([], [], '', '');

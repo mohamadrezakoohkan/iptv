@@ -7,6 +7,8 @@ status: accepted
 governs:
   - client/st.js
   - client/cfg.js
+  - client/ui.js
+  - client/main.js
 ---
 
 # ADR-0003 — Persistence strategy — localStorage keys for credentials, selection, favourites

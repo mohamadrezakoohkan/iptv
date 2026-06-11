@@ -1,7 +1,10 @@
-// ADR: ADR-0001
+// ADR: ADR-0001, ADR-0003
 /* global window, document */
 
 'use strict';
+
+// Module-level stored state for auto-reconnect sel restoration (ADR-0003)
+let _stored = null;
 
 document.addEventListener('DOMContentLoaded', onReady);
 
@@ -9,11 +12,15 @@ document.addEventListener('DOMContentLoaded', onReady);
 // onConnRes — handle connect API result after auto-reconnect attempt
 // ---------------------------------------------------------------------------
 function onConnRes(res) {
-  const { setChs, setErr, go, ST } = window.IptvSt;
+  const { setChs, setErr, go, setCur, ST } = window.IptvSt;
   const { rndFoot, rndSide, rndGrid } = window.IptvUi;
   if (res.ok) {
     setChs(res.val.channels, res.val.categories, res.val.host, res.val.user);
     go('READY');
+    if (_stored && _stored.sel) {
+      const found = ST.chs.find(function bySel(ch) { return String(ch.id) === _stored.sel; });
+      if (found) setCur(found);
+    }
   } else {
     setErr(res.err);
     go('ERR');
@@ -49,9 +56,9 @@ function onReady() {
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
-  const loadSt = window.IptvSt.loadSt;
-  const stored = loadSt ? loadSt() : null;
-  if (stored && stored.creds) {
-    goLoad(stored.creds);
+  const loadStFn = window.IptvSt.loadSt;
+  _stored = loadStFn ? loadStFn() : null;
+  if (_stored && _stored.creds) {
+    goLoad(_stored.creds);
   }
 }
