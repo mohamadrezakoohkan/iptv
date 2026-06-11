@@ -5,6 +5,18 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #2 — 2026-06-11 — M3U playlist URL support
+
+- **Prompt:** Add M3U playlist URL support — users can paste any `.m3u` / `.m3u8` URL (e.g. `https://iptv-org.github.io/iptv/index.m3u`) and the app connects, browses, and plays channels with the same UX as Xtream portals.
+- **Outcome:** Shipped. All 3 tasks completed and validated.
+- **ADRs:** ADR-0005 (M3U playlist support — detection, parse, CORS proxy reuse, footer UI adaptation).
+- **Tasks:** 3 done, 0 failed, 0 blocked. TASK-0011 `isM3u()` + `parsM3u()` pure functions · TASK-0012 `loadM3u()` fetch+parse integration + `connect()` routing · TASK-0013 footer UI adaptation (hide username/password for M3U URLs). TASK-0013 required 3 attempts — initial unit tests incorrectly asserted `setAttribute('required')` on inputs that never carry `required` in the HTML; corrected to `removeAttribute('required')` in both M3U and non-M3U branches.
+- **Tests:** 205 unit (Vitest) + 66 UI (Playwright) — all passing.
+- **Rules earned:** none (see proposed rule in review report).
+- **Artifacts:** `client/api.js` (isM3u, parsM3u, loadM3u, connect routing), `client/ui.js` (updM3u, onUrlInput), `client/app.css` (`.is-m3u` hide rules), `index.html` (field-user/field-pass classes), `tests/unit/api.test.js` (extended), `tests/unit/m3u-ui.test.js` (new), `tests/ui/m3u.test.js` (new), `tests/ui/m3u-ui.test.js` (new), `adrs/ADR-0005-m3u-playlist-support.md`, `tasks/TASK-001{1,2,3}-*.md`.
+
+---
+
 ## #1 — 2026-06-11 — IPTV Player broadcast console (initial build)
 
 - **Prompt:** Build an IPTV Player broadcast console — single-page web app connecting to Xtream-compatible portals with category browsing, channel search, favourites, HLS playback via hls.js, and localStorage persistence.

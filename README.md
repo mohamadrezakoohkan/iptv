@@ -1,9 +1,9 @@
 # IPTV Broadcast Console
 
 A dark-themed, single-page web application that connects to any
-Xtream-compatible IPTV portal and lets you browse live channels by category,
-search by name, mark favourites, and stream the selected channel via HLS
-directly in the browser.
+Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
+lets you browse live channels by category, search by name, mark favourites,
+and stream the selected channel via HLS directly in the browser.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -46,17 +46,21 @@ npx playwright test
 
 ## Features
 
+- **M3U playlist support** — paste any `.m3u` or `.m3u8` URL to connect;
+  detection is automatic, credentials are hidden, and channels arrive in the
+  same browse/play UX as Xtream portals.
 - **Category sidebar** — browse channels by category; "All Channels" shows
   everything.
 - **Channel grid** — card per channel showing logo, number, and name; star to
   favourite.
 - **Search** — live-filter channels by name from the sidebar search input.
 - **HLS player** — idle, playing, and error states; autoplay on channel select.
-- **Footer** — login form + connected status bar showing host and channel count.
+- **Footer** — login form + connected status bar showing host and channel count;
+  username/password fields are hidden automatically when an M3U URL is entered.
 - **Persistence** — credentials, last-selected channel, and favourites survive
   page refreshes via `localStorage`.
-- **CORS proxy** — server proxies Xtream API calls so real portals (which do
-  not emit CORS headers) work from the browser.
+- **CORS proxy** — server proxies all external URL fetches (Xtream API calls
+  and M3U files) so remote hosts without CORS headers work from the browser.
 
 ## Architecture
 
