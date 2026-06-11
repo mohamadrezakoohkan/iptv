@@ -2,8 +2,8 @@
 id: TASK-0015
 adr: ADR-0007
 evolution: 3
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0014]
 ---
 
@@ -54,5 +54,21 @@ server base URL.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+- **Files touched:** `tests/int/m3u.test.js` (new — the only product change).
+- The file combines the TASK-0014 in-process server boot (`express()` +
+  `server/rtr.js`, ephemeral port, `afterAll` close) with the
+  `tests/unit/api.test.js` `loadApi` pattern (`new Function` over the
+  `client/api.js` source with a `global.window` stub).
+- The fetch shim `shimFetch` is a named top-level function (RULE-FN-5): URLs
+  starting with `/` are prefixed with `http://127.0.0.1:<port>`; everything
+  else delegates to native fetch unchanged.
+- `connect(LIVE_URL, { user: '', pass: '' })` runs **once in `beforeAll`**
+  (covered by the 120 s `hookTimeout`); the five `it` blocks assert against
+  the shared Result, so the ~2.4 MB playlist is downloaded once per run.
+- ADR-0007 already listed `tests/int/m3u.test.js` in `governs:` — no
+  traceability update needed.
+- Non-obvious for validation: under a network-sandboxed shell the second
+  vitest worker's outbound HTTPS intermittently got a proxy 502
+  (pre-existing `proxy.test.js` flaked, not this file). With normal network
+  access the full integration suite passes in ~1 s. Run with real outbound
+  network, per `specs/integration-testing.md`.
