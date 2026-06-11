@@ -2,7 +2,7 @@
 id: TASK-0013
 adr: ADR-0005
 evolution: 2
-status: validating
+status: done
 attempts: 3
 depends_on: [TASK-0011]
 ---
