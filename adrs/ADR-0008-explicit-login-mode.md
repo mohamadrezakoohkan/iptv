@@ -9,6 +9,7 @@ governs:
   - client/api.js
   - client/ui.js
   - client/main.js
+  - client/st.js
   - client/app.css
   - index.html
   - tests/unit/api.test.js

@@ -335,7 +335,8 @@ function onOk(val) {
   const src  = EL.url   ? EL.url.value.trim()   : val.host;
   const user = EL.uname ? EL.uname.value.trim() : val.user;
   const pass = EL.pwd   ? EL.pwd.value          : '';
-  try { localStorage.setItem(window.S.credsKey, JSON.stringify({ url: src, user, pass })); } catch (e) {}
+  const m3u  = getMode() === 'm3u';
+  try { localStorage.setItem(window.S.credsKey, JSON.stringify({ url: src, user, pass, m3u })); } catch (e) {}
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
