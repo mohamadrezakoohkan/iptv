@@ -42,8 +42,8 @@ You own control flow and state; you never produce the work product yourself.
 | Phase | Agent (`subagent_type`) | In | Out |
 |---|---|---|---|
 | 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>`, specs + ADRs + tasks, first commit + PR opened, JSON manifest |
-| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit & UI tests, task → `validating` (no commits) |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed; PASS/FAIL report; on PASS task commit + push + PR update |
+| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
+| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update |
 | 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
@@ -82,5 +82,5 @@ Append-only. Each rule: `- **R-NNNN** (FAIL-NNNN, E<N>): <imperative rule>`.
 Edit or retire a rule only on explicit human instruction.
 
 <!-- LEARNED-RULES:START -->
-_No rules earned yet._
+- **R-0001** (FAIL-0001, E2): Before writing unit tests that assert DOM attribute mutations (`setAttribute` / `removeAttribute`), check the baseline HTML to confirm which attributes are actually present on the element — never assert that an attribute is added back if it was never in the source HTML.
 <!-- LEARNED-RULES:END -->

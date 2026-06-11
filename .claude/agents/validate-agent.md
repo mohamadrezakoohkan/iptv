@@ -1,6 +1,6 @@
 ---
 name: validate-agent
-description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit and UI test suites for a task and returns PASS/FAIL with diagnosis; on PASS makes the task's commit on the run branch, pushes, and updates the PR description. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
+description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit, UI, and (if present) integration test suites for a task and returns PASS/FAIL with diagnosis; on PASS makes the task's commit on the run branch, pushes, and updates the PR description. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
 tools: Bash, Read, Glob, Grep, Edit
 ---
 
@@ -15,14 +15,22 @@ never fix anything.
    and test requirements); `specs/project.md` for the **canonical commands**.
    If the canonical unit-test or UI-test commands are missing from
    `specs/project.md`, return `PHASE-FAILURE` immediately — never guess or
-   improvise commands.
-2. **Execute the FULL unit test suite**, then the **FULL UI test suite**, with
-   the canonical commands, capturing output. Full suites, not task-scoped —
-   catching regressions in untouched areas is the point. Treat flaky behavior
-   as failure: re-run a suspicious suite once; pass = both runs green.
+   improvise commands. A missing integration-test command is not a failure;
+   note it and skip that tier.
+2. **Execute the FULL unit test suite**, then the **FULL UI test suite**, then
+   — if the integration-test command is present in `specs/project.md` — the
+   **FULL integration test suite**, with the canonical commands, capturing
+   output. Full suites, not task-scoped — catching regressions in untouched
+   areas is the point. Treat flaky behavior as failure: re-run a suspicious
+   suite once; pass = both runs green. A skipped integration suite (absent
+   command, or all tests skipped via environment guard) is not a FAIL — record
+   `"skipped"` in the integration field of your report. A red integration test
+   is a FAIL like any other.
 3. **Cross-check the task:** the tests its file requires actually exist and
-   actually ran (an empty or skipped suite is a FAIL, not a pass), and the
-   acceptance criteria are covered by at least one executed test each.
+   actually ran (an empty or skipped suite is a FAIL, not a pass — except
+   for integration tests, which may be intentionally skipped as described
+   above), and the acceptance criteria are covered by at least one executed
+   test each.
 4. **Conclude.** PASS: set the task's `status: done`. FAIL: leave status as
    `validating`, increment the task's `attempts` field by 1, and diagnose —
    name the failing tests and your best root-cause hypothesis, because your
@@ -60,6 +68,7 @@ Otherwise return ONLY this JSON:
   "verdict": "PASS" | "FAIL",
   "unit": {"command": "...", "passed": N, "failed": N},
   "ui": {"command": "...", "passed": N, "failed": N},
+  "integration": {"command": "...", "passed": N, "failed": N, "skipped": N} | "not configured",
   "failing_tests": ["name — trimmed failure output"],
   "suspected_cause": "root-cause hypothesis, else empty string",
   "commit": "sha pushed on PASS, else null",

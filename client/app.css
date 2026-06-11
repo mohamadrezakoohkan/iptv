@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -129,6 +129,10 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
   .cat-btn { white-space: nowrap; flex: none; width: auto; height: 34px; }
   .player-card { max-height: 40vw; }
 }
+
+/* M3U mode — hide username and password fields */
+.footer-login.is-m3u .field-user,
+.footer-login.is-m3u .field-pass { display: none; }
 
 /* Phase visibility — toggled by rndPhase() */
 body.is-load .player-wrap,

@@ -65,3 +65,16 @@ Files created:
 Non-obvious:
 - `new URL('http://[::1]/api').hostname` returns `[::1]` (with brackets) in Node.js, not `::1`. BLOCKED_HOSTS includes both forms.
 - The placeholder UI test exists because `npx playwright test` exits 1 with "No tests found"; a trivially-passing test keeps the command exit 0 per the acceptance criteria.
+
+## Hot-fix notes (E2 branch, applied on top of original implementation)
+
+**Bug 1 fixed — ERR_HTTP_HEADERS_SENT crash in server/rtr.js:**
+- `onProxyErr` now checks `res.headersSent` before calling `res.status(502).json()`. When headers are already sent it calls `res.destroy()` and returns immediately, preventing the crash.
+- Added `upstream.on('error', onUpErr)` inside `onProxyRes` to handle socket errors that surface after the upstream pipe has started. Guard is the same: only calls `res.destroy()` when headers are not yet sent.
+- Exposed `runProxy` as `rtr._runProxy` to allow direct unit testing of the error-path callback.
+
+**Bug 2 — no bug found in client/ui.js:**
+- `onFail(msg)` at line 336 sets `EL.ferr.textContent = msg` verbatim; `runConn` calls `onFail(res.err)` which passes the raw error string. No duplication. No change made.
+
+**New unit test added — tests/unit/rtr.test.js:**
+- `describe('runProxy — headersSent guard')`: monkey-patches `http.request` in `beforeEach` to return a fake proxy object whose `.on('error', cb)` captures the callback. The test sets `mockRes.headersSent = true`, calls `runProxy`, triggers the captured error callback, then asserts `res.destroy` was called once and `res.status` was never called. Restored in `afterEach`.

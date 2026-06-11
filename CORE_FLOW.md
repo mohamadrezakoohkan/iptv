@@ -42,7 +42,7 @@ agents, plus one harness maintainer that runs outside the pipeline.
 |---|---|---|---|
 | **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5) | write specs, ADRs, code, tests, or product docs itself |
 | **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
-| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
+| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, and PR description update (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
 | **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, the three templates, `.claude/settings.json` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
@@ -110,10 +110,13 @@ disagree, the orchestrator corrects the file.
 ### Canonical commands
 
 `specs/project.md` is the single source of truth for how to build the product
-and how to run the **unit test suite** and the **UI test suite**. The first
-evolution must establish them (via an ADR choosing the stack). `validate-agent`
-refuses to validate if these commands are missing — that is a phase failure,
-not an excuse to guess.
+and how to run the **unit test suite**, the **UI test suite**, and the
+**integration test suite**. The first evolution must establish the unit and UI
+commands (via an ADR choosing the stack); the integration command is added when
+a task first requires integration tests. `validate-agent` refuses to validate
+if the unit-test or UI-test commands are missing — that is a phase failure, not
+an excuse to guess. The integration-test command is optional: if absent,
+`validate-agent` skips that tier and notes the omission in its report.
 
 ### ADR ↔ code traceability
 
@@ -233,7 +236,7 @@ Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch → specs + ADRs + tasks
                                         │
 Phase 2+3 per task   ┌─► implement-agent (task, rule pack, last failure report)
 (in manifest order)  │            │
-                     │   validate-agent: run FULL unit + UI suites
+                     │   validate-agent: run FULL unit + UI + integration suites
                      │            │
                      │       PASS ─► task done → commit + push + PR update
                      │       FAIL ─► attempt < 4 ? ──yes──┐
@@ -267,7 +270,8 @@ everything in `adrs/` to understand the project, then:
    `governs:` list with the code paths its tasks will create or shape,
 5. derives an ordered set of tasks for each ADR — each task small enough to
    implement and validate in one agent run, with acceptance criteria and
-   explicit test requirements (unit; UI where user-facing),
+   explicit test requirements (unit; UI where user-facing; integration where
+   external connectivity is involved),
 6. commits the Phase 1 artifacts as the run's first commit, pushes the
    branch, and opens the run PR against `main` (§3 Git contract),
 7. returns a JSON manifest of ADRs and tasks, plus the run branch name and
@@ -285,17 +289,21 @@ For each task:
 1. Spawn `implement-agent` with the task ID, the Rule Pack, and — on retries —
    the previous validation report verbatim. It implements the task **and its
    tests** (unit always; UI tests whenever the task touches user-facing
-   behavior), then sets the task to `validating`. Along the way it keeps
-   traceability true (§3): new files get their `ADR:` comment, `governs:`
-   lists are trued up, and an ADR whose last governed code was just removed
-   is marked `deleted`.
+   behavior; integration tests whenever the task involves external
+   connectivity, API calls, or proxy behavior), then sets the task to
+   `validating`. Along the way it keeps traceability true (§3): new files get
+   their `ADR:` comment, `governs:` lists are trued up, and an ADR whose last
+   governed code was just removed is marked `deleted`.
 2. Spawn `validate-agent` with the task ID. It reads the canonical commands
-   from `specs/project.md` and executes the **full** unit suite and the
-   **full** UI suite (full, not task-scoped — this is the regression gate).
-   It returns PASS or FAIL with the failing tests and a suspected cause. On
-   PASS it also makes the task's commit, pushes the run branch, and updates
-   the PR description (§3 Git contract); on FAIL nothing is committed — the
-   retry reworks the tree in place.
+   from `specs/project.md` and executes the **full** unit suite, the **full**
+   UI suite, and — if the integration-test command is present — the **full**
+   integration suite (full, not task-scoped — this is the regression gate).
+   Integration tests may be skipped when the command is absent from
+   `specs/project.md`; the omission is noted in the report but is not itself
+   a FAIL. It returns PASS or FAIL with the failing tests and a suspected
+   cause. On PASS it also makes the task's commit, pushes the run branch, and
+   updates the PR description (§3 Git contract); on FAIL nothing is committed
+   — the retry reworks the tree in place.
 3. On FAIL: increment `attempts`. If `attempts < 4`, loop to step 1. After the
    3rd failed retry (`attempts = 4`), run the failure protocol (§5, including
    the failure commit), mark the task `failed`, mark tasks that depend on it
