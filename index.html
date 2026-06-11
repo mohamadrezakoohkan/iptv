@@ -54,23 +54,35 @@
         </div>
       </main>
     </div>
-    <footer class="footer">
-      <div class="footer-form" id="footer-form">
-        <div class="field grow-2">
-          <label for="inp-url">Portal URL</label>
-          <input id="inp-url" type="text" placeholder="http://your-portal or demo">
-        </div>
-        <div class="field">
-          <label for="inp-user">Username</label>
-          <input id="inp-user" type="text" placeholder="username">
-        </div>
-        <div class="field">
-          <label for="inp-pass">Password</label>
-          <input id="inp-pass" type="password" placeholder="password">
-        </div>
-        <button class="btn btn-primary" id="btn-connect" type="button">Connect</button>
+    <footer class="footer" id="footer">
+      <div class="footer-login" id="footer-login">
+        <form class="footer-form" id="login-form" autocomplete="on">
+          <div class="field grow-2">
+            <label for="f-url">Portal URL</label>
+            <input id="f-url" type="text" placeholder="http://portal.example.com:8080" autocomplete="url" />
+          </div>
+          <div class="field">
+            <label for="f-user">Username</label>
+            <input id="f-user" type="text" placeholder="username" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="f-pass">Password</label>
+            <input id="f-pass" type="password" placeholder="password" autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary" id="btn-conn" disabled>
+            Connect
+          </button>
+        </form>
+        <div class="footer-hint" id="footer-hint">Type "demo" as URL to try with a sample playlist.</div>
+        <div class="footer-error" id="footer-err" style="display:none"></div>
       </div>
-      <div class="footer-hint">Type 'demo' to try a sample playlist.</div>
+      <div class="footer-conn" id="footer-conn" style="display:none">
+        <div class="footer-status">
+          <span class="status-dot"></span>
+          <span class="status-text" id="conn-text"></span>
+          <button type="button" class="btn btn-ghost" id="btn-disc">Disconnect</button>
+        </div>
+      </div>
     </footer>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>

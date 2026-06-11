@@ -2,8 +2,8 @@
 id: TASK-0008
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0003, TASK-0004]
 ---
 
@@ -51,3 +51,16 @@ handled by the state machine and reflected by CSS classes on `body`.
   URL; click Connect; verify spinner appears; verify connected status bar
   appears after ~1s; verify channel count shown; click Disconnect; verify
   login form reappears.
+
+## Implementation notes
+
+### Files touched
+- `index.html` — replaced old `<footer class="footer"><div class="footer-form" id="footer-form">` with the two-section structure: `id="footer"` on the footer element, `id="footer-login"` (login form with `id="login-form"`, field ids `f-url`/`f-user`/`f-pass`, `id="btn-conn"`, `id="footer-hint"`, `id="footer-err"`) and `id="footer-conn"` (status bar with `id="conn-text"`, `id="btn-disc"`).
+- `client/ui.js` — expanded `EL` declaration with 10 new properties (`url`, `uname`, `pwd`, `conn`, `logi`, `hint`, `ferr`, `bcon`, `bdis`, `ctxt`); updated `EL.foot` to point to `#footer`; replaced `rndFooter()` with `rndFoot()` implementing INIT/ERR→login visible/conn hidden, READY/PLAY/SRCH→conn visible/login hidden with status text; added `onUrlInput()`, `onOk()`, `onFail()`, `runConn()`, `onConn()`, `onDisc()`; updated `mkEL()` to wire all new element refs and events; updated public API export.
+- `tests/unit/foot.test.js` — new file; 20 unit tests covering `rndFoot()` in all phases, connect success/failure paths via form submit handler introspection.
+- `tests/ui/foot.test.js` — new file; 13 Playwright tests covering initial state, URL-input→button-enable, demo connect flow, disconnect flow.
+
+### Non-obvious decisions
+- `onDisc()` guards `stopPlay()` with `cur === 'PLAY'` check because `play.js`'s `stopPlay()` dereferences `_vid` unconditionally — calling it before `mkPlay()` initializes `_vid` (which happens in TASK-0009's `main.js`) would throw. The guard is semantically correct: only a channel actively playing (PLAY phase) needs stopping.
+- `runConn()` is an async function (RULE-FN-4 compliant) called from `onConn()` with `.catch()` to handle any unexpected rejections, keeping `onConn` itself synchronous and side-effect-prefix-correct.
+- The existing `rndFooter` export was replaced by `rndFoot` — no external consumers referenced `rndFooter` in any test file.

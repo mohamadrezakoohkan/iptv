@@ -7,16 +7,26 @@
 // Element registry — fully declared, never extended (CONVENTIONS §10)
 // ---------------------------------------------------------------------------
 const EL = {
-  list: null,   // .ch-grid / #ch-list
+  list: null,   // #ch-list (.ch-grid)
   play: null,   // #player-video
   srch: null,   // #search
   info: null,   // #now-info
   err:  null,   // #player-err
   nav:  null,   // #grp-nav / .sidebar-list
-  foot: null,   // #footer-form
+  foot: null,   // #footer
   card: null,   // #player-card
   idle: null,   // #player-idle
   wrap: null,   // #player-wrap
+  url:  null,   // #f-url
+  uname: null,  // #f-user
+  pwd:  null,   // #f-pass
+  conn: null,   // #footer-conn
+  logi: null,   // #footer-login
+  hint: null,   // #footer-hint
+  ferr: null,   // #footer-err
+  bcon: null,   // #btn-conn
+  bdis: null,   // #btn-disc
+  ctxt: null,   // #conn-text
 };
 
 // ---------------------------------------------------------------------------
@@ -164,20 +174,34 @@ function onGridKey(evt) {
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
-  EL.list = document.getElementById('ch-list');
-  EL.play = document.getElementById('player-video');
-  EL.srch = document.getElementById('search');
-  EL.info = document.getElementById('now-info');
-  EL.err  = document.getElementById('player-err');
-  EL.nav  = document.getElementById('grp-nav');
-  EL.foot = document.getElementById('footer-form');
-  EL.card = document.getElementById('player-card');
-  EL.idle = document.getElementById('player-idle');
-  EL.wrap = document.getElementById('player-wrap');
+  EL.list  = document.getElementById('ch-list');
+  EL.play  = document.getElementById('player-video');
+  EL.srch  = document.getElementById('search');
+  EL.info  = document.getElementById('now-info');
+  EL.err   = document.getElementById('player-err');
+  EL.nav   = document.getElementById('grp-nav');
+  EL.foot  = document.getElementById('footer');
+  EL.card  = document.getElementById('player-card');
+  EL.idle  = document.getElementById('player-idle');
+  EL.wrap  = document.getElementById('player-wrap');
+  EL.url   = document.getElementById('f-url');
+  EL.uname = document.getElementById('f-user');
+  EL.pwd   = document.getElementById('f-pass');
+  EL.conn  = document.getElementById('footer-conn');
+  EL.logi  = document.getElementById('footer-login');
+  EL.hint  = document.getElementById('footer-hint');
+  EL.ferr  = document.getElementById('footer-err');
+  EL.bcon  = document.getElementById('btn-conn');
+  EL.bdis  = document.getElementById('btn-disc');
+  EL.ctxt  = document.getElementById('conn-text');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
   if (EL.list) EL.list.addEventListener('keydown', onGridKey);
+  const frm = document.getElementById('login-form');
+  if (frm)    frm.addEventListener('submit', onConn);
+  if (EL.url) EL.url.addEventListener('input', onUrlInput);
+  if (EL.bdis) EL.bdis.addEventListener('click', onDisc);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,13 +256,108 @@ function rndHead() {
 }
 
 // ---------------------------------------------------------------------------
-// rndFooter — toggle footer visibility class based on ST.phase
+// rndFoot — update footer section visibility based on ST.phase
 // ---------------------------------------------------------------------------
-function rndFooter() {
-  if (!EL.foot) return;
-  const st     = window.IptvSt.ST;
-  const isConn = st.phase === 'READY' || st.phase === 'PLAY' || st.phase === 'SRCH';
-  EL.foot.classList.toggle('hidden', isConn);
+function rndFoot() {
+  if (!EL.logi || !EL.conn) return;
+  const st    = window.IptvSt.ST;
+  const ready = st.phase === 'READY' || st.phase === 'PLAY' || st.phase === 'SRCH';
+  EL.logi.style.display = ready ? 'none' : '';
+  EL.conn.style.display = ready ? '' : 'none';
+  if (ready) {
+    const cnt = st.chs.length;
+    const cat = st.cats.length;
+    EL.ctxt.textContent = 'Connected to ' + st.host + ' as ' + st.user
+      + ' · ' + cnt + ' channels · ' + cat + ' categories';
+  }
+  if ((st.phase === 'INIT' || st.phase === 'ERR') && EL.ferr) {
+    EL.ferr.style.display = st.err ? '' : 'none';
+    if (st.err) EL.ferr.textContent = st.err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// onUrlInput — enable/disable Connect button based on URL input value
+// ---------------------------------------------------------------------------
+function onUrlInput() {
+  if (!EL.bcon || !EL.url) return;
+  const st = window.IptvSt.ST;
+  EL.bcon.disabled = EL.url.value.trim().length === 0 || st.phase === 'LOAD';
+}
+
+// ---------------------------------------------------------------------------
+// onOk — handle successful connect result
+// ---------------------------------------------------------------------------
+function onOk(val) {
+  window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
+  window.IptvSt.go('READY');
+  const st = window.IptvSt.ST;
+  rndSide(st.cats, st.chs, st.favs);
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
+  rndFoot();
+  if (EL.bcon) { EL.bcon.textContent = 'Connect'; EL.bcon.disabled = false; }
+  if (EL.url)   EL.url.disabled   = false;
+  if (EL.uname) EL.uname.disabled = false;
+  if (EL.pwd)   EL.pwd.disabled   = false;
+}
+
+// ---------------------------------------------------------------------------
+// onFail — handle failed connect result
+// ---------------------------------------------------------------------------
+function onFail(msg) {
+  window.IptvSt.setErr(msg);
+  window.IptvSt.go('ERR');
+  if (EL.ferr) { EL.ferr.textContent = msg; EL.ferr.style.display = ''; }
+  if (EL.bcon) { EL.bcon.textContent = 'Connect'; EL.bcon.disabled = false; }
+  if (EL.url)   EL.url.disabled   = false;
+  if (EL.uname) EL.uname.disabled = false;
+  if (EL.pwd)   EL.pwd.disabled   = false;
+  rndFoot();
+}
+
+// ---------------------------------------------------------------------------
+// runConn — async: read inputs, call API, delegate to onOk/onFail
+// ---------------------------------------------------------------------------
+async function runConn() {
+  const src  = EL.url   ? EL.url.value.trim()   : '';
+  const user = EL.uname ? EL.uname.value.trim() : '';
+  const pass = EL.pwd   ? EL.pwd.value          : '';
+  window.IptvSt.go('LOAD');
+  if (EL.bcon) { EL.bcon.disabled = true; EL.bcon.textContent = '⧖ Connecting…'; }
+  if (EL.url)   EL.url.disabled   = true;
+  if (EL.uname) EL.uname.disabled = true;
+  if (EL.pwd)   EL.pwd.disabled   = true;
+  const res = await window.IptvApi.connect(src, { user, pass });
+  if (res.ok) { onOk(res.val); } else { onFail(res.err); }
+}
+
+// ---------------------------------------------------------------------------
+// onConn — form submit handler; prevents default, calls runConn
+// ---------------------------------------------------------------------------
+function onConn(evt) {
+  evt.preventDefault();
+  runConn().catch(function onErr(e) { onFail(e.message); });
+}
+
+// ---------------------------------------------------------------------------
+// onDisc — disconnect button handler
+// ---------------------------------------------------------------------------
+function onDisc() {
+  const cur = window.IptvSt.ST.phase;
+  if (window.IptvPlay && cur === 'PLAY') window.IptvPlay.stopPlay();
+  window.IptvSt.setChs([], [], '', '');
+  if (cur === 'SRCH') window.IptvSt.go('READY');
+  if (window.IptvSt.ST.phase === 'PLAY' || window.IptvSt.ST.phase === 'READY') {
+    window.IptvSt.go('ERR');
+  }
+  if (window.IptvSt.ST.phase === 'ERR') window.IptvSt.go('INIT');
+  if (EL.url)   { EL.url.value   = ''; EL.url.disabled   = false; }
+  if (EL.uname) { EL.uname.value = ''; EL.uname.disabled = false; }
+  if (EL.pwd)   { EL.pwd.value   = ''; EL.pwd.disabled   = false; }
+  if (EL.bcon)  { EL.bcon.disabled = true; EL.bcon.textContent = 'Connect'; }
+  rndFoot();
+  rndSide([], [], []);
+  rndGrid([]);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,4 +395,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFooter, rndPhase };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase };
