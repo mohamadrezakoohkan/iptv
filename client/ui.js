@@ -1,4 +1,4 @@
-// ADR: ADR-0001
+// ADR: ADR-0001, ADR-0004
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -8,12 +8,15 @@
 // ---------------------------------------------------------------------------
 const EL = {
   list: null,   // .ch-grid / #ch-list
-  play: null,   // #player
+  play: null,   // #player-video
   srch: null,   // #search
   info: null,   // #now-info
-  err:  null,   // #err-bar
+  err:  null,   // #player-err
   nav:  null,   // #grp-nav / .sidebar-list
   foot: null,   // #footer-form
+  card: null,   // #player-card
+  idle: null,   // #player-idle
+  wrap: null,   // #player-wrap
 };
 
 // ---------------------------------------------------------------------------
@@ -162,12 +165,15 @@ function onGridKey(evt) {
 // ---------------------------------------------------------------------------
 function mkEL() {
   EL.list = document.getElementById('ch-list');
-  EL.play = document.getElementById('player');
+  EL.play = document.getElementById('player-video');
   EL.srch = document.getElementById('search');
   EL.info = document.getElementById('now-info');
-  EL.err  = document.getElementById('err-bar');
+  EL.err  = document.getElementById('player-err');
   EL.nav  = document.getElementById('grp-nav');
   EL.foot = document.getElementById('footer-form');
+  EL.card = document.getElementById('player-card');
+  EL.idle = document.getElementById('player-idle');
+  EL.wrap = document.getElementById('player-wrap');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -236,6 +242,23 @@ function rndFooter() {
 }
 
 // ---------------------------------------------------------------------------
+// rndPlayer — update player-card visibility based on current phase
+// ---------------------------------------------------------------------------
+function rndPlayer() {
+  const st   = window.IptvSt.ST;
+  const play = st.phase === 'PLAY';
+  const err  = st.phase === 'ERR' && st.cur !== null;
+  if (EL.wrap) EL.wrap.style.display = err ? 'block' : '';
+  if (EL.card) EL.card.classList.toggle('player-idle', !play);
+  if (EL.idle) EL.idle.style.display = play ? 'none' : '';
+  if (EL.play) EL.play.style.display = play ? '' : 'none';
+  if (EL.err) {
+    EL.err.style.display = err ? '' : 'none';
+    if (err) EL.err.textContent = st.err ? st.err : '';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // rndPhase — apply body.is-{phase} CSS class from ST.phase
 // ---------------------------------------------------------------------------
 function rndPhase() {
@@ -247,6 +270,7 @@ function rndPhase() {
   if (st.phase) {
     document.body.classList.add('is-' + st.phase.toLowerCase());
   }
+  rndPlayer();
 }
 
 // ---------------------------------------------------------------------------

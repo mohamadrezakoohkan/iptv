@@ -2,8 +2,8 @@
 id: TASK-0007
 adr: ADR-0004
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0003, TASK-0004]
 ---
 
@@ -51,3 +51,20 @@ when a stream is loaded, and shows an error overlay on fatal hls.js errors.
 - **UI:** Playwright — load app in demo mode; before channel selection verify
   `#player-idle` is visible; click a channel card; verify `#player-idle`
   is hidden and video element is present in player card.
+
+## Implementation notes
+
+### Files changed
+- `client/play.js` — created; hls.js wrapper exposing `mkPlay`, `loadPlay`, `stopPlay` via `window.IptvPlay`
+- `client/ui.js` — added `card`, `idle`, `wrap` to EL registry; added `rndPlayer()` helper called from `rndPhase()`; updated `mkEL()` to init new refs; updated ADR comment
+- `client/app.css` — added `#player-card.player-idle { position: relative; inset: auto; }` override to prevent the `.player-idle` overlay CSS from expanding `#player-card` when the class is toggled for state tracking; updated ADR comment
+- `index.html` — added `id`s (`player-card`, `player-video`, `player-err`, `player-wrap`); changed `id="player"` → `id="player-video"`, `id="err-bar"` → `id="player-err"`; added hls.js CDN `<script>` tag and `<script src="/play.js">`; updated ADR comment
+- `adrs/ADR-0004-video-playback.md` — `governs:` trued up with `client/ui.js`, `client/app.css`, `index.html`
+- `tests/unit/play.test.js` — created; 10 unit tests covering all `loadPlay`/`stopPlay` paths
+- `tests/ui/player.test.js` — created; 11 Playwright tests covering idle/play/error DOM state transitions
+
+### Non-obvious decisions
+- **CSS conflict fix**: `.player-idle { position: absolute; inset: 0 }` is used for the overlay div. Toggling it on `#player-card` for state tracking would make the card `position: absolute; inset: 0`, breaking layout. Added `#player-card.player-idle { position: relative; inset: auto }` to neutralize the conflict.
+- **`body.is-err .player-wrap { display: none }` override**: Pre-existing CSS hides `.player-wrap` in ERR phase. `rndPlayer()` sets `EL.wrap.style.display = 'block'` when ERR + cur is set, overriding the CSS rule so `#player-err` overlay has dimensions and is visible.
+- **Stub design for unit tests**: HLS stub functions are assigned as own properties in the constructor body (not prototype), so call-tracking is done via a shared `log` object reference captured in the closure — not via prototype mutation after instantiation.
+- **Out-of-scope observation**: `client/main.js` (TASK-0009) needs to call `IptvPlay.mkPlay(document.getElementById('player-video'))` once at DOMContentLoaded. This is noted here but not implemented (out of scope).

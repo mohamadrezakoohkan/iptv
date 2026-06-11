@@ -6,6 +6,9 @@ evolution: 1
 status: accepted
 governs:
   - client/play.js
+  - client/ui.js
+  - client/app.css
+  - index.html
 ---
 
 # ADR-0004 — Video playback — hls.js with native HLS fallback

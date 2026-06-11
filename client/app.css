@@ -1,4 +1,4 @@
-/* ADR: ADR-0001 */
+/* ADR: ADR-0001, ADR-0004 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -65,6 +65,8 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .player-card { width: 100%; aspect-ratio: 16/9; max-height: 35vh; background: var(--sur); border: 1px solid var(--ln); border-radius: 8px; overflow: hidden; position: relative; }
 .player-card video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
 .player-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+/* Keep player-card positioned correctly when player-idle class is toggled onto it for state tracking */
+#player-card.player-idle { position: relative; inset: auto; }
 .idle-icon { width: 48px; height: 48px; border: 2px solid var(--ln); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; }
 .idle-bar { height: 3px; border-radius: 2px; background: var(--ln); }
 .idle-bar:nth-child(1) { width: 28px; }

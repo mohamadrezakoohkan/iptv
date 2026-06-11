@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001 -->
+<!-- ADR: ADR-0001, ADR-0004 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -32,9 +32,9 @@
           </div>
           <span class="now-title" id="now-info"></span>
         </div>
-        <div class="player-wrap">
-          <div class="player-card">
-            <video id="player" playsinline></video>
+        <div class="player-wrap" id="player-wrap">
+          <div id="player-card" class="player-card player-idle">
+            <video id="player-video" controls playsinline style="display:none"></video>
             <div class="player-idle" id="player-idle">
               <div class="idle-icon">
                 <div class="idle-bar"></div>
@@ -43,7 +43,7 @@
               </div>
               <span class="idle-label">NO SIGNAL</span>
             </div>
-            <div class="player-err" id="err-bar" style="display:none"></div>
+            <div class="player-err" id="player-err" style="display:none"></div>
           </div>
         </div>
         <div class="ch-section">
@@ -73,9 +73,11 @@
       <div class="footer-hint">Type 'demo' to try a sample playlist.</div>
     </footer>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
   <script src="/api.js"></script>
   <script src="/st.js"></script>
   <script src="/srch.js"></script>
+  <script src="/play.js"></script>
   <script src="/ui.js"></script>
 </body>
 </html>
