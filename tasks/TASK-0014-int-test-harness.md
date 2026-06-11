@@ -2,8 +2,8 @@
 id: TASK-0014
 adr: ADR-0006
 evolution: 3
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -62,5 +62,32 @@ network is up.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `vitest.int.config.js` (new) — CommonJS, mirrors `vitest.config.js`;
+  include `tests/int/**/*.test.js`, `testTimeout`/`hookTimeout` 120000,
+  `fileParallelism: false`. Carries `// ADR: ADR-0006`.
+- `tests/int/proxy.test.js` (new) — boots a fresh `express()` app with
+  `server/rtr.js` mounted, `listen(0, '127.0.0.1')` in `beforeAll`,
+  `srv.close()` in `afterAll`. Two tests: live fetch of
+  `https://iptv-org.github.io/iptv/index.m3u` via
+  `/api/xtream?url=<encoded>` (asserts 200 + first non-empty line starts
+  with `#EXTM3U`), and live invalid-target rejection
+  (`?url=not-a-url` → 400 + `{ err: string }`).
+- `package.json` — added `test:int` script
+  (`vitest run --config vitest.int.config.js`). No comment possible in
+  JSON; linked from ADR-0006's Traceability section only.
+
+Non-obvious points:
+
+- Test file uses ESM `import` + `createRequire` to load CommonJS server
+  modules — same pattern as `tests/unit/rtr.test.js`.
+- `beforeAll`/`afterAll` return Promises wrapping the server lifecycle so
+  Vitest awaits bind/close; no fixed ports, no child processes, no
+  supertest (ADR-0006).
+- ADR-0006's `governs:` list already matched the created paths exactly;
+  no ADR edit was required.
+
+Verified locally: integration suite 2/2 pass with live network (~0.7 s —
+the CDN is fast), unit suite 206/206 pass with no `tests/int` file picked
+up, UI suite 66/66 pass.

@@ -4,7 +4,8 @@
   "main": "server/srv.js",
   "scripts": {
     "start": "node server/srv.js",
-    "test": "npx vitest run"
+    "test": "npx vitest run",
+    "test:int": "vitest run --config vitest.int.config.js"
   },
   "dependencies": {
     "express": "^4.19.2"
