@@ -2,8 +2,8 @@
 id: TASK-0003
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 2
 depends_on: [TASK-0001]
 ---
 
@@ -49,3 +49,26 @@ rendering lives here.
   functions — verify they mutate only their intended `ST` properties. `onPhase`
   callback is invoked after `go()`.
 - **UI:** n/a — pure logic module.
+
+## Implementation notes
+
+**Files touched:**
+- `client/st.js` — created (new file)
+- `tests/unit/st.test.js` — created (new file)
+- `tasks/TASK-0003-state-machine.md` — status updated to `validating`, attempts set to 2
+
+**Design notes:**
+- `ST` is declared with `const` and fully initialized per acceptance criteria. The properties use `cats`, `favs`, `host`, `user` (as specified by the task) which differ from the generic example in CONVENTIONS.md §5 — the acceptance criteria takes precedence.
+- `_phaseCb` is a module-level `let` variable (not a property on ST); this keeps the callback registry out of the state object (no new ST properties after declaration rule respected).
+- `go()` sets `ST.phase` first, then calls `_phaseCb()`, so the callback always sees the updated phase — matching the acceptance criteria requirement that `rndPhase()` is called after state change.
+- All setter functions are named function declarations (RULE-FN-5) and each is under 20 lines (RULE-FN-2).
+- The IIFE wrapping pattern from `api.js` was not used; `st.js` uses a flat top-level module with `'use strict'` and `window.IptvSt = {...}` directly, since the IIFE pattern is an `api.js` artifact, not required by CONVENTIONS.md for `st.js`.
+- ADR traceability: `client/st.js` already appeared in `governs:` for ADR-0001 (no update needed there); ADR-0003 `governs:` already lists `client/st.js` (no update needed).
+
+**Test coverage (65 tests passing):**
+- `go()` valid transitions: all 10 defined transitions in PHASES map
+- `go()` invalid transitions: 9 cases including BOGUS target
+- `ST.phase` mutation: starts as INIT, updates on valid call, unchanged on invalid call
+- `onPhase(cb)`: callback invoked, called after phase update, replaces previous, not called on throw
+- Each setter (`setErr`, `setChs`, `setCur`, `setSrch`, `setFlt`, `setVol`, `setMuted`, `setFavs`): correct mutation + no side-effects on unrelated properties
+- ST initial state: all 12 properties verified
