@@ -2,8 +2,8 @@
 id: TASK-0011
 adr: ADR-0005
 evolution: 2
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -63,4 +63,13 @@ Neither function makes network calls, touches the DOM, or writes to `ST`.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+### Files changed
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/client/api.js` — Added six helper functions (`getM3uAttr`, `getChanName`, `mkM3uCh`, `parsInfLine`, `firstNonEmpty`, `parsM3uLines`, `getM3uCats`) plus the two exported functions `isM3u` and `parsM3u`. Updated ADR comment from `ADR-0001` to `ADR-0001, ADR-0005`. Added `URL` to globals comment. Exported `isM3u` and `parsM3u` on `window.IptvApi`.
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/tests/unit/api.test.js` — Appended two new `describe` blocks: `isM3u` (6 cases) and `parsM3u` (5 cases), all using the existing `loadApi` harness with `URL` injected as an additional global.
+
+### Non-obvious choices
+- `isM3u` wraps `new URL()` in try/catch per the task spec (ADR §Detection) despite RULE-ERR-4. This is the correct tradeoff: the function is a pure predicate that must degrade gracefully on unparseable URLs; it falls back to a raw string `.m3u`/`.m3u8` suffix check.
+- `parsM3uLines` preserves `inf` across blank lines and non-EXTINF comment lines (`#EXTVLCOPT`, etc.), so a comment between `#EXTINF` and the stream URL does not silently drop the channel.
+- `mkM3uCh` uses `tvgName || chanName` as `name`, honouring the precedence specified in the task: tvg-name attribute wins, then name-after-comma fallback.
+- `stream_id`, `category_id`, and `categoryId` extra fields are emitted for downstream UI compatibility as specified in the task.
+- All new helper functions are at IIFE scope (not nested), satisfying RULE-FN-6. All are ≤ 20 lines, satisfying RULE-FN-2.

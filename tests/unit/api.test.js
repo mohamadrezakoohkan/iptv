@@ -236,3 +236,130 @@ describe('connect(realUrl) — error handling', function () {
     expect(res.err).toContain('reach');
   });
 });
+
+// ---------------------------------------------------------------------------
+// isM3u
+// ---------------------------------------------------------------------------
+describe('isM3u', function () {
+  let api;
+  beforeEach(function () {
+    api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
+  });
+
+  it('returns true for URL with .m3u extension', function () {
+    expect(api.isM3u('https://example.com/list.m3u', '', '')).toBe(true);
+  });
+
+  it('returns true for URL with .M3U8 extension (case-insensitive)', function () {
+    expect(api.isM3u('https://example.com/list.M3U8', '', '')).toBe(true);
+  });
+
+  it('returns true for .m3u extension even when credentials are provided (extension takes priority)', function () {
+    expect(api.isM3u('https://example.com/list.m3u', 'user', 'pass')).toBe(true);
+  });
+
+  it('returns true for plain http URL with no credentials (no extension)', function () {
+    expect(api.isM3u('http://portal.example.com', '', '')).toBe(true);
+  });
+
+  it('returns false for "demo" (demo bypass)', function () {
+    expect(api.isM3u('demo', '', '')).toBe(false);
+  });
+
+  it('returns false when credentials are present and no extension (Xtream+creds bypass)', function () {
+    expect(api.isM3u('http://portal.example.com', 'admin', '1234')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parsM3u
+// ---------------------------------------------------------------------------
+describe('parsM3u', function () {
+  let api;
+  beforeEach(function () {
+    api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
+  });
+
+  it('returns ok:false when text does not start with #EXTM3U', function () {
+    const res = api.parsM3u('some random text\n#EXTINF:-1,Channel\nhttp://stream.example.com/ch1');
+    expect(res.ok).toBe(false);
+    expect(res.err).toBe('not an M3U file');
+  });
+
+  it('parses a minimal 2-channel M3U fixture correctly', function () {
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 tvg-id="ch1" tvg-name="Channel One" tvg-logo="http://img.example.com/1.png" group-title="News",Channel One',
+      'http://stream.example.com/ch1',
+      '#EXTINF:-1 tvg-id="ch2" tvg-name="Channel Two" tvg-logo="" group-title="Sports",Channel Two',
+      'http://stream.example.com/ch2',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.channels).toHaveLength(2);
+    const ch1 = res.val.channels[0];
+    expect(ch1.id).toBe('ch1');
+    expect(ch1.name).toBe('Channel One');
+    expect(ch1.url).toBe('http://stream.example.com/ch1');
+    expect(ch1.img).toBe('http://img.example.com/1.png');
+    expect(ch1.grp).toBe('News');
+    expect(ch1.num).toBe(1);
+    const ch2 = res.val.channels[1];
+    expect(ch2.id).toBe('ch2');
+    expect(ch2.grp).toBe('Sports');
+    expect(ch2.num).toBe(2);
+  });
+
+  it('derives deduplicated ordered categories from channels', function () {
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 group-title="Sports",Sport A',
+      'http://stream.example.com/a',
+      '#EXTINF:-1 group-title="News",News A',
+      'http://stream.example.com/b',
+      '#EXTINF:-1 group-title="Sports",Sport B',
+      'http://stream.example.com/c',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.categories).toHaveLength(2);
+    expect(res.val.categories[0]).toEqual({ category_id: 'Sports', category_name: 'Sports' });
+    expect(res.val.categories[1]).toEqual({ category_id: 'News', category_name: 'News' });
+  });
+
+  it('defaults grp to "Other" when group-title is absent', function () {
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 tvg-name="No Group Channel",No Group Channel',
+      'http://stream.example.com/nogrp',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.channels[0].grp).toBe('Other');
+    expect(res.val.categories[0]).toEqual({ category_id: 'Other', category_name: 'Other' });
+  });
+
+  it('skips an #EXTINF entry whose following stream URL line is absent', function () {
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 group-title="News",Real Channel',
+      'http://stream.example.com/real',
+      '#EXTINF:-1 group-title="News",Missing URL Channel',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.channels).toHaveLength(1);
+    expect(res.val.channels[0].name).toBe('Real Channel');
+  });
+
+  it('correctly handles channel name with embedded commas (uses last comma)', function () {
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 group-title="News",News, Live,Actual Name',
+      'http://stream.example.com/actual',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.channels[0].name).toBe('Actual Name');
+  });
+});

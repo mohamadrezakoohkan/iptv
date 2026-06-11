@@ -1,5 +1,5 @@
-// ADR: ADR-0001
-/* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise */
+// ADR: ADR-0001, ADR-0005
+/* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
   'use strict';
@@ -120,5 +120,119 @@
     return { ok: true, val: { host: src, user: opts.user, categories: val, channels: res.val } };
   }
 
-  window.IptvApi = { connect, isDemo };
+  /** Extract quoted attribute value from an #EXTINF line. Returns '' if absent. */
+  function getM3uAttr(line, attr) {
+    const re = new RegExp(attr + '="([^"]*)"');
+    const m = line.match(re);
+    return m ? m[1] : '';
+  }
+
+  /** Extract channel name from #EXTINF line (substring after last comma). */
+  function getChanName(line) {
+    const idx = line.lastIndexOf(',');
+    return idx >= 0 ? line.slice(idx + 1).trim() : '';
+  }
+
+  /** Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num} */
+  function mkM3uCh(opts) {
+    const grp = opts.grp || 'Other';
+    return {
+      id:          opts.tvgId || String(opts.num),
+      name:        opts.tvgName || opts.chanName,
+      grp,
+      url:         opts.strUrl,
+      img:         opts.img,
+      cat:         grp,
+      num:         opts.num,
+      stream_id:   opts.num,
+      category_id: grp,
+      categoryId:  grp,
+    };
+  }
+
+  /** Parse one #EXTINF line into an info object for mkM3uCh. */
+  function parsInfLine(line) {
+    return {
+      tvgId:    getM3uAttr(line, 'tvg-id'),
+      tvgName:  getM3uAttr(line, 'tvg-name'),
+      grp:      getM3uAttr(line, 'group-title'),
+      img:      getM3uAttr(line, 'tvg-logo'),
+      chanName: getChanName(line),
+    };
+  }
+
+  /** Accumulate channels from already-split lines (after the #EXTM3U header). */
+  function parsM3uLines(lines) {
+    const chs = [];
+    let inf = null;
+    let num = 1;
+    for (let i = 0; i < lines.length; i += 1) {
+      const ln = lines[i].trim();
+      if (ln.startsWith('#EXTINF')) {
+        inf = parsInfLine(ln);
+      } else if (inf !== null && ln.length > 0 && !ln.startsWith('#')) {
+        chs.push(mkM3uCh({ tvgId: inf.tvgId, tvgName: inf.tvgName, grp: inf.grp, img: inf.img, chanName: inf.chanName, strUrl: ln, num }));
+        num += 1;
+        inf = null;
+      }
+      /* blank lines and non-EXTINF comment lines are skipped without resetting inf */
+    }
+    return chs;
+  }
+
+  /** Derive deduplicated ordered categories array from channels list. */
+  function getM3uCats(chs) {
+    const seen = new Set();
+    const cats = [];
+    for (let i = 0; i < chs.length; i += 1) {
+      const grp = chs[i].grp;
+      if (!seen.has(grp)) {
+        seen.add(grp);
+        cats.push({ category_id: grp, category_name: grp });
+      }
+    }
+    return cats;
+  }
+
+  /** Find index of first non-empty line. Used by parsM3u. */
+  function firstNonEmpty(lines) {
+    for (let i = 0; i < lines.length; i += 1) {
+      if (lines[i].trim().length > 0) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * Pure M3U parser. Returns Result<{categories, channels}>.
+   * @param {string} text - raw M3U playlist text
+   */
+  function parsM3u(text) {
+    const lines = text.split('\n');
+    const first = firstNonEmpty(lines);
+    if (first < 0 || !lines[first].trim().startsWith('#EXTM3U')) {
+      return { ok: false, err: 'not an M3U file' };
+    }
+    const chs = parsM3uLines(lines.slice(first + 1));
+    return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
+  }
+
+  /**
+   * M3U detection heuristic.
+   * Returns true if URL ends with .m3u/.m3u8 (case-insensitive) OR
+   * user+pass are absent and URL is a plain http(s) URL (not "demo").
+   * @param {string} url
+   * @param {string} user
+   * @param {string} pass
+   */
+  function isM3u(url, user, pass) {
+    let pth = '';
+    try { pth = new URL(url).pathname; } catch (_) { pth = url || ''; }
+    if (/\.(m3u8?)$/i.test(pth)) return true;
+    const noCredentials = !user && !pass;
+    const notDemo = typeof url === 'string' && url.trim().toLowerCase() !== 'demo';
+    const isHttp = typeof url === 'string' && /^https?:\/\//i.test(url);
+    return Boolean(noCredentials && notDemo && isHttp);
+  }
+
+  window.IptvApi = { connect, isDemo, isM3u, parsM3u };
 }());
