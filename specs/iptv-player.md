@@ -130,15 +130,39 @@ mono labels.
 
 ### Logged-out state
 
-Flex row: Portal URL field (flex-grow 2), Username field, Password field,
-Connect button (amber fill), hint text.
+Flex row: login-mode selector, Portal URL field (flex-grow 2), Username
+field, Password field, Connect button (amber fill), hint text.
 
-- Portal URL: accepts any `http(s)://host` Xtream URL or the literal string
-  `"demo"` to load the built-in demo playlist.
+#### Login-mode selector (explicit user choice — no auto-detection)
+
+The user **explicitly chooses** how to log in via a two-option mode
+selector rendered inside the login form:
+
+| Mode     | Label                  | Fields shown                  |
+|----------|------------------------|-------------------------------|
+| `xtream` | "Username & Password"  | URL + Username + Password     |
+| `m3u`    | "Playlist URL only"    | URL only                      |
+
+- Default mode on load: `xtream`.
+- Selecting `m3u` hides the Username and Password fields (CSS class
+  `is-m3u` on `#footer-login`); selecting `xtream` shows them again.
+- The selector is keyboard-accessible and its active option is visually
+  distinct.
+- **The URL input never changes the mode.** Typing a `.m3u`/`.m3u8` URL in
+  `xtream` mode does not hide the credential fields; typing a portal URL in
+  `m3u` mode does not reveal them. Auto-detection of M3U URLs is removed.
+- Hint text per mode:
+  - `xtream`: `Type "demo" to try a sample playlist.`
+  - `m3u`: `Paste an .m3u / .m3u8 playlist URL — no login needed.`
+
+#### Connect behavior
+
+- Portal URL: in `xtream` mode accepts any `http(s)://host` Xtream URL; in
+  `m3u` mode accepts any `http(s)://` playlist URL. The literal string
+  `"demo"` loads the built-in demo playlist in **either** mode.
 - On Connect click: show loading state (button disabled, spinner), call
-  `IptvApi.connect()`, transition to logged-in state on success or show inline
-  error on failure.
-- Hint text: "Type 'demo' to try a sample playlist."
+  `IptvApi.connect()` with the selected mode, transition to logged-in state
+  on success or show inline error on failure.
 
 ### Logged-in state
 
@@ -148,19 +172,33 @@ session, removes stored credentials, resets state to INIT.
 
 ---
 
-## 8. Xtream API integration
+## 8. Connection engine (Xtream + M3U)
 
 The design ships `client/api.js` as a self-contained IIFE that exposes
 `window.IptvApi`. The server-side proxy in `server/rtr.js` forwards
-`/api/xtream/*` requests to the target portal, stripping credentials from
-the URL and re-adding them server-side so browser CORS is never an issue.
+`/api/xtream?url=<encoded>` requests to the target host, so browser CORS is
+never an issue for portals or remote M3U files.
 
-`IptvApi.connect(url, user, pass)` returns a Promise that resolves to:
+`IptvApi.connect(src, opts)` — `opts: { user, pass, m3u }` — returns a
+Promise resolving to a Result (`{ ok, val }` / `{ ok, err }`, RULE-FN-4)
+whose `val` is:
 ```
 { server, host, user, categories: Cat[], channels: Ch[] }
 ```
 
-**Demo mode**: when `url === "demo"` (case-insensitive), `IptvApi.connect()`
+**Routing is explicit, never inferred from the URL:**
+
+1. `src === "demo"` (case-insensitive) → demo playlist, in either mode.
+2. `opts.m3u === true` → M3U path: fetch `src` through the proxy, parse
+   `#EXTM3U` text into categories + channels.
+3. otherwise → Xtream path: `player_api.php` categories + live streams.
+
+There is **no URL-shape heuristic**: a `.m3u8` URL with `m3u: false` is
+treated as an Xtream portal, and a credential-less plain URL with
+`m3u: true` is treated as a playlist. The caller (footer mode selector,
+stored-session reconnect, or a test) always states the mode.
+
+**Demo mode**: when `src === "demo"` (case-insensitive), `IptvApi.connect()`
 returns a synthetic playlist of 7 categories / 34 channels routed to two
 public HLS test streams after a 700ms simulated delay.
 
@@ -168,15 +206,22 @@ public HLS test streams after a 700ms simulated delay.
 
 ## 9. Persistence (localStorage)
 
-| Key                 | Type   | Contents                                      |
-|---------------------|--------|-----------------------------------------------|
-| `iptv_creds`        | JSON   | `{ url, user, pass }` — auto-reconnect on load|
-| `iptv_sel`          | string | last selected `stream_id`                     |
-| `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)     |
+| Key                 | Type   | Contents                                              |
+|---------------------|--------|-------------------------------------------------------|
+| `iptv_creds`        | JSON   | `{ url, user, pass, m3u }` — auto-reconnect on load   |
+| `iptv_sel`          | string | last selected `stream_id`                             |
+| `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)             |
 
 On page load, if `iptv_creds` is present, the app silently calls
-`IptvApi.connect()` with stored credentials. On success the session is
-restored (including last-selected channel and favourites).
+`IptvApi.connect()` with stored credentials **and the stored `m3u` mode
+flag**. On success the session is restored (including last-selected channel
+and favourites).
+
+Legacy migration: a stored `iptv_creds` value written before the mode flag
+existed has no `m3u` property. It is interpreted once, deterministically:
+`m3u` is `true` when both `user` and `pass` are empty and `url` is not
+`"demo"`, else `false`. This is a read-time migration of stored data only —
+never applied to live form input.
 
 Credentials are stored only after a successful connect; a failed connect
 never writes to localStorage. Disconnect removes `iptv_creds` but preserves
