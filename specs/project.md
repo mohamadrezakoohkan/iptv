@@ -35,17 +35,23 @@ without real credentials.
 | Player  | hls.js 1.5 (CDN) + native HLS fallback (Safari)            |
 | CSS     | Plain CSS, custom properties, no preprocessor               |
 | Fonts   | Space Grotesk + IBM Plex Mono (Google Fonts CDN)            |
-| Testing | Vitest (unit) + Playwright (UI/e2e)                         |
+| Testing | Vitest (unit + integration) + Playwright (UI/e2e)           |
 
 ## Canonical commands
 
-| Purpose        | Command                                    |
-|----------------|--------------------------------------------|
-| Setup          | `npm install`                              |
-| Build / run    | `node server/srv.js`                       |
-| Unit test suite| `npx vitest run`                           |
-| UI test suite  | `npx playwright test`                      |
+| Purpose                | Command                                       |
+|------------------------|-----------------------------------------------|
+| Setup                  | `npm install`                                 |
+| Build / run            | `node server/srv.js`                          |
+| Unit test suite        | `npx vitest run`                              |
+| UI test suite          | `npx playwright test`                         |
+| Integration test suite | `npx vitest run --config vitest.int.config.js`|
+
+The integration suite requires live outbound network access (it validates
+real connectivity to public IPTV endpoints). It is intentionally excluded
+from the unit suite's config so `npx vitest run` stays network-free.
 
 ## Feature specs
 
 - `specs/iptv-player.md` — full IPTV player broadcast console feature spec
+- `specs/integration-testing.md` — live-network integration test tier
