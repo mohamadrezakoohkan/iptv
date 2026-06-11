@@ -8,12 +8,12 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 ## #2 — 2026-06-11 — M3U playlist URL support
 
 - **Prompt:** Add M3U playlist URL support — users can paste any `.m3u` / `.m3u8` URL (e.g. `https://iptv-org.github.io/iptv/index.m3u`) and the app connects, browses, and plays channels with the same UX as Xtream portals.
-- **Outcome:** Shipped. All 3 tasks completed and validated.
+- **Outcome:** Shipped. All 4 tasks completed and validated.
 - **ADRs:** ADR-0005 (M3U playlist support — detection, parse, CORS proxy reuse, footer UI adaptation).
-- **Tasks:** 3 done, 0 failed, 0 blocked. TASK-0011 `isM3u()` + `parsM3u()` pure functions · TASK-0012 `loadM3u()` fetch+parse integration + `connect()` routing · TASK-0013 footer UI adaptation (hide username/password for M3U URLs). TASK-0013 required 3 attempts — initial unit tests incorrectly asserted `setAttribute('required')` on inputs that never carry `required` in the HTML; corrected to `removeAttribute('required')` in both M3U and non-M3U branches.
-- **Tests:** 205 unit (Vitest) + 66 UI (Playwright) — all passing.
-- **Rules earned:** none (see proposed rule in review report).
-- **Artifacts:** `client/api.js` (isM3u, parsM3u, loadM3u, connect routing), `client/ui.js` (updM3u, onUrlInput), `client/app.css` (`.is-m3u` hide rules), `index.html` (field-user/field-pass classes), `tests/unit/api.test.js` (extended), `tests/unit/m3u-ui.test.js` (new), `tests/ui/m3u.test.js` (new), `tests/ui/m3u-ui.test.js` (new), `adrs/ADR-0005-m3u-playlist-support.md`, `tasks/TASK-001{1,2,3}-*.md`.
+- **Tasks:** 4 done, 0 failed, 0 blocked. TASK-0001 hot-fix: `res.headersSent` guard in `server/rtr.js` preventing ERR_HTTP_HEADERS_SENT crash · TASK-0011 `isM3u()` + `parsM3u()` pure functions · TASK-0012 `loadM3u()` fetch+parse integration + `connect()` routing · TASK-0013 footer UI adaptation (hide username/password for M3U URLs). TASK-0013 required 3 attempts — initial unit tests incorrectly asserted `setAttribute('required')` on inputs that never carry `required` in the HTML; corrected to `removeAttribute('required')` in both M3U and non-M3U branches, earning R-0001.
+- **Tests:** 206 unit (Vitest) + 66 UI (Playwright) — all passing.
+- **Rules earned:** R-0001 (FAIL-0001): Before writing unit tests that assert DOM attribute mutations, check the baseline HTML to confirm which attributes are actually present on the element.
+- **Artifacts:** `server/rtr.js` (headersSent guard), `client/api.js` (isM3u, parsM3u, loadM3u, connect routing), `client/ui.js` (updM3u, onUrlInput), `client/app.css` (`.is-m3u` hide rules), `index.html` (field-user/field-pass classes), `tests/unit/api.test.js` (extended), `tests/unit/rtr.test.js` (extended), `tests/unit/m3u-ui.test.js` (new), `tests/ui/m3u.test.js` (new), `tests/ui/m3u-ui.test.js` (new), `adrs/ADR-0005-m3u-playlist-support.md`, `tasks/TASK-0001-*.md`, `tasks/TASK-001{1,2,3}-*.md`.
 
 ---
 
