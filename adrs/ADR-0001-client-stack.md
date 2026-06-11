@@ -5,6 +5,7 @@ date: 2026-06-11
 evolution: 1
 status: accepted
 governs:
+  - client/api.js
   - client/main.js
   - client/st.js
   - client/ui.js

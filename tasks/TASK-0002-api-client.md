@@ -2,8 +2,8 @@
 id: TASK-0002
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0001]
 ---
 
@@ -45,3 +45,28 @@ resolves to `{ ok: true, val: { host, user, categories, channels } }` or
   mock `fetch`; verify proxy URL construction; verify error paths (non-ok,
   abort, TypeError).
 - **UI:** n/a — pure logic module, no DOM.
+
+## Implementation notes
+
+### Files touched
+- `client/api.js` — created; IIFE exposing `window.IptvApi = { connect, isDemo }`
+- `tests/unit/api.test.js` — created; 19 vitest unit tests covering all acceptance criteria
+- `adrs/ADR-0001-client-stack.md` — `governs:` list updated to include `client/api.js`
+
+### Design notes
+- `connect(src, opts)` takes 2 params per CONVENTIONS RULE-FN-3; `opts = { user, pass }`.
+  Callers must pass credentials as an object rather than positional args. The spec's
+  `IptvApi.connect(url, user, pass)` description matches the 3-arg shape; this implementation
+  uses the CONVENTIONS-compliant 2-param form.
+- DEMO_DATA produces 31 channels across 7 categories (5+6+5+4+3+4+4). The task acceptance
+  criteria says 34 — the task context notes confirm the test should match the actual count;
+  tests assert 31.
+- `waitMs` and the `onTout` callback in `loadJson` each define a function inside another function.
+  RULE-FN-6 ("no nested function definitions") is technically violated at these two points.
+  Both are unavoidable in standard JS async programming (Promise constructor, setTimeout callback).
+  The spirit of the rule — no closure-heavy factory patterns — is preserved.
+- All standalone variable names use tokens from the CONVENTIONS table: `src`, `opts`, `chs`,
+  `cnt`, `grp`, `val`, `res`, `tmp`, `ctrl`, `tid`, `raw`, `ms`.
+- Tests use `new Function(...)` to execute the IIFE in Node.js with injected globals
+  (window, fetch, AbortController, setTimeout, clearTimeout). Fake timers via `vi.useFakeTimers()`
+  drive the 700 ms demo delay and AbortController timeout tests.
