@@ -1,10 +1,10 @@
-<!-- ADR: ADR-0001, ADR-0004 -->
+<!-- ADR: ADR-0001 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IPTV Broadcast Console</title>
+  <title>IPTV player</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <body>
   <div class="app">
     <div class="app-main">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
           <span class="brand-dot"></span>
           <span class="brand-name">IPTV</span>
@@ -36,11 +36,14 @@
           <div id="player-card" class="player-card player-idle">
             <video id="player-video" controls playsinline style="display:none"></video>
             <div class="player-idle" id="player-idle">
-              <div class="idle-icon">
-                <div class="idle-bar"></div>
-                <div class="idle-bar"></div>
-                <div class="idle-bar"></div>
-              </div>
+              <svg class="idle-antenna" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="28" y="32" width="8" height="20" rx="2" fill="currentColor"/>
+                <rect x="20" y="48" width="24" height="4" rx="2" fill="currentColor"/>
+                <line x1="32" y1="32" x2="12" y2="14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                <line x1="32" y1="32" x2="52" y2="14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="12" cy="13" r="3" fill="currentColor"/>
+                <circle cx="52" cy="13" r="3" fill="currentColor"/>
+              </svg>
               <span class="idle-label">NO SIGNAL</span>
             </div>
             <div class="player-err" id="player-err" style="display:none"></div>
@@ -86,10 +89,13 @@
     </footer>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+  <script src="/cfg.js"></script>
   <script src="/api.js"></script>
   <script src="/st.js"></script>
   <script src="/srch.js"></script>
   <script src="/play.js"></script>
   <script src="/ui.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/main.js"></script>
 </body>
 </html>

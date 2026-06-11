@@ -2,8 +2,8 @@
 id: TASK-0009
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0002, TASK-0003, TASK-0004, TASK-0005, TASK-0006, TASK-0007, TASK-0008]
 ---
 
@@ -53,3 +53,22 @@ client constants including localStorage keys.
   page title is "IPTV player"; verify `#sidebar` visible; verify `#player-idle`
   visible; verify footer login form visible; verify no JS console errors on
   load.
+
+## Implementation notes
+
+### Files created
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/client/cfg.js` — client config: const S with all keys, Object.freeze(S), window.S
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/client/nav.js` — stub: window.IptvNav = {}
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/client/main.js` — DOMContentLoaded entry; onReady + goLoad as module-level functions; onConnRes extracted as module-level (RULE-FN-6 compliance — no nested fn defs)
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/tests/unit/cfg.test.js` — 11 unit tests for S contract
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/tests/ui/smoke.test.js` — 7 smoke UI tests
+
+### Files modified
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/index.html` — title updated to "IPTV player"; ADR comment updated; sidebar gets id="sidebar"; idle state uses inline SVG antenna icon; script load order now includes /cfg.js, /nav.js, /main.js
+- `/Users/mohammadreza/Desktop/Personal/vibe-coded-apps/iptv/adrs/ADR-0003-persistence.md` — governs: now includes client/cfg.js
+
+### Non-obvious decisions
+- `onConnRes` extracted from inside goLoad to comply with CONVENTIONS §9 RULE-FN-6 (no nested function definitions); it is a module-level named function
+- `loadSt` is conditionally accessed via `window.IptvSt.loadSt` because TASK-0010 (persistence layer) has not been implemented yet; a null check prevents crashes
+- `onReady` destructures `onPhase` from IptvUi but it doesn't exist on IptvUi — it uses `regPhase` (aliased from `window.IptvSt.onPhase`) to register the phase callback
+- idle state in player uses inline SVG rather than CSS bars, per the "inline SVG for the antenna idle icon" requirement in the acceptance criteria
