@@ -6,6 +6,7 @@ evolution: 1
 status: accepted
 governs:
   - client/api.js
+  - client/app.css
   - client/main.js
   - client/st.js
   - client/ui.js

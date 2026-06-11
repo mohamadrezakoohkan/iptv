@@ -10,4 +10,9 @@ module.exports = defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
   },
+  webServer: {
+    command: 'node server/srv.js',
+    port: 3000,
+    reuseExistingServer: true,
+  },
 });

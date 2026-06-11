@@ -1,12 +1,77 @@
+<!-- ADR: ADR-0001 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IPTV Broadcast Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-  <h1>IPTV Broadcast Console</h1>
-  <p>Coming soon.</p>
+  <div class="app">
+    <div class="app-main">
+      <aside class="sidebar">
+        <div class="sidebar-head">
+          <span class="brand-dot"></span>
+          <span class="brand-name">IPTV</span>
+        </div>
+        <div class="sidebar-search">
+          <div class="search-field">
+            <input id="search" type="text" placeholder="Search channels…" autocomplete="off">
+          </div>
+        </div>
+        <div class="sidebar-list" id="grp-nav"></div>
+      </aside>
+      <main class="content">
+        <div class="content-head">
+          <div class="on-air-badge" id="on-air-badge">
+            <span class="on-air-dot"></span>ON AIR
+          </div>
+          <span class="now-title" id="now-info"></span>
+        </div>
+        <div class="player-wrap">
+          <div class="player-card">
+            <video id="player" playsinline></video>
+            <div class="player-idle" id="player-idle">
+              <div class="idle-icon">
+                <div class="idle-bar"></div>
+                <div class="idle-bar"></div>
+                <div class="idle-bar"></div>
+              </div>
+              <span class="idle-label">NO SIGNAL</span>
+            </div>
+            <div class="player-err" id="err-bar" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ch-section">
+          <div class="ch-bar">
+            <span class="ch-bar-count" id="ch-count"></span>
+          </div>
+          <div class="ch-grid" id="ch-list"></div>
+        </div>
+      </main>
+    </div>
+    <footer class="footer">
+      <div class="footer-form" id="footer-form">
+        <div class="field grow-2">
+          <label for="inp-url">Portal URL</label>
+          <input id="inp-url" type="text" placeholder="http://your-portal or demo">
+        </div>
+        <div class="field">
+          <label for="inp-user">Username</label>
+          <input id="inp-user" type="text" placeholder="username">
+        </div>
+        <div class="field">
+          <label for="inp-pass">Password</label>
+          <input id="inp-pass" type="password" placeholder="password">
+        </div>
+        <button class="btn btn-primary" id="btn-connect" type="button">Connect</button>
+      </div>
+      <div class="footer-hint">Type 'demo' to try a sample playlist.</div>
+    </footer>
+  </div>
 </body>
 </html>
