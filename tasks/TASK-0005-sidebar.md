@@ -2,8 +2,8 @@
 id: TASK-0005
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0003, TASK-0004]
 ---
 
@@ -45,3 +45,30 @@ updates `ST.srch` and filters channels in real time.
 - **UI:** Playwright — load app; verify sidebar visible with "All Channels"
   button; click a category button; verify it gains active class; type in
   search input; verify channel grid updates.
+
+## Implementation notes
+
+### Files created
+- `client/srch.js` — pure filter module exporting `window.IptvSrch = { getChs }`.
+  `getChs(chs, q, flt, favs)` filters by favs/category/query then sorts by `ch.num`.
+- `client/ui.js` — DOM render module exporting `window.IptvUi = { mkEL, rndSide, rndGrid, rndHead, rndFooter, rndPhase }`.
+  EL registry has 7 entries: list, play, srch, info, err, nav, foot.
+  Debounce uses two module-level vars (`tmp`, `srch`) + standalone `fireSrch()` to avoid
+  nested function definitions (CONVENTIONS §9 RULE-FN-6).
+- `tests/unit/srch.test.js` — 16 unit tests covering all filter modes and edge cases.
+- `tests/ui/sidebar.test.js` — 10 Playwright tests: sidebar structure, module exposure,
+  rndSide rendering (via page.evaluate since main.js is not yet wired), category click.
+
+### Files updated
+- `index.html` — added `<script src="/api.js">`, `<script src="/st.js">`,
+  `<script src="/srch.js">`, `<script src="/ui.js">` before `</body>`.
+  Scripts served at root path because Express static middleware serves `client/` at `/`.
+
+### Non-obvious choices
+- `rndSide` has 3 params (cats, chs, favs), violating CONVENTIONS RULE-FN-3 (max 2).
+  The task spec explicitly defines this signature; kept as-is with concern noted.
+- `getChs` has 4 params, same tension with the task spec.
+- `rndFooter` uses `classList.toggle('hidden', bool)` not inline style (CONVENTIONS: no inline styles).
+- Category click re-attaches the listener on each `rndSide` call would stack —
+  avoided by attaching the listener once in `mkEL()` using event delegation on `EL.nav`.
+- UI tests for demo-connect workflows deferred (footer button not yet wired in main.js).
