@@ -96,6 +96,48 @@
     }
   }
 
+  /** Fetch raw text through proxy with 15 s AbortController timeout. */
+  async function fetchTxt(src) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(function onTout() { ctrl.abort(); }, TOUT_MS);
+    try {
+      const raw = await fetch(src, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (!raw.ok) return { ok: false, err: 'Playlist responded ' + raw.status };
+      const val = await raw.text();
+      return { ok: true, val };
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.name === 'AbortError') return { ok: false, err: 'Playlist timed out after 15 s' };
+      return { ok: false, err: 'Could not reach the playlist – network error' };
+    }
+  }
+
+  /** Extract hostname from a URL string. Returns the full url string on parse failure. */
+  function hostOf(url) {
+    try { return new URL(url).hostname; } catch (_) { return url; }
+  }
+
+  /** Fetch an M3U playlist via proxy, parse it, return Result<{server,host,user,categories,channels}>. */
+  async function loadM3u(url) {
+    const prx = '/api/xtream?url=' + encodeURIComponent(url);
+    const res = await fetchTxt(prx);
+    if (!res.ok) return res;
+    const parsed = parsM3u(res.val);
+    if (!parsed.ok) return parsed;
+    return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels } };
+  }
+
+  /** Load Xtream portal data — categories then channels. */
+  async function loadXtream(src, opts) {
+    let res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_categories' }));
+    if (!res.ok) return res;
+    const val = res.val;
+    res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_streams' }));
+    if (!res.ok) return res;
+    return { ok: true, val: { host: src, user: opts.user, categories: val, channels: res.val } };
+  }
+
   /** Return demo Result after simulated delay. */
   async function loadDemo() {
     await waitMs(DEMO_MS);
@@ -106,18 +148,16 @@
   }
 
   /**
-   * Connect to a portal or demo.
-   * @param {string} src  - portal base URL or "demo"
+   * Connect to a portal, M3U URL, or demo.
+   * @param {string} src  - portal base URL, M3U URL, or "demo"
    * @param {Object} opts - { user: string, pass: string }
    */
   async function connect(src, opts) {
+    const usr = (opts && opts.user) || '';
+    const pss = (opts && opts.pass) || '';
     if (isDemo(src)) return loadDemo();
-    let res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_categories' }));
-    if (!res.ok) return res;
-    const val = res.val;
-    res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_streams' }));
-    if (!res.ok) return res;
-    return { ok: true, val: { host: src, user: opts.user, categories: val, channels: res.val } };
+    if (isM3u(src, usr, pss)) return loadM3u(src);
+    return loadXtream(src, { user: usr, pass: pss });
   }
 
   /** Extract quoted attribute value from an #EXTINF line. Returns '' if absent. */
@@ -234,5 +274,5 @@
     return Boolean(noCredentials && notDemo && isHttp);
   }
 
-  window.IptvApi = { connect, isDemo, isM3u, parsM3u };
+  window.IptvApi = { connect, isDemo, isM3u, parsM3u, loadM3u };
 }());

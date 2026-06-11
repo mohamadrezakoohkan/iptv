@@ -1,4 +1,4 @@
-// ADR: ADR-0001
+// ADR: ADR-0001, ADR-0005
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -234,6 +234,75 @@ describe('connect(realUrl) — error handling', function () {
     const res = await api.connect(BASE, { user: 'u', pass: 'p' });
     expect(res.ok).toBe(false);
     expect(res.err).toContain('reach');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadM3u / connect M3U path
+// ---------------------------------------------------------------------------
+describe('connect(m3uUrl) — loadM3u integration', function () {
+  const M3U_URL = 'https://example.com/list.m3u';
+  const PROXY_URL = '/api/xtream?url=' + encodeURIComponent(M3U_URL);
+
+  const M3U_FIXTURE = [
+    '#EXTM3U',
+    '#EXTINF:-1 tvg-id="c1" tvg-name="Channel One" group-title="News",Channel One',
+    'http://stream.example.com/c1',
+    '#EXTINF:-1 tvg-id="c2" tvg-name="Channel Two" group-title="Sports",Channel Two',
+    'http://stream.example.com/c2',
+  ].join('\n');
+
+  function baseGlobals(ftch) {
+    return { fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL };
+  }
+
+  it('resolves ok:true with correct shape on valid M3U text', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue(M3U_FIXTURE),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect(M3U_URL, {});
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('example.com');
+    expect(res.val.user).toBe('');
+    expect(res.val.server).toBeNull();
+    expect(Array.isArray(res.val.categories)).toBe(true);
+    expect(res.val.categories.length).toBeGreaterThan(0);
+    expect(Array.isArray(res.val.channels)).toBe(true);
+    expect(res.val.channels.length).toBeGreaterThan(0);
+  });
+
+  it('resolves ok:false on HTTP 404 response', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:     false,
+      status: 404,
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect(M3U_URL, {});
+    expect(res.ok).toBe(false);
+    expect(typeof res.err).toBe('string');
+  });
+
+  it('resolves ok:false with "not an M3U file" on non-M3U 200 body', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue('not m3u'),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect(M3U_URL, {});
+    expect(res.ok).toBe(false);
+    expect(res.err).toBe('not an M3U file');
+  });
+
+  it('constructs the correct proxy URL for the M3U fetch', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue(M3U_FIXTURE),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    await api.connect(M3U_URL, {});
+    expect(ftch.mock.calls[0][0]).toBe(PROXY_URL);
   });
 });
 

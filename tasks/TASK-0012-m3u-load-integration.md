@@ -2,8 +2,8 @@
 id: TASK-0012
 adr: ADR-0005
 evolution: 2
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0011]
 ---
 
@@ -57,4 +57,15 @@ Xtream path. The public return shape is the same in both modes so callers
 
 ## Implementation notes
 
-_Filled by implement-agent._
+### Files touched
+
+- `client/api.js` — Added `fetchTxt(src)` helper (raw text fetch, same 15s timeout+abort pattern as `loadJson`), `hostOf(url)` pure helper (extracts hostname via `new URL`), `loadM3u(url)` async function (builds proxy URL, calls `fetchTxt`, passes text to `parsM3u`, maps result to `{server:null, host, user:'', categories, channels}`), and `loadXtream(src, opts)` (extracted from original `connect` body). Updated `connect(src, opts)` to dispatch: demo → `loadDemo`, M3U → `loadM3u`, else → `loadXtream`. Added `loadM3u` to `window.IptvApi` exports.
+- `tests/unit/api.test.js` — Added `describe('connect(m3uUrl) — loadM3u integration')` with 4 tests: success path, HTTP 404 path, non-M3U body path, proxy URL construction verification.
+- `tests/ui/m3u.test.js` — New Playwright test: navigates to localhost:3000, fills M3U URL with empty credentials, clicks Connect, races `#footer-conn` vs `#footer-err` within 15s, asserts either visible outcome and no JS exceptions.
+- `adrs/ADR-0005-m3u-playlist-support.md` — Updated `governs:` to add `tests/unit/api.test.js` and `tests/ui/m3u.test.js`.
+
+### Non-obvious choices
+
+- `parsM3u` is declared after `loadM3u` in the source file, but function declarations inside an IIFE are hoisted, so forward reference is safe.
+- `connect()` previously used `opts.user` / `opts.pass` directly without null-guarding opts. The new implementation guards `(opts && opts.user) || ''` since the M3U path may be called with `{}` (empty opts).
+- The UI test uses `Promise.race` to handle both network-available and network-unavailable CI environments; either outcome is acceptable as long as no JS exception fires.
