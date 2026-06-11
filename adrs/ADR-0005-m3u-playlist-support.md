@@ -7,8 +7,12 @@ status: accepted
 governs:
   - client/api.js
   - client/ui.js
+  - client/app.css
+  - index.html
   - tests/unit/api.test.js
+  - tests/unit/m3u-ui.test.js
   - tests/ui/m3u.test.js
+  - tests/ui/m3u-ui.test.js
 ---
 
 # ADR-0005 — M3U playlist support — detection, parse, CORS proxy reuse, footer UI adaptation

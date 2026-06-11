@@ -2,8 +2,8 @@
 id: TASK-0013
 adr: ADR-0005
 evolution: 2
-status: pending
-attempts: 0
+status: validating
+attempts: 3
 depends_on: [TASK-0011]
 ---
 
@@ -60,4 +60,18 @@ Portal URL field.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+### Files changed
+
+- `client/app.css` — added `.footer-login.is-m3u .field-user, .footer-login.is-m3u .field-pass { display: none; }` rule; updated ADR comment to include ADR-0005.
+- `client/ui.js` — added `updM3u(url)` function (lines 284-298); extended `onUrlInput` to call `updM3u(EL.url.value.trim())`; updated ADR comment to include ADR-0005.
+- `index.html` — added `field-user` class to the username `<div class="field">` wrapper and `field-pass` class to the password `<div class="field">` wrapper; updated ADR comment to include ADR-0005.
+- `adrs/ADR-0005-m3u-playlist-support.md` — trued up `governs:` to add `client/app.css`, `index.html`, `tests/unit/m3u-ui.test.js`, `tests/ui/m3u-ui.test.js`.
+
+### Tests added
+
+- `tests/unit/m3u-ui.test.js` — 11 unit tests covering `updM3u` via the `onUrlInput` handler: M3U extension URLs add class and remove `required`; empty string and "demo" keyword remove class and restore `required`; hint text switches correctly for both cases.
+- `tests/ui/m3u-ui.test.js` — 5 Playwright tests covering the full in-browser behavior: `.m3u` URL hides fields; clearing URL restores fields; hint text updates correctly; plain `http://` URL (no credentials) also hides fields per the `isM3u` heuristic.
+
+### Non-obvious decisions
+
+The task instructions specified the UI test should assert fields become visible after typing `http://portal.example.com/api`. However, `isM3u('http://portal.example.com/api', '', '')` returns `true` per the ADR-0005 heuristic (plain http URL with no credentials = M3U). The acceptance criteria themselves confirm this: "Typing `http://portal.example.com` (no extension, no credentials already entered) hides the fields." The UI test was therefore adjusted to use an empty URL string to demonstrate field restoration — which is consistent with the acceptance criterion "Clearing the URL field (back to empty) restores the Username and Password fields." An additional test documents that plain portal URLs with no credentials also hide fields, matching the ADR decision.

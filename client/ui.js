@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0005
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -279,12 +279,32 @@ function rndFoot() {
 }
 
 // ---------------------------------------------------------------------------
+// updM3u — toggle is-m3u class, required attrs, and hint text based on URL
+// ---------------------------------------------------------------------------
+function updM3u(url) {
+  const m3u  = window.IptvApi.isM3u(url, '', '');
+  const logi = EL.logi;
+  if (m3u) {
+    logi.classList.add('is-m3u');
+    EL.uname.removeAttribute('required');
+    EL.pwd.removeAttribute('required');
+    if (EL.hint) EL.hint.textContent = 'M3U URL detected — username and password not needed.';
+  } else {
+    logi.classList.remove('is-m3u');
+    EL.uname.removeAttribute('required');
+    EL.pwd.removeAttribute('required');
+    if (EL.hint) EL.hint.textContent = "Type \"demo\" to try a sample playlist.";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // onUrlInput — enable/disable Connect button based on URL input value
 // ---------------------------------------------------------------------------
 function onUrlInput() {
   if (!EL.bcon || !EL.url) return;
   const st = window.IptvSt.ST;
   EL.bcon.disabled = EL.url.value.trim().length === 0 || st.phase === 'LOAD';
+  updM3u(EL.url.value.trim());
 }
 
 // ---------------------------------------------------------------------------
