@@ -2,7 +2,7 @@
 id: TASK-0018
 adr: ADR-0008
 evolution: 4
-status: pending
+status: done
 attempts: 0
 depends_on: [TASK-0017]
 ---
@@ -60,5 +60,49 @@ typing any URL never changes the visible fields.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `index.html` — added `#login-mode` radiogroup (`.field.field-mode`) as the
+  first item of `#login-form`: two native radios `#mode-xtream` (checked) and
+  `#mode-m3u` wrapped in `.mode-opt` labels. Baseline hint text corrected to
+  the canonical `Type "demo" to try a sample playlist.` so the default DOM
+  equals the rendered xtream state. ADR comment updated (+ADR-0008).
+- `client/app.css` — segmented-control styles (`.login-mode`, `.mode-opt`,
+  `.mode-txt`): radios are absolutely positioned with `opacity: 0` over the
+  label (native keyboard/arrow-key semantics preserved; the input itself
+  receives clicks); checked option gets `--acc` text + amber tint background;
+  `:focus-visible` draws an `--acc` outline. ADR comment updated.
+- `client/ui.js` — `updM3u` deleted; added `getMode()` (pure, reads
+  `EL.mm3u.checked`), `rndMode()` (toggles `is-m3u` on `#footer-login` +
+  swaps hint via `HINT_XTR`/`HINT_M3U` constants), `onMode()` (change
+  handler, delegated on the `#login-mode` container — radio `change` events
+  bubble). `onUrlInput` now only manages the Connect button. `runConn`
+  passes `m3u: getMode() === 'm3u'` to `IptvApi.connect`. New EL entries
+  `mode`/`mxt`/`mm3u`. Exports gained `rndMode` + `getMode`. ADR comment:
+  ADR-0005 replaced by ADR-0008.
+- `tests/unit/m3u-ui.test.js` — rewritten for toggle-driven behavior
+  (13 tests): default mode, onMode class+hint toggling both ways, runConn
+  m3u flag for both modes (+demo), no-auto-detect on URL input, updM3u
+  absence. No `required`-attribute assertions (R-0001).
+- `tests/ui/m3u-ui.test.js` — rewritten (8 Playwright tests): default
+  selector state, default field visibility, hide/restore on mode switch,
+  hint swap, `.m3u8` URL in xtream mode leaves fields visible, demo connect
+  in both modes, arrow-key keyboard operation.
+- `tests/unit/foot.test.js` — connect-args assertion updated to include
+  `m3u: false` (runConn's call shape changed); ADR comment +ADR-0008.
+- `tests/ui/m3u.test.js` — now checks `#mode-m3u` before connecting (the
+  heuristic fallback no longer triggers from the UI since runConn always
+  passes an explicit boolean); ADR comment ADR-0005 → ADR-0008.
+- `adrs/ADR-0008-explicit-login-mode.md` — `governs:` trued up with
+  `tests/unit/foot.test.js`.
+
+Non-obvious:
+
+- No `main.js` change: stored-creds reconnect still omits `m3u` (engine
+  heuristic fallback covers it transitionally) — that is TASK-0019's scope,
+  as is persisting the mode in `iptv_creds` (`onOk` still stores
+  `{ url, user, pass }`).
+- Default state needs no init render: baseline HTML (xtream checked, no
+  `is-m3u`, xtream hint) already equals `rndMode()`'s xtream output.
+
+Suites at hand-off: unit 214/214, UI 69/69, integration 10/10 — all green.

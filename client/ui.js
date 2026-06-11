@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0005
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -27,7 +27,14 @@ const EL = {
   bcon: null,   // #btn-conn
   bdis: null,   // #btn-disc
   ctxt: null,   // #conn-text
+  mode: null,   // #login-mode (radiogroup container)
+  mxt:  null,   // #mode-xtream radio
+  mm3u: null,   // #mode-m3u radio
 };
+
+// Hint text per login mode (ADR-0008)
+const HINT_XTR = 'Type "demo" to try a sample playlist.';
+const HINT_M3U = 'Paste an .m3u / .m3u8 playlist URL — no login needed.';
 
 // ---------------------------------------------------------------------------
 // Debounce state — module-level vars, TOKENS TABLE compliant
@@ -196,6 +203,9 @@ function mkEL() {
   EL.bcon  = document.getElementById('btn-conn');
   EL.bdis  = document.getElementById('btn-disc');
   EL.ctxt  = document.getElementById('conn-text');
+  EL.mode  = document.getElementById('login-mode');
+  EL.mxt   = document.getElementById('mode-xtream');
+  EL.mm3u  = document.getElementById('mode-m3u');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -203,6 +213,7 @@ function mkEL() {
   const frm = document.getElementById('login-form');
   if (frm)    frm.addEventListener('submit', onConn);
   if (EL.url) EL.url.addEventListener('input', onUrlInput);
+  if (EL.mode) EL.mode.addEventListener('change', onMode);
   if (EL.bdis) EL.bdis.addEventListener('click', onDisc);
 }
 
@@ -279,22 +290,31 @@ function rndFoot() {
 }
 
 // ---------------------------------------------------------------------------
-// updM3u — toggle is-m3u class, required attrs, and hint text based on URL
+// getMode — pure: current login mode from the selector ('xtream' | 'm3u')
 // ---------------------------------------------------------------------------
-function updM3u(url) {
-  const m3u  = window.IptvApi.isM3u(url, '', '');
-  const logi = EL.logi;
+function getMode() {
+  return (EL.mm3u && EL.mm3u.checked) ? 'm3u' : 'xtream';
+}
+
+// ---------------------------------------------------------------------------
+// rndMode — render footer per selected login mode: is-m3u class + hint text
+// ---------------------------------------------------------------------------
+function rndMode() {
+  if (!EL.logi) return;
+  const m3u = getMode() === 'm3u';
   if (m3u) {
-    logi.classList.add('is-m3u');
-    EL.uname.removeAttribute('required');
-    EL.pwd.removeAttribute('required');
-    if (EL.hint) EL.hint.textContent = 'M3U URL detected — username and password not needed.';
+    EL.logi.classList.add('is-m3u');
   } else {
-    logi.classList.remove('is-m3u');
-    EL.uname.removeAttribute('required');
-    EL.pwd.removeAttribute('required');
-    if (EL.hint) EL.hint.textContent = "Type \"demo\" to try a sample playlist.";
+    EL.logi.classList.remove('is-m3u');
   }
+  if (EL.hint) EL.hint.textContent = m3u ? HINT_M3U : HINT_XTR;
+}
+
+// ---------------------------------------------------------------------------
+// onMode — login-mode selector change handler
+// ---------------------------------------------------------------------------
+function onMode() {
+  rndMode();
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +324,6 @@ function onUrlInput() {
   if (!EL.bcon || !EL.url) return;
   const st = window.IptvSt.ST;
   EL.bcon.disabled = EL.url.value.trim().length === 0 || st.phase === 'LOAD';
-  updM3u(EL.url.value.trim());
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +372,7 @@ async function runConn() {
   if (EL.url)   EL.url.disabled   = true;
   if (EL.uname) EL.uname.disabled = true;
   if (EL.pwd)   EL.pwd.disabled   = true;
-  const res = await window.IptvApi.connect(src, { user, pass });
+  const res = await window.IptvApi.connect(src, { user, pass, m3u: getMode() === 'm3u' });
   if (res.ok) { onOk(res.val); } else { onFail(res.err); }
 }
 
@@ -422,4 +441,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, getMode };

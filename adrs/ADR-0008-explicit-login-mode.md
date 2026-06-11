@@ -12,6 +12,7 @@ governs:
   - client/app.css
   - index.html
   - tests/unit/api.test.js
+  - tests/unit/foot.test.js
   - tests/unit/m3u-ui.test.js
   - tests/unit/persist.test.js
   - tests/ui/m3u-ui.test.js
