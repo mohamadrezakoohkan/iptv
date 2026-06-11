@@ -149,20 +149,17 @@
 
   /**
    * Connect to a portal, M3U URL, or demo.
-   * Routing (ADR-0008): demo first; explicit opts.m3u boolean alone decides
-   * the path when present; the isM3u heuristic is only the fallback when
-   * opts.m3u is absent (transitional — removed by TASK-0020).
+   * Routing (ADR-0008): demo first; then explicit opts.m3u boolean alone
+   * decides the path — true means M3U, anything else means Xtream. No
+   * URL-shape auto-detection.
    * @param {string} src  - portal base URL, M3U URL, or "demo"
    * @param {Object} opts - { user: string, pass: string, m3u: boolean }
    */
   async function connect(src, opts) {
     const usr = (opts && opts.user) || '';
     const pss = (opts && opts.pass) || '';
-    const m3u = opts && typeof opts.m3u === 'boolean' ? opts.m3u : null;
     if (isDemo(src)) return loadDemo();
-    if (m3u === true) return loadM3u(src);
-    if (m3u === false) return loadXtream(src, { user: usr, pass: pss });
-    if (isM3u(src, usr, pss)) return loadM3u(src);
+    if (opts && opts.m3u === true) return loadM3u(src);
     return loadXtream(src, { user: usr, pass: pss });
   }
 
@@ -262,23 +259,5 @@
     return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
   }
 
-  /**
-   * M3U detection heuristic.
-   * Returns true if URL ends with .m3u/.m3u8 (case-insensitive) OR
-   * user+pass are absent and URL is a plain http(s) URL (not "demo").
-   * @param {string} url
-   * @param {string} user
-   * @param {string} pass
-   */
-  function isM3u(url, user, pass) {
-    let pth = '';
-    try { pth = new URL(url).pathname; } catch (_) { pth = url || ''; }
-    if (/\.(m3u8?)$/i.test(pth)) return true;
-    const noCredentials = !user && !pass;
-    const notDemo = typeof url === 'string' && url.trim().toLowerCase() !== 'demo';
-    const isHttp = typeof url === 'string' && /^https?:\/\//i.test(url);
-    return Boolean(noCredentials && notDemo && isHttp);
-  }
-
-  window.IptvApi = { connect, isDemo, isM3u, parsM3u, loadM3u };
+  window.IptvApi = { connect, isDemo, parsM3u, loadM3u };
 }());

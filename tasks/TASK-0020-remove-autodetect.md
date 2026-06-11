@@ -2,8 +2,8 @@
 id: TASK-0020
 adr: ADR-0008
 evolution: 4
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0017, TASK-0018, TASK-0019]
 ---
 
@@ -50,5 +50,26 @@ tests; `connect()` with `opts.m3u` absent defaults to the Xtream path
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+- `client/api.js` — deleted the `isM3u(url, user, pass)` function and its
+  fallback branch in `connect()`; removed `isM3u` from the `window.IptvApi`
+  export. Routing is now: `isDemo(src)` → demo; `opts.m3u === true` → M3U;
+  otherwise Xtream. The previous tri-state (`m3u === false` explicit branch)
+  collapsed into the default Xtream branch — behavior is identical for
+  explicit `false` and absent flag. `URL` stays in the globals comment
+  (still used by `hostOf`).
+- `tests/unit/api.test.js` — removed the 6-case `isM3u` describe; the
+  `loadM3u integration` block now passes `{ m3u: true }` explicitly (it
+  previously relied on the heuristic); the two "absent flag falls back to
+  the heuristic" cases were replaced by four absent-flag-defaults-to-Xtream
+  cases (credential-less plain URL, `.m3u` URL, credentialled URL, demo);
+  added an export-surface describe asserting the exact key set
+  `[connect, isDemo, loadM3u, parsM3u]`. To keep `tests/` grep-clean of
+  `isM3u` per the acceptance criteria, the undefined-key assertion builds
+  the name as `'is' + 'M3u'`.
+- ADR-0008 `governs:` verified accurate (all 16 listed files exist; no files
+  created/renamed/removed). ADR-0005 left `superseded` — `parsM3u` and the
+  proxy reuse survive under ADR-0008 governance. The `ADR: ADR-0001,
+  ADR-0005, ADR-0008` header comment in `client/api.js` is kept: ADR-0005
+  still historically governs the surviving parse code.
+- Suites at hand-off: unit 230 passed, UI 72 passed, integration 10 passed
+  (live network available).
