@@ -2,8 +2,8 @@
 id: TASK-0016
 adr: ADR-0007
 evolution: 3
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0014]
 ---
 
@@ -54,5 +54,23 @@ load-bearing.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+- Files touched: `tests/int/strm.test.js` (new, only file changed).
+- Channel list is obtained via the engine `connect` path (in-process Express
+  server + `client/api.js` IIFE with the same fetch shim / `loadApi` harness
+  pattern as `tests/int/m3u.test.js`), so the live source is the full engine
+  chain, not a fixture.
+- Constants per RULE-ID-7: `SMPL_CNT = 5`, `STRM_MS = 15000`, `MIN_OK = 1`,
+  plus `LIVE_URL`. Sample indices: `Math.round((i / (SMPL_CNT - 1)) *
+  (chs.length - 1))` for i = 0..4 → exactly first, 25 %, 50 %, 75 %, last.
+- `loadStrm(url)` returns a RULE-FN-4 Result and never throws: non-2xx,
+  network errors, aborts, and 2xx-but-not-`#EXTM3U` bodies all become
+  `{ ok: false, err }`. The `AbortController` timeout also bounds `.text()`
+  on endless (non-manifest) 2xx byte streams, so no stream can hang the test
+  past 15 s.
+- The 5 fetches run in parallel (`Promise.all`) — worst case ~15 s, well
+  under the 120 s test timeout; file-level parallelism is already off in
+  `vitest.int.config.js` so the public endpoint is not hammered.
+- Per-stream outcomes are both `console.log`ged and embedded in the
+  assertion message (vitest `expect(value, message)`), so red and green runs
+  are diagnosable. Verification run: 3/5 sampled streams live, all suites
+  green (unit 206, UI 66, integration 10).
