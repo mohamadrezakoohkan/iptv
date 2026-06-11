@@ -49,20 +49,22 @@ function mkLogo(ch) {
  * @param {string[]} favs
  */
 function mkFav(ch, favs) {
-  const on = favs.indexOf(String(ch.id)) !== -1 ? ' on' : '';
-  return '<span class="ch-fav' + on + '" role="button" tabindex="0" data-id="'
-    + ch.id + '" title="Toggle favourite">&#9733;</span>';
+  const on    = favs.indexOf(String(ch.id)) !== -1 ? ' on' : '';
+  const label = on ? 'Remove from favourites' : 'Add to favourites';
+  return '<span class="ch-fav' + on + '" role="button" tabindex="0" data-fav="'
+    + ch.id + '" aria-label="' + label + '">&#9733;</span>';
 }
 
 /**
  * Build a single channel card HTML string.
- * opts: { ch, cur, favs }
+ * Reads ST.cur and ST.favs from window.IptvSt.
+ * @param {Object} ch - Ch object
  */
-function mkCard(opts) {
-  const ch   = opts.ch;
-  const cur  = opts.cur;
-  const favs = opts.favs;
-  const active = (cur && String(cur.id) === String(ch.id)) ? ' active' : '';
+function mkCard(ch) {
+  const st   = window.IptvSt.ST;
+  const favs = st.favs;
+  const cur  = st.cur;
+  const active = (cur && String(cur.id) === String(ch.id)) ? ' ch-active' : '';
   return '<div class="ch-card' + active + '" role="button" tabindex="0" data-id="' + ch.id + '">'
     + '<div class="ch-card-top">'
     + '<span class="ch-num">' + fmtNum(ch.num) + '</span>'
@@ -117,6 +119,45 @@ function onCatClick(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// toggleFav — toggle a channel in ST.favs; updates star element in-place
+// ---------------------------------------------------------------------------
+function toggleFav(id) {
+  const st   = window.IptvSt.ST;
+  const idx  = st.favs.indexOf(id);
+  const nxt  = idx === -1 ? st.favs.concat([id]) : st.favs.filter(function notId(x) { return x !== id; });
+  window.IptvSt.setFavs(nxt);
+  const star = document.querySelector('[data-fav="' + id + '"]');
+  if (!star) return;
+  star.className = 'ch-fav' + (nxt.includes(id) ? ' on' : '');
+  star.setAttribute('aria-label', nxt.includes(id) ? 'Remove from favourites' : 'Add to favourites');
+}
+
+// ---------------------------------------------------------------------------
+// onGridClick — event-delegated click handler on EL.list (ch-grid)
+// ---------------------------------------------------------------------------
+function onGridClick(evt) {
+  const fav  = evt.target.closest('[data-fav]');
+  if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
+  const card = evt.target.closest('[data-id]');
+  if (!card) return;
+  const id = card.getAttribute('data-id');
+  const st = window.IptvSt.ST;
+  const ch = st.chs.find(function byId(c) { return String(c.id) === id; });
+  if (!ch) return;
+  window.IptvSt.setCur(ch);
+  if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
+}
+
+// ---------------------------------------------------------------------------
+// onGridKey — keyboard handler on EL.list for Enter key
+// ---------------------------------------------------------------------------
+function onGridKey(evt) {
+  if (evt.key !== 'Enter') return;
+  onGridClick(evt);
+}
+
+// ---------------------------------------------------------------------------
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
@@ -129,6 +170,8 @@ function mkEL() {
   EL.foot = document.getElementById('footer-form');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
+  if (EL.list) EL.list.addEventListener('click', onGridClick);
+  if (EL.list) EL.list.addEventListener('keydown', onGridKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,14 +179,13 @@ function mkEL() {
 // ---------------------------------------------------------------------------
 function rndGrid(chs) {
   if (!EL.list) return;
-  const st = window.IptvSt.ST;
   if (!chs || chs.length === 0) {
     EL.list.innerHTML = '<p class="ch-empty">No channels found.</p>';
     return;
   }
   let html = '';
   for (let i = 0; i < chs.length; i += 1) {
-    html += mkCard({ ch: chs[i], cur: st.cur, favs: st.favs });
+    html += mkCard(chs[i]);
   }
   EL.list.innerHTML = html;
 }
@@ -210,4 +252,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, rndSide, rndGrid, rndHead, rndFooter, rndPhase };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFooter, rndPhase };

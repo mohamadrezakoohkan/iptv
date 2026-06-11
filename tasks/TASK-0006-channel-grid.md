@@ -2,8 +2,8 @@
 id: TASK-0006
 adr: ADR-0001
 evolution: 1
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0005]
 ---
 
@@ -47,3 +47,26 @@ channel; clicking the star toggles the favourite state.
   first card; verify it gains `ch-active` class; click its star; verify
   `fav-on` class toggled; click "Favourites" sidebar filter; verify only
   starred cards shown.
+
+## Implementation notes
+
+### Files touched
+- `client/ui.js` — updated:
+  - `mkFav`: added `aria-label` ("Add/Remove from favourites"), changed `data-id` → `data-fav` on the star element
+  - `mkCard`: changed signature from `mkCard(opts)` to `mkCard(ch)` (reads `window.IptvSt.ST` for `cur`/`favs`); active class changed from `active` → `ch-active`; exported on `window.IptvUi`
+  - `rndGrid`: updated to call `mkCard(chs[i])` directly
+  - Added `toggleFav(id)`: updates `ST.favs` via `setFavs`, then patches only the star element in-place (no full re-render)
+  - Added `onGridClick(evt)`: event-delegated handler — fav star click → `toggleFav`; card click → `setCur`, guard `go('PLAY')` if phase=READY, call `window.IptvPlay.loadPlay(ch.url)` if available
+  - Added `onGridKey(evt)`: keyboard Enter delegates to `onGridClick`
+  - `mkEL`: wires `click` and `keydown` on `EL.list`
+  - `toggleFav` exported on `window.IptvUi`
+
+### Test files created
+- `tests/unit/grid.test.js` — 16 unit tests: number padding, fav star class, aria-label, ch-active class, accessibility attributes
+- `tests/ui/grid.test.js` — 11 UI tests: card count (31), structure, clicking behaviour, star toggle, favs filter
+
+### Non-obvious decisions
+- `mkCard(ch)` reads `window.IptvSt.ST` rather than being purely parameter-driven because RULE-FN-3 (max 2 params) makes it impossible to pass `ch + opts{cur,favs}` cleanly as a 1-param function. The existing `rndSide` already uses the same global-read pattern.
+- Demo data has 31 channels (spec said 34; test file uses 31 matching the actual data).
+- `go('PLAY')` is only called when `ST.phase === 'READY'` to prevent throwing when a card is clicked from PLAY state (channel switch).
+- The `onGridClick` handler checks `[data-fav]` before `[data-id]` so that fav clicks do not also trigger card-select (the fav span is inside the card div).
