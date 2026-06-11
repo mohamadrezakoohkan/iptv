@@ -23,6 +23,9 @@ One paragraph: what exists when this task is done that doesn't exist now.
 - **Unit:** what must be unit-tested.
 - **UI:** what must be UI-tested (required whenever the task touches
   user-facing behavior; write "n/a — not user-facing" otherwise).
+- **Integration:** what must be integration-tested against live external
+  services (required whenever the task involves external connectivity, API
+  calls, or proxy behavior; write "n/a — no external connectivity" otherwise).
 
 ## Implementation notes
 

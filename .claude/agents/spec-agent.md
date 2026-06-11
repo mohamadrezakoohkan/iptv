@@ -40,8 +40,10 @@ are binding constraints on everything you produce).
 6. **Derive tasks per ADR.** Create `tasks/TASK-NNNN-<slug>.md` from
    `tasks/TEMPLATE.md`. Each task: small enough for one implement+validate
    cycle, concrete acceptance criteria, explicit test requirements (unit
-   always; UI tests whenever user-facing behavior is touched), `depends_on`
-   listing task IDs that must land first, `status: pending`, `attempts: 0`.
+   always; UI tests whenever user-facing behavior is touched; integration
+   tests whenever the task involves external connectivity, API calls, or proxy
+   behavior), `depends_on` listing task IDs that must land first,
+   `status: pending`, `attempts: 0`.
 7. **Self-check:** every ADR has ≥1 task; every task points to an existing
    ADR; ordering respects dependencies; nothing violates the Rule Pack.
 8. **First commit + PR** (CORE_FLOW.md §3): `git add` the files you created
