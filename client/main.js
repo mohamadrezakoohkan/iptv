@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0018
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0018, ADR-0019
 /* global window, document */
 
 'use strict';
@@ -53,6 +53,9 @@ function onReady() {
   const { onPhase: regPhase, ST } = window.IptvSt;
   const { mkPlay } = window.IptvPlay;
   mkEL();
+  // Reflect the persisted theme on <html> and the toggle before any connect
+  // flow (ADR-0019). Default 'dark' is a visual no-op (baseline = no attribute).
+  window.IptvUi.rndTheme(window.IptvSt.loadTheme());
   mkPlay(document.getElementById('player-video'));
   regPhase(rndPhase);
   rndPhase();

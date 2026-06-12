@@ -54,6 +54,11 @@ All colours are CSS custom properties on `:root`:
 Fonts: `Space Grotesk` for UI text; `IBM Plex Mono` for channel numbers and
 mono labels.
 
+The values above are the **dark** theme (the default). The same eight colour
+tokens are re-defined for a **light** theme, selected by a `data-theme`
+attribute on the document root; see `specs/theme.md` and ADR-0019. Every rule
+in this spec reads tokens, so it recolours automatically under either theme.
+
 ---
 
 ## 3. Header bar

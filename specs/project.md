@@ -26,7 +26,10 @@ The product ships as a Node.js + Express server that serves the static client
 files and proxies Xtream API calls to avoid browser CORS restrictions. The
 client is pure vanilla JS (no framework), styled with CSS custom properties,
 and uses a flat state machine (CONVENTIONS.md §6) instead of reactive
-component hooks.
+component hooks. The colour palette is theme-switchable: a sun/moon toggle in
+the top-right swaps between a dark (default) and a light theme by overriding
+the CSS custom-property tokens via a `data-theme` attribute on the document
+root, and the choice persists across sessions.
 
 A built-in **demo mode** (enter "demo" as portal URL) loads a curated playlist
 of publicly accessible HLS test streams, so the app works out of the box
@@ -61,4 +64,5 @@ from the unit suite's config so `npx vitest run` stays network-free.
 ## Feature specs
 
 - `specs/iptv-player.md` — full IPTV player broadcast console feature spec
+- `specs/theme.md` — light / dark theme toggle (sun/moon switch, top-right)
 - `specs/integration-testing.md` — live-network integration test tier

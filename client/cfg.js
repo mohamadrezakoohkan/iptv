@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015, ADR-0017, ADR-0018
+// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015, ADR-0017, ADR-0018, ADR-0019
 /* global window */
 
 'use strict';
@@ -32,6 +32,7 @@ const S = {
   selKey:   'iptv_sel',
   favsKey:  'iptv_favs',
   sortKey:  'iptv_sort',
+  themeKey: 'iptv_theme',   // light/dark theme choice (ADR-0019)
   psts:     PSTS,
 };
 Object.freeze(S);

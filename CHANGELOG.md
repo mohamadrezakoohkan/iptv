@@ -5,6 +5,19 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #10 — 2026-06-12 — Light/dark theme switching via a sun/moon toggle in the top-right
+
+- **Prompt:** Add light/dark theme switching with a sun-vs-moon toggle in the top-right corner.
+- **Outcome:** Shipped. Both tasks completed and validated, first attempt each.
+- **ADRs:** ADR-0019 (light/dark theme via a `data-theme` attribute on `<html>` driving a `:root[data-theme="light"]` token-override rule that re-defines the same eight colour tokens — `--bg`/`--sur`/`--sur2`/`--ln`/`--tx`/`--dim`/`--acc`/`--live` — so every token-reading rule recolours for free; dark is the default and stays on `:root` (no flash, `index.html` ships with **no** `data-theme`, per R-0001); the choice persists under a new `iptv_theme` key (`S.themeKey`, ADR-0003 pattern) via `st.js` `loadTheme()`/`saveTheme()`; theme is presentational chrome — **not** an `ST` phase field (ADR-0001 / CONVENTIONS §6 unaffected); a keyboard-focusable sun↔moon `#theme-toggle` (`role="switch"` + `aria-checked`) mounts in `.content-head` immediately before the account button `#acct-btn` (ADR-0014), applied/persisted by `rndTheme`/`onTheme` in `ui.js` and restored on load in `main.js`).
+- **Tasks:** 2 done, 0 failed, 0 blocked. TASK-0037 theme key + persistence helpers + light-theme token rule (`client/cfg.js` `S.themeKey`, `client/st.js` `loadTheme`/`saveTheme` + the uniquely-named `THMS`/`THM_DEF` top-level bindings to avoid a shared-window-scope collision, `client/app.css` `:root[data-theme="light"]`) · TASK-0038 sun/moon toggle markup + CSS + handlers + init (`index.html`, `client/app.css`, `client/ui.js` `EL.thm`/`rndTheme`/`onTheme`, `client/main.js`). Both first-attempt passes.
+- **Tests:** 462 unit (Vitest) + 137 UI (Playwright, incl. baseline-has-no-data-theme R-0001 checks, the light token override recolouring computed bg/surface/text, the toggle visible top-right coexisting with the account button without overlap, click + keyboard activation switching theme, sun/moon state reflecting the active theme, and persistence across reload) — all passing. Integration tier (25, live network) not re-run this evolution — the theme is client-only (localStorage + CSS, no external connectivity); last green at E9 TASK-0036.
+- **Rules earned:** none (no terminal failures).
+- **Artifacts:** `client/cfg.js`, `client/st.js`, `client/ui.js`, `client/main.js`, `client/app.css`, `index.html`, `specs/project.md` (theme-switchable palette note + `specs/theme.md` in the feature-spec list), `specs/theme.md` (new), `tests/unit/{theme,themetoggle,persist}.test.js`, `tests/ui/{theme,themetoggle}.test.js`, `test-results/theme-{dark,light}.png` (UI screenshots), `adrs/ADR-0019-theme-toggle.md`, `tasks/TASK-003{7,8}-*.md`.
+- **Notes:** this branch (`ai/e10-light-dark-theme-toggle`, PR #13) was cut from `harness/fix-private-repo-screenshots` (PR #12) → E9 (PR #11) → harness Test Results (PR #10) → E8 (PR #9) → E7 (PR #8), so PR #13's diff against `main` includes all those commits and depends on PRs #8, #9, #10, #11, and #12 merging first. The validate-agent wrote a collapsible Test Results block per task into PR #13; because the repo is private, the UI screenshots are referenced as clickable blob-viewer links (an inline raw embed would 404 under GitHub's anonymous image proxy) — the screenshot mechanism was corrected on PR #12 this session.
+
+---
+
 ## #9 — 2026-06-12 — Channel sorting control + filterable category/genre browsing + active-genre chip
 
 - **Prompt:** Add channel sorting and channel categories/genres browsing.

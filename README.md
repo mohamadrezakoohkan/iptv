@@ -1,6 +1,7 @@
 # IPTV Broadcast Console
 
-A dark-themed, single-page web application that connects to any
+A single-page web application — with a switchable **light/dark theme** (a
+sun/moon toggle in the top-right; dark by default) — that connects to any
 Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
 lets you browse live channels by category/genre, filter and sort the channel
 list, search by name, mark favourites, and stream the selected channel directly
@@ -112,11 +113,17 @@ command.
   becomes an ordinary saved account (deduped, switchable, removable). The
   list is read-only — present even before you have saved any account of your
   own — so it is the default account list provided by the community.
+- **Light / dark theme** — a sun/moon toggle in the top-right corner (left of
+  the account button) switches between the default dark "broadcast console"
+  look and a light theme. The whole palette recolours through CSS custom-
+  property tokens overridden by a `data-theme` attribute on the document root;
+  the choice persists across reloads (`localStorage`, single client-wide
+  setting — not per account). It is an explicit user choice, not OS-detected.
 - **Footer** — login-mode selector + login form + connected status bar
   showing host and channel count.
 - **Persistence** — saved accounts and the active account, login mode (per
-  account), last-selected channel, the channel sort preference, and favourites
-  survive page refreshes via `localStorage`.
+  account), last-selected channel, the channel sort preference, the chosen
+  theme, and favourites survive page refreshes via `localStorage`.
 - **CORS proxy** — server proxies all external URL fetches (Xtream API calls,
   M3U files, and live streams) so remote hosts without CORS headers work from
   the browser; it follows validated redirects (up to 5 hops, SSRF-checked)
