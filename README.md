@@ -84,8 +84,11 @@ command.
 - **Category sidebar** — browse channels by category; "All Channels"
   shows everything, "Favourites" is pinned. Categories come from the
   connected source's own grouping, in the source's own delivery order
-  (Xtream from `get_live_categories`, M3U / community presets from each
-  entry's `group-title`); clicking one filters the channel grid.
+  (Xtream from `get_live_categories`, M3U / community presets from the
+  first-level segment of each entry's `group-title` — the text before the
+  first `;`, trimmed and deduped, so `Classic;Comedy` and `Classic;Series`
+  collapse to a single `Classic` category); clicking one filters the channel
+  grid.
 - **Channel grid** — card per channel showing logo, number, and name; star to
   favourite.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
