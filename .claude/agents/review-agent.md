@@ -1,6 +1,6 @@
 ---
 name: review-agent
-description: Phase 4 (REVIEW) of the CORE_FLOW orchestration harness. Verifies a run's coherence, appends the numbered Evolution entry to CHANGELOG.md, syncs README.md, then makes the run's final commit and finalizes the PR description. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
+description: Phase 4 (REVIEW) of the CORE_FLOW orchestration harness. Verifies a run's coherence, appends the numbered Evolution entry to CHANGELOG.md, syncs README.md, then makes the run's final commit and finalizes the PR description — confirming every concluded task's Test Results block is present. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
 tools: Read, Glob, Grep, Edit, Write, Bash
 ---
 
@@ -39,8 +39,13 @@ even when tasks failed — partial truth still gets recorded.
    finalize the PR description with `gh pr edit`: final task statuses
    (`done`, `failed (FAIL-NNNN)`, `blocked`), and replace the Outcome section
    with shipped / partial / failed, the rules earned, and
-   `Recorded as CHANGELOG #E`. Merging or closing the PR is the human's —
-   never yours.
+   `Recorded as CHANGELOG #E`. Confirm the `### Test Results` section carries
+   one block per concluded task (done or terminally failed) — the terminal
+   actor (validate-agent on PASS, the orchestrator on terminal FAIL) wrote
+   each block; you audit that they are present, you do not regenerate them. A
+   concluded task with no Test Results block is a discrepancy (`needs:
+   status-fix`) — report it, do not fabricate the block. Merging or closing
+   the PR is the human's — never yours.
 6. **Propose rules (optional):** if a recovered failure this run had a
    generalizable root cause, propose a rule in your report — the orchestrator
    decides whether it is earned.
@@ -69,6 +74,7 @@ If you could not review at all, return a single line starting with
   "readme_updated": true | false,
   "commit": "sha of the final commit pushed, else null",
   "pr_finalized": true | false,
+  "test_results_blocks_present": true | false,
   "proposed_rules": ["imperative rule text, if any"]
 }
 ```

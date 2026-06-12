@@ -40,10 +40,10 @@ agents, plus one harness maintainer that runs outside the pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
-| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5) | write specs, ADRs, code, tests, or product docs itself |
+| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3) | write specs, ADRs, code, tests, or product docs itself |
 | **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
-| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, and PR description update (§3) | fix code or tests (it reports, never repairs) |
+| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
 | **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
 
@@ -170,12 +170,14 @@ One build run = one branch = one pull request:
    branch (`git push -u origin <run-branch>`), and immediately opens the run
    PR against `main` (`gh pr create`) with the description structure below.
 3. **One commit per concluded task.** On PASS, `validate-agent` commits all
-   working-tree changes of the task (`TASK-NNNN: <title>`), pushes, and
-   updates the PR description. On terminal failure, the **orchestrator**
-   commits the working-tree state together with the failure record
-   (`FAIL-NNNN: TASK-NNNN failed terminally`) and pushes — failures are
-   visible in the PR, never hidden. `implement-agent` never commits; review
-   remediation rounds follow the same per-task mechanics.
+   working-tree changes of the task (`TASK-NNNN: <title>`), pushes, updates
+   the PR description, and writes the task's Test Results block into the PR
+   (see Test Results below). On terminal failure, the **orchestrator** commits
+   the working-tree state together with the failure record
+   (`FAIL-NNNN: TASK-NNNN failed terminally`), pushes, and writes the failed
+   task's Test Results block from the last validation report — failures and
+   their test evidence are visible in the PR, never hidden. `implement-agent`
+   never commits; review remediation rounds follow the same per-task mechanics.
 4. **Final commit.** `review-agent` commits its CHANGELOG/README updates
    (`E<N>: review`), pushes, and finalizes the PR description. The run ends
    with the PR open; merging — or closing — it is the human's decision.
@@ -197,6 +199,9 @@ this harness: no force pushes, no rebases, no amending pushed commits.
 ### Tasks
 - [ ] TASK-NNNN — <title> — pending
 
+### Test Results
+_Populated as each task reaches a terminal validation state._
+
 ### Outcome
 _Run in progress._
 ```
@@ -204,6 +209,51 @@ _Run in progress._
 A task's line becomes `- [x] … — done` when validated, or `- [ ] … — failed
 (FAIL-NNNN)` / `- [ ] … — blocked` at finalization. The final Outcome states
 shipped / partial / failed, the rules earned, and `Recorded as CHANGELOG #E`.
+
+**Test Results** — collapsible test evidence, written **once per task, only at
+its terminal validation state**: a PASS (task `done`) or the ultimate FAIL
+after the retry budget is exhausted. Never written on an intermediate FAIL
+that will be retried, and never duplicated across attempts. The actor that
+makes the task's terminal commit owns its block: `validate-agent` on PASS, the
+orchestrator on terminal FAIL. Each task contributes one entry per test tier,
+using GitHub collapsible `<details>` blocks whose `<summary>` carries the test
+count and the final state (`PASS` / `FAIL`):
+
+```
+#### TASK-NNNN — <title>
+
+<details><summary>Unit — N tests, PASS</summary>
+
+| Test | Result |
+|---|---|
+| <test name> | pass / fail |
+
+</details>
+
+<details><summary>UI — N tests, PASS</summary>
+
+![<test name>](https://github.com/<owner>/<repo>/raw/<run-branch>/<artifact-path>)
+
+</details>
+
+<details><summary>Integration — N tests, PASS</summary>
+
+What matters: counts (passed / failed / skipped), the assertion groups
+exercised with pass/fail each, endpoints or external surfaces hit, and any
+notable live-network anomalies or tolerances. Omit the block entirely when no
+integration command is configured.
+
+</details>
+```
+
+UI screenshots are referenced by **committed artifact path** on the run branch,
+not pasted bytes: the UI suite writes its screenshots to a known run-artifacts
+directory that `validate-agent` commits with the task, and the block links them
+with raw-blob URLs (`…/raw/<run-branch>/<path>`) so GitHub renders them inline.
+When a UI run produces no screenshots, the UI block falls back to the same
+table form as the unit block and says so — never promise an image that will not
+render. On terminal FAIL the summary state is `FAIL`, the unit/UI tables mark
+the failing rows, and the integration block records what failed.
 
 The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
 changes in the working tree, and the human decides when harness changes land.
@@ -306,13 +356,17 @@ For each task:
    Integration tests may be skipped when the command is absent from
    `specs/project.md`; the omission is noted in the report but is not itself
    a FAIL. It returns PASS or FAIL with the failing tests and a suspected
-   cause. On PASS it also makes the task's commit, pushes the run branch, and
-   updates the PR description (§3 Git contract); on FAIL nothing is committed
-   — the retry reworks the tree in place.
+   cause. On PASS it also makes the task's commit, pushes the run branch,
+   updates the PR description, and writes the task's collapsible Test Results
+   block into the PR (§3 Git contract, Test Results); on FAIL nothing is
+   committed and no Test Results block is written — the retry reworks the tree
+   in place, and the block is written only at the task's terminal state.
 3. On FAIL: increment `attempts`. If `attempts < 4`, loop to step 1. After the
    3rd failed retry (`attempts = 4`), run the failure protocol (§5, including
-   the failure commit), mark the task `failed`, mark tasks that depend on it
-   `blocked`, and continue with the remaining independent tasks.
+   the failure commit and the failed task's Test Results block — that is the
+   terminal FAIL state, so its evidence goes into the PR), mark the task
+   `failed`, mark tasks that depend on it `blocked`, and continue with the
+   remaining independent tasks.
 
 **Phase 4 — REVIEW.** Always runs, even if some tasks failed. Spawn
 `review-agent` with `E`, the manifest, per-task outcomes, and the Rule Pack.
@@ -324,7 +378,9 @@ tasks have real code and real passing tests, ADR ↔ code traceability holds
 2. updates `README.md` if the product's identity, setup, or commands changed,
 3. commits its updates as the run's final commit, pushes the run branch, and
    finalizes the PR description — final task statuses, outcome, rules earned,
-   CHANGELOG reference (§3 Git contract).
+   CHANGELOG reference (§3 Git contract), confirming every concluded task has
+   its Test Results block (it audits, never regenerates — the terminal actor
+   wrote each block).
 
 If review finds discrepancies that require code changes, the orchestrator
 dispatches **one remediation round** through the standard implement→validate
@@ -382,11 +438,14 @@ orchestrator (never the agents) then:
    `- **R-NNNN** (FAIL-NNNN, E<N>): <rule text>`
 3. Commits the working-tree state together with the failure record and the
    rule append to the run branch and pushes
-   (`FAIL-NNNN: TASK-NNNN failed terminally`, §3 Git contract) — the failure
-   is visible in the PR, never hidden. If no run branch exists yet (Phase 1
+   (`FAIL-NNNN: TASK-NNNN failed terminally`, §3 Git contract), and — when the
+   terminal failure is an exhausted task (not a Phase 1 / harness-path
+   failure) — writes the failed task's Test Results block into the PR from the
+   last validation report (§3 Test Results), so the failing evidence is
+   visible in the PR, never hidden. If no run branch exists yet (Phase 1
    failed before branching, or the failure is on the harness path), the
-   record stays uncommitted and the Run Report says so. Never commit to
-   `main`.
+   record stays uncommitted, no PR block is written, and the Run Report says
+   so. Never commit to `main`.
 4. Reports the new rule in the Run Report.
 
 Because the Rule Pack is injected into every agent prompt of every future run,
