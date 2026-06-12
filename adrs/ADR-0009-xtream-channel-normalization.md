@@ -6,6 +6,7 @@ evolution: 5
 status: accepted
 governs:
   - client/api.js
+  - tests/int/xtream.test.js
 ---
 
 # ADR-0009 — Xtream path normalizes portal objects into the canonical Ch schema

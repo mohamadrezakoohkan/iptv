@@ -2,7 +2,7 @@
 id: TASK-0021
 adr: ADR-0009
 evolution: 5
-status: pending
+status: done
 attempts: 0
 depends_on: []
 ---
@@ -47,4 +47,23 @@ login produces channels the grid, sidebar, and player can actually use.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+- `client/api.js`: rewrote `loadXtream()` — now calls no-action
+  `player_api.php` first (`mkInfUrl`), rejects falsy `user_info.auth` with
+  `{ ok: false, err: 'Login failed – …' }`, reads
+  `allowed_output_formats[0]` (fallback `"ts"`, `getExt`), then fetches
+  categories + streams and normalizes via `getXtCats` / `mkCatMap` /
+  `getXtChs` / `mkXtCh`. Stream URL:
+  `<base>/live/<user>/<pass>/<stream_id>.<ext>`, with `getBase()` stripping
+  trailing slashes (also applied in `mkPxUrl`). Categories normalized to
+  `{ category_id: string, category_name: string }` — same shape as the M3U
+  path. `category_id` keys are stringified so numeric portal ids match.
+  `val` now also carries `server: <base>` per spec §8.
+- `tests/unit/api.test.js`: Xtream-path tests updated to the new 3-call
+  sequence (info → categories → streams) plus new tests for the §8 mapping
+  table, auth failure, ext fallback, unknown category → "Uncategorized",
+  trailing-slash handling, numeric category ids. M3U/demo tests untouched.
+- `tests/int/xtream.test.js` (new): live-portal integration test through
+  the in-process Express proxy — auth, >1 category, >1 channel, CH_DEF
+  schema sample, non-empty `.ts` URLs. Verified passing against the live
+  portal.
+- ADR-0009 `governs:` trued up with the new integration test file.
