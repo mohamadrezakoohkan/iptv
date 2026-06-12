@@ -8,6 +8,10 @@ streams play via hls.js, raw MPEG-TS streams (the common Xtream live output)
 via mpegts.js. On browsers without Media Source Extensions (e.g. iOS Safari),
 the server remuxes live TS to HLS on the fly so streams still play.
 
+It remembers **multiple accounts** at once: a top-right nav button opens a
+right slide-in panel that names the connected account and its server URL, and
+lets you switch between saved accounts, add a new one, or remove one.
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
@@ -86,10 +90,17 @@ command.
   (`GET /api/hls?url=…`, ffmpeg stream copy, per-source sessions reaped
   when idle) and played through native HLS or hls.js — no
   "MPEG-TS not supported" dead end.
+- **Multiple accounts** — a top-right account nav button opens a right
+  slide-in panel showing the connected account name + server URL; from there
+  you can switch to another saved account (its stored connection is replayed,
+  no re-typing), add a new account (returns to the footer login), or remove a
+  saved account. All saved accounts persist across refreshes; a pre-existing
+  single-account install is migrated automatically on first load.
 - **Footer** — login-mode selector + login form + connected status bar
   showing host and channel count.
-- **Persistence** — credentials, login mode, last-selected channel, and
-  favourites survive page refreshes via `localStorage`.
+- **Persistence** — saved accounts and the active account, login mode (per
+  account), last-selected channel, and favourites survive page refreshes via
+  `localStorage`.
 - **CORS proxy** — server proxies all external URL fetches (Xtream API calls,
   M3U files, and live streams) so remote hosts without CORS headers work from
   the browser; it follows validated redirects (up to 5 hops, SSRF-checked)
