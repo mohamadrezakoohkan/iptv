@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -345,8 +345,7 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
     expect(res.val.host).toBe('example.com');
     expect(res.val.user).toBe('');
     expect(res.val.server).toBeNull();
-    expect(Array.isArray(res.val.categories)).toBe(true);
-    expect(res.val.categories.length).toBeGreaterThan(0);
+    expect(res.val.categories).toEqual([]);
     expect(Array.isArray(res.val.channels)).toBe(true);
     expect(res.val.channels.length).toBeGreaterThan(0);
   });
@@ -552,7 +551,7 @@ describe('parsM3u', function () {
     expect(ch2.num).toBe(2);
   });
 
-  it('derives deduplicated ordered categories from channels', function () {
+  it('returns categories:[] regardless of group-title values (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
       '#EXTINF:-1 group-title="Sports",Sport A',
@@ -564,12 +563,18 @@ describe('parsM3u', function () {
     ].join('\n');
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
-    expect(res.val.categories).toHaveLength(2);
-    expect(res.val.categories[0]).toEqual({ category_id: 'Sports', category_name: 'Sports' });
-    expect(res.val.categories[1]).toEqual({ category_id: 'News', category_name: 'News' });
+    expect(res.val.categories).toEqual([]);
+    expect(res.val.channels).toHaveLength(3);
+    expect(res.val.channels.map(function nm(ch) { return ch.name; })).toEqual(['Sport A', 'News A', 'Sport B']);
+    expect(res.val.channels.map(function ur(ch) { return ch.url; })).toEqual([
+      'http://stream.example.com/a',
+      'http://stream.example.com/b',
+      'http://stream.example.com/c',
+    ]);
+    expect(res.val.channels.every(function emptyCat(ch) { return ch.cat === ''; })).toBe(true);
   });
 
-  it('defaults grp to "Other" when group-title is absent', function () {
+  it('defaults grp to "Other" when group-title is absent and keeps cat empty (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
       '#EXTINF:-1 tvg-name="No Group Channel",No Group Channel',
@@ -578,7 +583,8 @@ describe('parsM3u', function () {
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
     expect(res.val.channels[0].grp).toBe('Other');
-    expect(res.val.categories[0]).toEqual({ category_id: 'Other', category_name: 'Other' });
+    expect(res.val.channels[0].cat).toBe('');
+    expect(res.val.categories).toEqual([]);
   });
 
   it('skips an #EXTINF entry whose following stream URL line is absent', function () {

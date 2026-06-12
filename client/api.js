@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -259,20 +259,20 @@
     return idx >= 0 ? line.slice(idx + 1).trim() : '';
   }
 
-  /** Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num} */
+  /**
+   * Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num}
+   * cat is always '' (ADR-0020): M3U sources expose no categories, so the
+   * sidebar is a flat list. grp keeps the raw group-title for display/debug.
+   */
   function mkM3uCh(opts) {
-    const grp = opts.grp || 'Other';
     return {
-      id:          opts.tvgId || String(opts.num),
-      name:        opts.tvgName || opts.chanName,
-      grp,
-      url:         opts.strUrl,
-      img:         opts.img,
-      cat:         grp,
-      num:         opts.num,
-      stream_id:   opts.num,
-      category_id: grp,
-      categoryId:  grp,
+      id:   opts.tvgId || String(opts.num),
+      name: opts.tvgName || opts.chanName,
+      grp:  opts.grp || 'Other',
+      url:  opts.strUrl,
+      img:  opts.img,
+      cat:  '',
+      num:  opts.num,
     };
   }
 
@@ -306,20 +306,6 @@
     return chs;
   }
 
-  /** Derive deduplicated ordered categories array from channels list. */
-  function getM3uCats(chs) {
-    const seen = new Set();
-    const cats = [];
-    for (let i = 0; i < chs.length; i += 1) {
-      const grp = chs[i].grp;
-      if (!seen.has(grp)) {
-        seen.add(grp);
-        cats.push({ category_id: grp, category_name: grp });
-      }
-    }
-    return cats;
-  }
-
   /** Find index of first non-empty line. Used by parsM3u. */
   function firstNonEmpty(lines) {
     for (let i = 0; i < lines.length; i += 1) {
@@ -330,6 +316,8 @@
 
   /**
    * Pure M3U parser. Returns Result<{categories, channels}>.
+   * categories is always [] (ADR-0020): M3U sources expose no categories,
+   * so the sidebar renders a flat All Channels + Favourites list.
    * @param {string} text - raw M3U playlist text
    */
   function parsM3u(text) {
@@ -339,7 +327,7 @@
       return { ok: false, err: 'not an M3U file' };
     }
     const chs = parsM3uLines(lines.slice(first + 1));
-    return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
+    return { ok: true, val: { categories: [], channels: chs } };
   }
 
   window.IptvApi = { connect, isDemo, parsM3u, loadM3u };

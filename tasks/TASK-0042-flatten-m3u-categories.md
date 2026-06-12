@@ -2,8 +2,8 @@
 id: TASK-0042
 adr: ADR-0020
 evolution: 12
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -64,8 +64,34 @@ favourites, accounts, presets, and theme all still work.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+- `client/api.js` — `parsM3u` now returns `categories: []`; `getM3uCats` removed
+  (was its only caller, no orphan); `mkM3uCh` simplified to the canonical `Ch`
+  fields with `cat: ''` and dropped the unused `stream_id` / `category_id` /
+  `categoryId` aliases (verified no client reader: only `ui.js` `getCatId`
+  reads `category_id` off *category* objects, never M3U channel objects).
+  Added `ADR-0020` to the file's `ADR:` comment.
+- `tests/unit/api.test.js` — replaced the "derives deduplicated ordered
+  categories" assertion with one asserting `categories === []` plus channel
+  count/name/url/`cat===''`; updated the "defaults grp to Other" and the
+  `loadM3u` integration shape test to expect empty categories. Xtream and demo
+  category assertions left untouched (still pass). Public surface
+  `connect, isDemo, loadM3u, parsM3u` intact.
+- `tests/ui/m3u.test.js` — added three Playwright tests: M3U fixture (with
+  noisy `Classic;…` group-titles) parsed via real `IptvApi.parsM3u` + rendered
+  via `IptvUi.rndSide` yields exactly one button (All Channels), no group
+  buttons; favourites adds only the Favourites button; Xtream/demo-shaped
+  categories still render their buttons.
+- `tests/int/m3u.test.js` — live iptv-org assertions updated to expect
+  `categories` empty while still asserting > 100 channels conform to CH_DEF.
+
+Non-obvious: `rndSide` already renders flat on empty cats — unchanged per ADR.
+R-0001: the only DOM-attribute baseline relevant here is the `active` class on
+`[data-cat="all"]`, which `rndSide` adds itself; no source-HTML attribute
+presence is asserted. `cat` is now empty on M3U channels; the grid filter
+`ch.cat === id` only fires for a clicked category button, which M3U no longer
+has, so empty `cat` is safe. ADR-0020 / ADR-0005 `governs:` already list all
+touched files; no traceability edits needed.
 
 This touches shared-scope plain-`<script>` client files; validate-agent runs
 the FULL unit AND UI suites (and the integration suite). `rndSide` in

@@ -1,4 +1,4 @@
-// ADR: ADR-0007, ADR-0008
+// ADR: ADR-0007, ADR-0008, ADR-0020
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'module';
 import { readFileSync } from 'fs';
@@ -76,9 +76,9 @@ describe('engine — live M3U connect + load (iptv-org index.m3u)', function () 
     expect(res.val.server).toBeNull();
   });
 
-  it('parses the playlist at real scale: > 100 channels, > 1 categories', function () {
+  it('parses the playlist at real scale: > 100 channels, empty categories (ADR-0020)', function () {
     expect(res.val.channels.length).toBeGreaterThan(100);
-    expect(res.val.categories.length).toBeGreaterThan(1);
+    expect(res.val.categories).toEqual([]);
   });
 
   it('sampled channels (first, middle, last) conform to CH_DEF', function () {
@@ -96,10 +96,8 @@ describe('engine — live M3U connect + load (iptv-org index.m3u)', function () 
     }
   });
 
-  it('every category has string category_id and category_name', function () {
-    for (const cat of res.val.categories) {
-      expect(typeof cat.category_id).toBe('string');
-      expect(typeof cat.category_name).toBe('string');
-    }
+  it('exposes no categories — the sidebar is flat for M3U sources (ADR-0020)', function () {
+    expect(Array.isArray(res.val.categories)).toBe(true);
+    expect(res.val.categories.length).toBe(0);
   });
 });
