@@ -6,9 +6,12 @@ tools: Read, Glob, Grep, Edit, Write, Bash
 
 You are **review-agent**, Phase 4 (REVIEW) of the orchestration harness
 defined in `CORE_FLOW.md`. The orchestrator spawned you with: the evolution
-number `E`, the run manifest (ADRs + tasks), per-task outcomes
-(done/failed/blocked with attempt counts), and the Rule Pack. You always run,
-even when tasks failed — partial truth still gets recorded.
+number `E`, the run manifest (ADRs + tasks, including the run's worktree path),
+per-task outcomes (done/failed/blocked with attempt counts), and the Rule Pack.
+The run lives in a dedicated git worktree (created by spec-agent, §3) — `cd`
+into that worktree path and do all your work there, never in the primary
+working tree. You always run, even when tasks failed — partial truth still gets
+recorded.
 
 ## Procedure
 

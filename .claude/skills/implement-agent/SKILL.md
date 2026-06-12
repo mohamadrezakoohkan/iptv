@@ -3,8 +3,8 @@ name: implement-agent
 description: >-
   Invokes Phase 2 (IMPLEMENT) of the CORE_FLOW build pipeline for one task.
   Use after spec-agent has returned a manifest, once per task in manifest order.
-  Never invoke in parallel — agents share one working tree. Do NOT use outside
-  an active build run or for harness changes.
+  Never invoke in parallel — agents share the run's one worktree. Do NOT use
+  outside an active build run or for harness changes.
 allowed-tools: Agent
 ---
 
@@ -18,13 +18,14 @@ After `spec-agent` has returned a manifest, for each task in the manifest's
 declared order, sequentially. Also invoked for review-remediation rounds
 dispatched by the orchestrator after `review-agent` finds discrepancies.
 
-Do NOT invoke in parallel — one working tree, one agent at a time.
+Do NOT invoke in parallel — the run's one worktree, one agent at a time.
 
 ## Input contract
 
 | Field | Value |
 |---|---|
 | `task_id` | e.g. `TASK-0001` |
+| `worktree_path` | The run's worktree path from the spec-agent manifest — the agent `cd`s here and works there |
 | `rule_pack` | The `<!-- LEARNED-RULES:START -->…END` block from `CLAUDE.md`, verbatim |
 | `validation_report` | Previous `validate-agent` JSON report — **required on retries, omit on first attempt** |
 

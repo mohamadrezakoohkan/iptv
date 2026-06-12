@@ -42,7 +42,7 @@ outside the pipeline.
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
 | **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3) | write specs, ADRs, code, tests, or product docs itself |
-| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
+| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run's dedicated worktree on the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
@@ -165,11 +165,16 @@ protection.
 
 One build run = one branch = one pull request:
 
-1. **Branch.** At the start of Phase 1, `spec-agent` creates the run branch
-   from the current HEAD: `ai/e<E>-<slug>` (the evolution number plus 2–5
-   kebab-case words condensing the prompt). No build work ever happens on
-   `main`. If `git` or an authenticated `gh` CLI is unavailable, that is a
-   `PHASE-FAILURE` — the harness does not build outside a run branch.
+1. **Branch in a dedicated worktree.** At the start of Phase 1, `spec-agent`
+   creates the run branch from the current HEAD: `ai/e<E>-<slug>` (the
+   evolution number plus 2–5 kebab-case words condensing the prompt) in a
+   **new git worktree** (`git worktree add -b ai/e<E>-<slug> <path> HEAD`), so
+   the entire run is isolated from the primary working tree. The run's
+   absolute worktree path is returned in the manifest and is where every
+   later phase of the run operates. No build work ever happens on `main` or in
+   the primary working tree. If `git` or an authenticated `gh` CLI is
+   unavailable, that is a `PHASE-FAILURE` — the harness does not build outside
+   a run worktree.
 2. **First commit, then PR.** `spec-agent` commits the Phase 1 artifacts as
    the run's first commit (`E<N> spec: <prompt, condensed>`), pushes the
    branch (`git push -u origin <run-branch>`), and immediately opens the run
@@ -318,7 +323,8 @@ intent is ambiguous, ask the human rather than guess.
         │ E = next evolution number;  Rule Pack = Learned Rules from CLAUDE.md │
         └────────────────────────────────────────────────────────────────────┘
                                         │
-Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch → specs + ADRs + tasks
+Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch in a new worktree
+                                  → specs + ADRs + tasks
                                   → first commit + push → open PR (manifest)
                                         │
 Phase 2+3 per task   ┌─► implement-agent (task, rule pack, last failure report)
@@ -348,8 +354,9 @@ it MUST be included in the prompt of every agent spawned during the run.
 **Phase 1 — SPEC.** Spawn `spec-agent` with: the user prompt verbatim, `E`, and
 the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `specs/`, and
 everything in `adrs/` to understand the project, then:
-1. creates the run branch `ai/e<E>-<slug>` from the current HEAD and checks
-   it out (§3 Git contract) — build work never happens on `main`,
+1. creates the run branch `ai/e<E>-<slug>` from the current HEAD in a new git
+   worktree (§3 Git contract) and works inside it — build work never happens
+   on `main` or in the primary working tree,
 2. aligns the prompt with the existing project (or defines the project, on the
    first run),
 3. creates or updates spec files in `specs/`,
@@ -361,8 +368,8 @@ everything in `adrs/` to understand the project, then:
    external connectivity is involved),
 6. commits the Phase 1 artifacts as the run's first commit, pushes the
    branch, and opens the run PR against `main` (§3 Git contract),
-7. returns a JSON manifest of ADRs and tasks, plus the run branch name and
-   the PR URL.
+7. returns a JSON manifest of ADRs and tasks, plus the run branch name, the
+   run's absolute worktree path, and the PR URL.
 
 The orchestrator verifies every file in the manifest exists before proceeding.
 If `spec-agent` reports `PHASE-FAILURE` (e.g. the prompt contradicts accepted
@@ -370,11 +377,13 @@ ADRs and the contradiction is not resolvable from the prompt), the run halts:
 failure protocol, then ask the human.
 
 **Phases 2+3 — IMPLEMENT + VALIDATE, per task.** Tasks execute sequentially in
-manifest order (no parallel implementation — agents share one working tree).
+manifest order (no parallel implementation — agents share the run's one
+worktree). Every Phase 2/3/4 agent is told the run's worktree path (from the
+Phase 1 manifest) and operates inside it, never in the primary working tree.
 For each task:
 
-1. Spawn `implement-agent` with the task ID, the Rule Pack, and — on retries —
-   the previous validation report verbatim. It implements the task **and its
+1. Spawn `implement-agent` with the task ID, the run's worktree path, the Rule
+   Pack, and — on retries — the previous validation report verbatim. It implements the task **and its
    tests** (unit always; UI tests whenever the task touches user-facing
    behavior; integration tests whenever the task involves external
    connectivity, API calls, or proxy behavior), then sets the task to
@@ -502,7 +511,10 @@ the backlog path does not fall back to an uncommitted write.
 A **terminal failure** is any phase ending beyond its retry budget, or any
 phase reporting `PHASE-FAILURE`. The harness path counts too: a
 `coreflow-agent` `PHASE-FAILURE` is recorded with `phase: harness`. The
-orchestrator (never the agents) then:
+failure record and rule append are written inside the run worktree (where the
+build changes live and the run branch is checked out), so they commit together
+with the working state on that branch. The orchestrator (never the agents)
+then:
 
 1. Creates `failures/FAIL-NNNN-<slug>.md` from `failures/TEMPLATE.md`:
    evolution, phase, related ADR/task IDs, symptom, root cause, what each
@@ -511,8 +523,8 @@ orchestrator (never the agents) then:
 2. Appends the rule to the Learned Rules section of `CLAUDE.md`, between the
    `LEARNED-RULES` markers, as:
    `- **R-NNNN** (FAIL-NNNN, E<N>): <rule text>`
-3. Commits the working-tree state together with the failure record and the
-   rule append to the run branch and pushes
+3. Commits the run worktree's state together with the failure record and the
+   rule append to the run branch and pushes (from inside the run worktree)
    (`FAIL-NNNN: TASK-NNNN failed terminally`, §3 Git contract), and — when the
    terminal failure is an exhausted task (not a Phase 1 / harness-path
    failure) — writes the failed task's Test Results block into the PR from the

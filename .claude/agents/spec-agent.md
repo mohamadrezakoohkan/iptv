@@ -15,11 +15,15 @@ are binding constraints on everything you produce).
    every file in `adrs/`. This is how you understand what the project is. Do
    not skip files; on a young project this is cheap, and stale context is how
    contradictory ADRs get written.
-2. **Create the run branch** (CORE_FLOW.md §3, Git & pull-request contract):
-   `git checkout -b ai/e<E>-<slug>` from the current HEAD — `<slug>` is 2–5
-   kebab-case words condensing the prompt. Never work on `main`. If `git` is
-   broken or `gh auth status` fails, report `PHASE-FAILURE` — the harness
-   does not build outside a run branch.
+2. **Create the run branch in a dedicated worktree** (CORE_FLOW.md §3, Git &
+   pull-request contract): from the repository root run
+   `git worktree add -b ai/e<E>-<slug> <path> HEAD` to get a fresh checkout on
+   the new run branch, isolated from the primary working tree — `<slug>` is
+   2–5 kebab-case words condensing the prompt. Do all of the following inside
+   that worktree, and return its absolute path in the manifest so every later
+   phase operates there. Never work on `main` or in the primary working tree.
+   If `git` is broken or `gh auth status` fails, report `PHASE-FAILURE` — the
+   harness does not build outside a run worktree.
 3. **Align the prompt with the project.** Restate the prompt as concrete
    intent against the current state. On the first evolution there is no
    product yet — your job then includes defining it (and forcing the stack +
@@ -46,9 +50,10 @@ are binding constraints on everything you produce).
    `status: pending`, `attempts: 0`.
 7. **Self-check:** every ADR has ≥1 task; every task points to an existing
    ADR; ordering respects dependencies; nothing violates the Rule Pack.
-8. **First commit + PR** (CORE_FLOW.md §3): `git add` the files you created
-   or updated, commit as `E<N> spec: <prompt, condensed>`, push with
-   `git push -u origin ai/e<E>-<slug>`, then open the run PR against `main`
+8. **First commit + PR** (CORE_FLOW.md §3): inside the run worktree, `git add`
+   the files you created or updated, commit as `E<N> spec: <prompt, condensed>`,
+   push with `git push -u origin ai/e<E>-<slug>`, then open the run PR against
+   `main`
    with `gh pr create`, title `E<N>: <prompt, condensed>`, body in the
    canonical PR-description structure from CORE_FLOW.md §3 (every task line
    `- [ ] TASK-NNNN — <title> — pending`, Outcome `_Run in progress._`).
@@ -59,7 +64,8 @@ are binding constraints on everything you produce).
 - Touch `CORE_FLOW.md`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, or
   `failures/`.
 - Commit to or push `main`, force-push, merge or close a PR, or skip the
-  branch step and work on `main` (CORE_FLOW.md §3).
+  worktree step and work on `main` or in the primary working tree
+  (CORE_FLOW.md §3).
 - Invent scope the prompt doesn't imply. Smallest coherent decision set wins.
 
 ## Return (your final message — the orchestrator parses it)
@@ -72,6 +78,7 @@ Otherwise return ONLY this JSON:
 {
   "evolution": E,
   "branch": "ai/e<E>-<slug>",
+  "worktree_path": "/absolute/path/to/run/worktree",
   "pr_url": "https://github.com/...",
   "specs_touched": ["specs/..."],
   "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "adrs/..."}],

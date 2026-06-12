@@ -24,7 +24,7 @@ Do NOT invoke mid-run while tasks are still pending or in-progress.
 | Field | Value |
 |---|---|
 | `E` | Evolution number for this run |
-| `manifest` | The full JSON manifest returned by `spec-agent` (ADRs + tasks) |
+| `manifest` | The full JSON manifest returned by `spec-agent` (ADRs + tasks + the run's `worktree_path`) — the agent `cd`s into that worktree and works there |
 | `outcomes` | Per-task result: `{"TASK-NNNN": "done" | "failed (FAIL-NNNN)" | "blocked"}` |
 | `rule_pack` | The `<!-- LEARNED-RULES:START -->…END` block from `CLAUDE.md`, verbatim |
 

@@ -62,10 +62,10 @@ change — the orchestrator decides whether to fix and retry or record a
 
 | Phase | Agent (`subagent_type`) | In | Out |
 |---|---|---|---|
-| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>`, specs + ADRs + tasks, first commit + PR opened, JSON manifest |
-| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
-| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
+| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>` in a new worktree, specs + ADRs + tasks, first commit + PR opened, JSON manifest (incl. worktree path) |
+| 2 IMPLEMENT | `implement-agent` | task ID, worktree path, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
+| 3 VALIDATE | `validate-agent` | task ID, worktree path | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
+| 4 REVIEW | `review-agent` | E, manifest (incl. worktree path), outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
@@ -78,8 +78,11 @@ change — the orchestrator decides whether to fix and retry or record a
   file itself is never removed — it is history).
 - Git & PR contract (CORE_FLOW.md §3): no actor ever commits or pushes to
   `main`, force-pushes, or merges a PR (`.claude/settings.json` deny rules
-  back this up). spec-agent creates branch `ai/e<E>-<slug>`, makes the run's
-  first commit, and opens the PR; validate-agent commits, pushes, updates
+  back this up). spec-agent creates branch `ai/e<E>-<slug>` in a new git
+  worktree (mirroring backlog-agent's isolation) and runs the whole evolution
+  there — the worktree path is in the manifest and every later phase operates
+  inside it; spec-agent makes the run's first commit and opens the PR;
+  validate-agent commits, pushes, updates
   the PR description per passed task, and writes that task's collapsible Test
   Results block; you commit terminal-failure state and write the failed task's
   Test Results block; review-agent makes the final commit and finalizes the
