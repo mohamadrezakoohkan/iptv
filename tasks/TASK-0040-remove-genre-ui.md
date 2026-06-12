@@ -2,8 +2,8 @@
 id: TASK-0040
 adr: ADR-0018
 evolution: 11
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0039]
 ---
 
@@ -86,5 +86,58 @@ Builds on TASK-0039 (the genre logic is already removed).
 
 ## Implementation notes
 
-_Filled by implement-agent. Reference the pre-E9 `rndSide`/`rndHead` at git
-commit 785cb61 for the exact restoration target._
+Restored the pre-E9 sidebar/header surgically against git `785cb61`, removing
+only the ADR-0018 layer and preserving ADR-0017 sort, ADR-0019 theme toggle,
+ADR-0013/0014 account panel, ADR-0016 presets, search, and favourites.
+
+Files touched:
+
+- `client/ui.js`: dropped `ADR-0018` from the header `ADR:` line; removed the
+  `EL.gchp` slot + its `getElementById('genre-chip')` init and the
+  `EL.nav` `input` listener (`onFlt`); removed the module-level `flt` var and
+  the `onFlt`, `mkPin`, `mkCats`, `rndCats`, `rstFlt` members; reverted
+  `rndSide` to the plain form (All Channels + optional Favourites + per-source
+  category buttons in delivery order, written straight into `EL.nav` — no
+  `#cat-list` wrapper, no filter input); reverted `rndHead` to the
+  name-only body (no chip); removed the three `rstFlt()` call sites (`onOk`,
+  `onSwOk`, `tearDown`); dropped `rndCats`/`rstFlt` from `window.IptvUi`.
+  `getCatId`/`getCatName`/`mkCatBtn` (pre-ADR-0018) kept. `rndHead` stays
+  invoked from its callers (the pre-E9 now-info update is harmless/correct).
+- `client/main.js`: dropped `ADR-0018` from the header `ADR:` line; `rndHead`
+  call in `onConnRes` retained (kept-invoked path).
+- `index.html`: removed the `#genre-chip` span + its comment from
+  `.content-head`; dropped `ADR-0018` from the file's `ADR:` comment. On-air
+  badge, `#now-info`, `#fmt-chips`, theme toggle, account button, and
+  `#grp-nav` unchanged.
+- `client/app.css`: removed `.cat-filter`/`#cat-filter`/`.cat-list`/
+  `.genre-chip` rules; `.now-title` back to `flex: 1`; `.fmt-chips` back to
+  `display: flex; gap: 4px; flex: none;` (dropped `margin-left: auto`); mobile
+  rule back to `.sidebar-head, .sidebar-search { display: none; }`; dropped
+  `ADR-0018` from the file's `ADR:` comment.
+
+Tests:
+
+- `tests/unit/genre.test.js`: the three ADR-0018 describe blocks marked
+  `describe.skip` with a deferral note (full-file deletion is TASK-0041) — they
+  assert behaviour that no longer exists by design, not a regression gate.
+- `tests/ui/genre.test.js`: skipped the active-genre-chip test (`test.skip`);
+  the two surviving tests (plain category-click grid filter + sort
+  integration) remain live and now also assert the absence of `#cat-filter`,
+  `#cat-list`, `#genre-chip` and capture `test-results/task-0040-plain-sidebar.png`.
+- `tests/unit/side.test.js` unchanged — already asserts the plain `rndSide`
+  output and passes.
+
+Traceability: no file carries `ADR: ADR-0018`; ADR-0018 `governs: []` and
+`status: deleted` confirmed (set by spec-agent; no decision-content edit made).
+The demo cat-id fix in `client/api.js` (`ch.cat === catSlug(grp)`) is retained
+under `ADR: ADR-0009` (no comment change needed).
+
+Suites: `npx vitest run` → 441 passed, 7 skipped. `npx playwright test` →
+133 passed, 1 skipped. Verified in demo mode that the plain category list,
+category-click grid filter, sort control, theme toggle, account panel +
+presets, search, and favourites all still work.
+
+Note (out of scope): running the Playwright suite clears the committed
+`test-results/genre-chip.png` (its generating test is now skipped, so it is
+not regenerated). That screenshot belongs to the deleted chip feature and its
+full removal is part of TASK-0041's cleanup.

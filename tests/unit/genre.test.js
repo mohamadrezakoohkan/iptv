@@ -1,11 +1,9 @@
-// ADR: ADR-0018
-// Unit tests — TASK-0036 sidebar genre-filter markup + content-head genre chip.
-// rndSide: the "Filter genres…" input appears only when the category count
-// exceeds S.catFltMin, "All Channels"/"Favourites" stay pinned, and the genre
-// buttons render via IptvSrch.getCats (filtered + name-ascending). rndHead: the
-// active-genre chip text comes from the current channel's grp (empty/hidden
-// when none). Per R-0001 the baseline #genre-chip ships with the `hidden`
-// attribute, so the stub starts hidden and we assert the toggle from there.
+// ADR: ADR-0018 (DELETED at E11)
+// These suites cover the removed ADR-0018 filterable genre sidebar + content-head
+// genre chip (TASK-0040 removed the markup, styles, and JS). They are skipped
+// here to keep the suite green and are deleted wholesale in TASK-0041 (the
+// dedicated genre-test cleanup task). They assert behaviour that no longer
+// exists by design — they are not a regression gate.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
@@ -83,7 +81,7 @@ function mkCats(n) {
 // ---------------------------------------------------------------------------
 // Pinned All Channels / Favourites entries (never filtered or reordered)
 // ---------------------------------------------------------------------------
-describe('rndSide — pinned All Channels / Favourites', function () {
+describe.skip('rndSide — pinned All Channels / Favourites', function () {
   it('always renders "All Channels" first with the total channel count', function () {
     const { ui, els } = loadUi();
     const chs = [{ id: '1', name: 'A', cat: 'c0', num: 1 }, { id: '2', name: 'B', cat: 'c1', num: 2 }];
@@ -119,7 +117,7 @@ describe('rndSide — pinned All Channels / Favourites', function () {
 // ---------------------------------------------------------------------------
 // Genre buttons render in the source's own delivery order (pre-E9 behaviour)
 // ---------------------------------------------------------------------------
-describe('rndSide — genre buttons in source order', function () {
+describe.skip('rndSide — genre buttons in source order', function () {
   it('renders the genre buttons in the source category order (no reordering)', function () {
     const { ui, els } = loadUi();
     const cats = [
@@ -139,7 +137,7 @@ describe('rndSide — genre buttons in source order', function () {
 // ---------------------------------------------------------------------------
 // rndHead — active-genre chip text from the current channel's grp
 // ---------------------------------------------------------------------------
-describe('rndHead — active-genre chip', function () {
+describe.skip('rndHead — active-genre chip', function () {
   it('shows the current channel grp and reveals the chip (hidden=false)', function () {
     const { ui, els, st } = loadUi();
     st.cur = { id: '1', name: 'World News 24', grp: 'News' };

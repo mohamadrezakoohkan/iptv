@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0018, ADR-0019 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -53,12 +53,6 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .search-field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: 400 13px/1 var(--font-ui); color: var(--tx); }
 .search-field input::placeholder { color: var(--dim); }
 .sidebar-list { flex: 1; overflow-y: auto; padding: 8px 8px 16px; scrollbar-width: thin; scrollbar-color: var(--ln) transparent; }
-/* genre filter input — appears above the category list for large catalogs (ADR-0018) */
-.cat-filter { padding: 0 2px 8px; }
-.cat-filter input { width: 100%; height: 30px; padding: 0 10px; background: var(--sur2); border: 1px solid var(--ln); border-radius: 6px; font: 400 12px/1 var(--font-ui); color: var(--tx); outline: none; }
-.cat-filter input:focus { border-color: var(--acc); }
-.cat-filter input::placeholder { color: var(--dim); }
-.cat-list { display: contents; }
 .cat-btn { width: 100%; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: none; background: transparent; border-radius: 6px; cursor: pointer; text-align: left; color: var(--dim); font: 500 13px/1 var(--font-ui); }
 .cat-btn:hover { background: var(--sur2); color: var(--tx); }
 .cat-btn.active { background: var(--sur2); color: var(--acc); }
@@ -74,12 +68,9 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .on-air-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--live); }
 @media (prefers-reduced-motion: no-preference) { .on-air-dot { animation: blink 1.2s ease-in-out infinite; } }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-.now-title { flex: 0 1 auto; min-width: 0; font: 600 15px/1 var(--font-ui); color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-title { flex: 1; min-width: 0; font: 600 15px/1 var(--font-ui); color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now-cat { font: 500 11px/1 var(--font-mono); color: var(--dim); background: var(--sur2); border: 1px solid var(--ln); border-radius: 4px; padding: 3px 8px; white-space: nowrap; flex: none; }
-/* active-genre chip in the content-head (§5a, ADR-0018) */
-.genre-chip { flex: none; max-width: 180px; font: 600 10px/1 var(--font-mono); color: var(--acc); background: rgba(242,163,60,0.08); border: 1px solid rgba(242,163,60,0.3); border-radius: 4px; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
-.genre-chip[hidden] { display: none; }
-.fmt-chips { display: flex; gap: 4px; flex: none; margin-left: auto; }
+.fmt-chips { display: flex; gap: 4px; flex: none; }
 .fmt-chip { height: 26px; padding: 0 9px; border: 1px solid var(--ln); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); color: var(--dim); cursor: pointer; letter-spacing: 0.05em; }
 .fmt-chip:hover { border-color: var(--dim); color: var(--tx); }
 .fmt-chip.active { border-color: var(--acc); color: var(--acc); background: rgba(242,163,60,0.08); }
@@ -153,7 +144,7 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 @media (max-width: 760px) {
   .app-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--ln); flex-direction: row; height: 50px; min-height: 50px; overflow: hidden; }
-  .sidebar-head, .sidebar-search, .cat-filter { display: none; }
+  .sidebar-head, .sidebar-search { display: none; }
   .sidebar-list { display: flex; flex-direction: row; gap: 4px; padding: 8px 12px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; flex: 1; scrollbar-width: none; }
   .sidebar-list::-webkit-scrollbar { display: none; }
   .cat-btn { white-space: nowrap; flex: none; width: auto; height: 34px; }

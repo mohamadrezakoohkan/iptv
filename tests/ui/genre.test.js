@@ -1,9 +1,8 @@
-// ADR: ADR-0018
-// UI tests — active-genre chip + source-order category browsing. In demo mode
-// selecting a channel shows the active-genre chip with the channel's grp;
-// selecting a sidebar genre filters the grid to that category; and a category
-// filter integrates with the sort control. The ADR-0018 genre-filter input was
-// removed (E11); the surviving chip markup is verified here pending TASK-0040.
+// ADR: ADR-0018 (DELETED at E11) / ADR-0009 (surviving demo category browsing)
+// The active-genre chip test below is skipped — TASK-0040 removed the chip; the
+// whole file is deleted in TASK-0041. The two surviving tests cover the plain
+// category-click grid filter (ADR-0009 demo cat-id fix) and its integration
+// with the ADR-0017 sort control — those remain a live regression gate.
 
 'use strict';
 
@@ -12,7 +11,7 @@ const { test, expect } = require('@playwright/test');
 // ---------------------------------------------------------------------------
 // Demo mode: selecting a channel shows the active-genre chip with its grp.
 // ---------------------------------------------------------------------------
-test('selecting a demo channel shows the active-genre chip with the channel grp', async function ({ page }) {
+test.skip('selecting a demo channel shows the active-genre chip with the channel grp', async function ({ page }) {
   await page.goto('http://localhost:3000');
   await page.fill('#f-url', 'demo');
   await page.click('#btn-conn');
@@ -45,6 +44,14 @@ test('selecting a sidebar genre filters the channel grid to that category', asyn
   await expect(page.locator('.ch-card')).toHaveCount(3);
   // the grid is non-empty (browsing actually works, not zero-channels)
   await expect(page.locator('.ch-empty')).toHaveCount(0);
+  // the restored plain sidebar has no "Filter genres…" input and no #cat-list
+  // wrapper, and the content-head carries no genre chip (TASK-0040 removal).
+  await expect(page.locator('#cat-filter')).toHaveCount(0);
+  await expect(page.locator('#cat-list')).toHaveCount(0);
+  await expect(page.locator('#genre-chip')).toHaveCount(0);
+  // screenshot the restored plain sidebar + content-head for the PR record.
+  await page.locator('.ch-card').first().click();
+  await page.screenshot({ path: 'test-results/task-0040-plain-sidebar.png' });
 });
 
 // ---------------------------------------------------------------------------
