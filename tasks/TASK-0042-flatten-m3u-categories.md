@@ -2,8 +2,8 @@
 id: TASK-0042
 adr: ADR-0020
 evolution: 12
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -103,3 +103,44 @@ change is needed — only the parse-step data changes. The grid filter
 also the sidebar button id. This touches shared-scope plain-`<script>` client
 files; validate-agent runs the FULL unit AND UI suites plus the integration
 suite.
+
+### Done (attempt 1) — forward re-implementation of first-level categories
+
+`client/api.js`:
+- Added pure helper `firstSeg(groupTitle)` — `String(g).split(';')[0].trim()`
+  with `'Other'` fallback for empty/absent — the single place the first-level
+  rule lives.
+- `mkM3uCh` now sets both `grp` and `cat` to `firstSeg(opts.grp)`; the canonical
+  `Ch` field set `{ id, name, grp, url, img, cat, num }` is unchanged. `cat ===
+  grp`, so the grid filter `ch.cat === id` matches the sidebar button id.
+- Re-introduced `getM3uCats(chs)` — deduplicated, first-seen-ordered
+  `{ category_id, category_name }` from each channel's `cat` (already the
+  first-level segment), matching the Xtream/sidebar category shape.
+- `parsM3u` returns `{ categories: getM3uCats(chs), channels }`; `loadM3u`
+  passes those through unchanged.
+- The earlier wrong-commit comments claiming "M3U exposes no categories / flat
+  sidebar / cat is always ''" were corrected to describe first-level
+  derivation.
+
+Tests:
+- `tests/unit/api.test.js` — replaced the `categories: []` assertions with
+  first-level assertions: `Classic;*` variants collapse to one `Classic`, no id
+  /name contains `;`, each channel `cat === grp === firstSeg`, the loadM3u-path
+  fixture (News/Sports) yields the two derived categories, "Other" fallback
+  derives an "Other" category. Xtream-normalization assertions untouched; export
+  surface assertion intact.
+- `tests/ui/m3u.test.js` — the two flat-sidebar tests now assert the
+  deduplicated first-level `Classic` button (All Channels + Classic = 2; with a
+  favourite = 3), and that no `Classic;` label leaks. Xtream/demo-shaped sidebar
+  test unchanged. No DOM-attribute-mutation assertions added (R-0001 N/A here).
+- `tests/int/m3u.test.js` — updated to assert `categories` non-empty,
+  deduplicated, and first-level only (no `;` in any id/name), keeping the > 100
+  channels + CH_DEF conformance assertions.
+
+No ADR traceability changes: ADR-0020's `governs:` already lists all four
+touched files and each already carries the `ADR: ADR-0020` comment.
+
+Verification: `npx vitest run` → 441 passed (19 files); `npx playwright test` →
+136 passed. Integration suite not run here (live-network; validate-agent's
+gate). Grid filter/search/sort/favourites/accounts/presets/theme all green in
+the unit + UI suites.

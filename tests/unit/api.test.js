@@ -345,7 +345,10 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
     expect(res.val.host).toBe('example.com');
     expect(res.val.user).toBe('');
     expect(res.val.server).toBeNull();
-    expect(res.val.categories).toEqual([]);
+    expect(res.val.categories).toEqual([
+      { category_id: 'News', category_name: 'News' },
+      { category_id: 'Sports', category_name: 'Sports' },
+    ]);
     expect(Array.isArray(res.val.channels)).toBe(true);
     expect(res.val.channels.length).toBeGreaterThan(0);
   });
@@ -551,30 +554,47 @@ describe('parsM3u', function () {
     expect(ch2.num).toBe(2);
   });
 
-  it('returns categories:[] regardless of group-title values (ADR-0020)', function () {
+  it('derives deduplicated first-level categories from semicolon group-titles (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
-      '#EXTINF:-1 group-title="Sports",Sport A',
+      '#EXTINF:-1 group-title="Classic;Comedy;Public;Series",Channel A',
       'http://stream.example.com/a',
-      '#EXTINF:-1 group-title="News",News A',
+      '#EXTINF:-1 group-title="Classic;Series",Channel B',
       'http://stream.example.com/b',
-      '#EXTINF:-1 group-title="Sports",Sport B',
+      '#EXTINF:-1 group-title="Classic;Music",Channel C',
       'http://stream.example.com/c',
+      '#EXTINF:-1 group-title="News;World",Channel D',
+      'http://stream.example.com/d',
     ].join('\n');
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
-    expect(res.val.categories).toEqual([]);
-    expect(res.val.channels).toHaveLength(3);
-    expect(res.val.channels.map(function nm(ch) { return ch.name; })).toEqual(['Sport A', 'News A', 'Sport B']);
+    // The three Classic;* variants collapse to a single Classic entry.
+    expect(res.val.categories).toEqual([
+      { category_id: 'Classic', category_name: 'Classic' },
+      { category_id: 'News', category_name: 'News' },
+    ]);
+    // No derived category id or name contains a semicolon.
+    expect(res.val.categories.every(function noSemi(c) {
+      return c.category_id.indexOf(';') === -1 && c.category_name.indexOf(';') === -1;
+    })).toBe(true);
+    expect(res.val.channels).toHaveLength(4);
+    expect(res.val.channels.map(function nm(ch) { return ch.name; }))
+      .toEqual(['Channel A', 'Channel B', 'Channel C', 'Channel D']);
     expect(res.val.channels.map(function ur(ch) { return ch.url; })).toEqual([
       'http://stream.example.com/a',
       'http://stream.example.com/b',
       'http://stream.example.com/c',
+      'http://stream.example.com/d',
     ]);
-    expect(res.val.channels.every(function emptyCat(ch) { return ch.cat === ''; })).toBe(true);
+    // Each channel's cat and grp equal its first-level segment, and cat === grp.
+    expect(res.val.channels.map(function cat(ch) { return ch.cat; }))
+      .toEqual(['Classic', 'Classic', 'Classic', 'News']);
+    expect(res.val.channels.every(function sameCatGrp(ch) {
+      return ch.cat === ch.grp && ch.cat.indexOf(';') === -1;
+    })).toBe(true);
   });
 
-  it('defaults grp to "Other" when group-title is absent and keeps cat empty (ADR-0020)', function () {
+  it('defaults grp/cat to "Other" when group-title is absent (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
       '#EXTINF:-1 tvg-name="No Group Channel",No Group Channel',
@@ -583,8 +603,8 @@ describe('parsM3u', function () {
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
     expect(res.val.channels[0].grp).toBe('Other');
-    expect(res.val.channels[0].cat).toBe('');
-    expect(res.val.categories).toEqual([]);
+    expect(res.val.channels[0].cat).toBe('Other');
+    expect(res.val.categories).toEqual([{ category_id: 'Other', category_name: 'Other' }]);
   });
 
   it('skips an #EXTINF entry whose following stream URL line is absent', function () {

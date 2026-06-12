@@ -260,18 +260,31 @@
   }
 
   /**
+   * First-level segment of a group-title (ADR-0020): the text before the first
+   * ';', trimmed. Empty/absent input falls back to 'Other'. The iptv-org
+   * convention uses ';' strictly as the category;subcategory hierarchy
+   * separator, so "Classic;Comedy;Series" → "Classic".
+   */
+  function firstSeg(groupTitle) {
+    const seg = String(groupTitle == null ? '' : groupTitle).split(';')[0].trim();
+    return seg.length > 0 ? seg : 'Other';
+  }
+
+  /**
    * Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num}
-   * cat is always '' (ADR-0020): M3U sources expose no categories, so the
-   * sidebar is a flat list. grp keeps the raw group-title for display/debug.
+   * grp and cat are both the first-level segment of group-title (ADR-0020), so
+   * the grid filter (ch.cat === id) matches the sidebar button id — mirroring
+   * the M3U convention where category_id is the grp string. Fallback 'Other'.
    */
   function mkM3uCh(opts) {
+    const seg = firstSeg(opts.grp);
     return {
       id:   opts.tvgId || String(opts.num),
       name: opts.tvgName || opts.chanName,
-      grp:  opts.grp || 'Other',
+      grp:  seg,
       url:  opts.strUrl,
       img:  opts.img,
-      cat:  '',
+      cat:  seg,
       num:  opts.num,
     };
   }
@@ -306,6 +319,25 @@
     return chs;
   }
 
+  /**
+   * Derive deduplicated, first-seen-ordered categories from a channels list
+   * (ADR-0020). Each channel's cat is already its first-level group-title
+   * segment, so the category id and name are that same string — shaped as
+   * { category_id, category_name } to match the Xtream/sidebar category object.
+   */
+  function getM3uCats(chs) {
+    const seen = new Set();
+    const cats = [];
+    for (let i = 0; i < chs.length; i += 1) {
+      const seg = chs[i].cat;
+      if (!seen.has(seg)) {
+        seen.add(seg);
+        cats.push({ category_id: seg, category_name: seg });
+      }
+    }
+    return cats;
+  }
+
   /** Find index of first non-empty line. Used by parsM3u. */
   function firstNonEmpty(lines) {
     for (let i = 0; i < lines.length; i += 1) {
@@ -316,8 +348,8 @@
 
   /**
    * Pure M3U parser. Returns Result<{categories, channels}>.
-   * categories is always [] (ADR-0020): M3U sources expose no categories,
-   * so the sidebar renders a flat All Channels + Favourites list.
+   * categories are the deduplicated first-level group-title segments
+   * (ADR-0020): "Classic;Comedy" and "Classic;Music" collapse to one "Classic".
    * @param {string} text - raw M3U playlist text
    */
   function parsM3u(text) {
@@ -327,7 +359,7 @@
       return { ok: false, err: 'not an M3U file' };
     }
     const chs = parsM3uLines(lines.slice(first + 1));
-    return { ok: true, val: { categories: [], channels: chs } };
+    return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
   }
 
   window.IptvApi = { connect, isDemo, parsM3u, loadM3u };

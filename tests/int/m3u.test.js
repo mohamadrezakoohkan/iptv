@@ -76,9 +76,10 @@ describe('engine — live M3U connect + load (iptv-org index.m3u)', function () 
     expect(res.val.server).toBeNull();
   });
 
-  it('parses the playlist at real scale: > 100 channels, empty categories (ADR-0020)', function () {
+  it('parses the playlist at real scale: > 100 channels, non-empty first-level categories (ADR-0020)', function () {
     expect(res.val.channels.length).toBeGreaterThan(100);
-    expect(res.val.categories).toEqual([]);
+    expect(Array.isArray(res.val.categories)).toBe(true);
+    expect(res.val.categories.length).toBeGreaterThan(0);
   });
 
   it('sampled channels (first, middle, last) conform to CH_DEF', function () {
@@ -96,8 +97,16 @@ describe('engine — live M3U connect + load (iptv-org index.m3u)', function () 
     }
   });
 
-  it('exposes no categories — the sidebar is flat for M3U sources (ADR-0020)', function () {
-    expect(Array.isArray(res.val.categories)).toBe(true);
-    expect(res.val.categories.length).toBe(0);
+  it('categories are deduplicated, first-level only — no semicolons (ADR-0020)', function () {
+    const cats = res.val.categories;
+    expect(cats.length).toBeGreaterThan(0);
+    // No category id or name contains a ';' — only the first-level segment survives.
+    for (const c of cats) {
+      expect(c.category_id.indexOf(';')).toBe(-1);
+      expect(c.category_name.indexOf(';')).toBe(-1);
+    }
+    // Deduplicated: each category_id appears exactly once.
+    const ids = cats.map(function id(c) { return c.category_id; });
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
