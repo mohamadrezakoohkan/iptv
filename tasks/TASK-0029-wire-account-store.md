@@ -2,8 +2,8 @@
 id: TASK-0029
 adr: ADR-0013
 evolution: 7
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0027]
 ---
 
@@ -64,5 +64,45 @@ rendering itself is TASK-0030.)
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Moved the connection lifecycle off the single `iptv_creds` record onto the
+ADR-0013 accounts store. The legacy compatibility shim TASK-0027 retained is
+gone: `S.credsKey` removed from `client/cfg.js`; `loadSt()` and the private
+`getCreds` helper no longer read/return `creds` — `loadSt()` now returns only
+`{ sel }` (it still owns `iptv_sel` + `iptv_favs` under ADR-0003). No
+read/write of `iptv_creds` remains in the client **except** the one-time
+read-time migration inside `loadAccts`/`runMig` (`st.js`), which is the
+intended ADR-0013 legacy migration.
+
+Files touched:
+- `client/cfg.js` — dropped `credsKey`.
+- `client/st.js` — removed `getCreds` + the creds branch of `loadSt`; added
+  `clearAct()` (removes the `iptv_act` key, leaves the accounts list intact)
+  and exported it.
+- `client/main.js` — load-time reconnect now reads `loadAccts()`, resolves the
+  active account via `getAct`, and `goLoad(acct)` replays its
+  `{ url, user, pass, m3u }` (stored m3u, never re-detected). No accounts →
+  stays at INIT.
+- `client/ui.js` — `onOk` now calls the new `saveActive` helper (mkAcct →
+  addAcct dedupe → saveAccts → saveAct) instead of writing `iptv_creds`; a
+  failed connect (`onFail`) still writes nothing. `onDisc` now `clearAct()` +
+  the extracted `tearDown()` (preserves `iptv_accts`/`iptv_sel`/`iptv_favs`).
+  Added `goSwitch(id)` (+ `runSwitch`/`onSwOk`) replaying a saved account and
+  setting it active on success, surfacing the inline error on failure without
+  mutating the store, and `onAcctRm(id)` deleting an account (clearing the
+  active id + tearing down only when the removed account is the active one).
+  `goSwitch` and `onAcctRm` are exported on `window.IptvUi` for TASK-0030 to
+  wire to the panel rows (panel rendering itself is out of scope here).
+
+Tests: rewrote the legacy `iptv_creds` assertions in
+`tests/unit/persist.test.js` (UI harness now loads the real cfg.js+st.js so
+the store helpers run against mocked localStorage), `tests/unit/cfg.test.js`
+(credsKey removed), and `tests/ui/persist.test.js` (accounts-store + migration
+model). Added switch/remove/disconnect unit coverage and account-store wiring
+UI tests in `tests/ui/acct.test.js`. `tests/unit/foot.test.js` gained
+account-store stubs so its connect-success path (which now calls `saveActive`)
+runs. Full unit suite (350) and full UI suite (99) green.
+
+Traceability: no `governs:` changes needed — every file is already listed
+under ADR-0013 / ADR-0014, and all carry their `ADR:` comments. ADR-0003's
+superseded-portion note stays accurate: `loadSt`/`saveSt` still own
+`iptv_sel` + `iptv_favs`, so ADR-0003 keeps live code and stays `accepted`.

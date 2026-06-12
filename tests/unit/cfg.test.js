@@ -36,8 +36,8 @@ describe('S config object', function () {
     expect(s.actKey).toBe('iptv_act');
   });
 
-  it('S.credsKey is "iptv_creds" (legacy reconnect path, until TASK-0029)', function () {
-    expect(s.credsKey).toBe('iptv_creds');
+  it('S.credsKey is removed (accounts store replaces the single creds record, ADR-0013)', function () {
+    expect(s.credsKey).toBeUndefined();
   });
 
   it('S.selKey is "iptv_sel"', function () {

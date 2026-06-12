@@ -125,3 +125,47 @@ test('account button opens the panel when activated by keyboard', async function
   await page.keyboard.press('Enter');
   await expect(page.locator('#acct-panel')).toHaveClass(/is-open/);
 });
+
+// ---------------------------------------------------------------------------
+// Account-store wiring (TASK-0029, ADR-0013)
+// ---------------------------------------------------------------------------
+
+// connectDemo — connect via the footer demo login and wait for the grid.
+async function connectDemo(page) {
+  await page.goto('http://localhost:3000');
+  await page.fill('#f-url', 'demo');
+  await page.click('#btn-conn');
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('.ch-card').first().waitFor({ state: 'visible', timeout: 5000 });
+}
+
+// ---------------------------------------------------------------------------
+// Connect saves + activates an account; reload auto-reconnects it
+// ---------------------------------------------------------------------------
+test('successful connect saves an active account and reload auto-reconnects it', async function ({ page }) {
+  await connectDemo(page);
+  const stored = await page.evaluate(function () {
+    const accts = JSON.parse(localStorage.getItem('iptv_accts'));
+    return { len: accts.length, actId: localStorage.getItem('iptv_act'), firstId: accts[0].id };
+  });
+  expect(stored.len).toBe(1);
+  expect(stored.actId).toBe(stored.firstId);
+  // Reload — no footer interaction; the active account must reconnect itself
+  await page.reload();
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
+  await page.locator('.ch-card').first().waitFor({ state: 'visible', timeout: 5000 });
+});
+
+// ---------------------------------------------------------------------------
+// Disconnect returns to the footer login while the account remains saved
+// ---------------------------------------------------------------------------
+test('disconnect shows the footer login but keeps the saved account', async function ({ page }) {
+  await connectDemo(page);
+  await page.click('#btn-disc');
+  await page.locator('#footer-login').waitFor({ state: 'visible', timeout: 3000 });
+  const after = await page.evaluate(function () {
+    return { accts: JSON.parse(localStorage.getItem('iptv_accts')), act: localStorage.getItem('iptv_act') };
+  });
+  expect(after.accts.length).toBe(1);
+  expect(after.act).toBeNull();
+});

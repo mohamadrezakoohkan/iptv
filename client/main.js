@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013
 /* global window, document */
 
 'use strict';
@@ -31,16 +31,16 @@ function onConnRes(res) {
 }
 
 // ---------------------------------------------------------------------------
-// goLoad — transition to LOAD, connect with stored creds (incl. the stored
-// m3u login mode — ADR-0008: replay the chosen mode, never re-detect),
-// delegate to onConnRes
+// goLoad — transition to LOAD, connect with the active account's stored
+// connection identity (incl. the stored m3u login mode — ADR-0008/ADR-0013:
+// replay the chosen mode, never re-detect), delegate to onConnRes
 // ---------------------------------------------------------------------------
-function goLoad(creds) {
+function goLoad(acct) {
   const { go } = window.IptvSt;
   const { rndFoot } = window.IptvUi;
   go('LOAD');
   rndFoot();
-  window.IptvApi.connect(creds.url, { user: creds.user, pass: creds.pass, m3u: creds.m3u })
+  window.IptvApi.connect(acct.url, { user: acct.user, pass: acct.pass, m3u: acct.m3u })
     .then(onConnRes);
 }
 
@@ -60,7 +60,10 @@ function onReady() {
   rndGrid([]);
   const loadStFn = window.IptvSt.loadSt;
   _stored = loadStFn ? loadStFn() : null;
-  if (_stored && _stored.creds) {
-    goLoad(_stored.creds);
+  const { loadAccts, getAct } = window.IptvSt;
+  const store = loadAccts ? loadAccts() : { accts: [], actId: null };
+  const acct  = getAct ? getAct(store.accts, store.actId) : null;
+  if (acct) {
+    goLoad(acct);
   }
 }

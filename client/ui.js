@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0014
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -402,6 +402,21 @@ function onUrlInput() {
 }
 
 // ---------------------------------------------------------------------------
+// saveActive — turn a successful connection into a saved + active account
+// (ADR-0013): build an Acct via mkAcct, dedupe-add it, persist the accounts
+// list and the active id. opts: { url, host, user, pass, m3u }
+// ---------------------------------------------------------------------------
+function saveActive(opts) {
+  const st = window.IptvSt;
+  const store = st.loadAccts();
+  const acct  = st.mkAcct(opts);
+  const accts = st.addAcct(store.accts, acct);
+  st.saveAccts(accts);
+  st.saveAct(acct.id);
+  return acct;
+}
+
+// ---------------------------------------------------------------------------
 // onOk — handle successful connect result
 // ---------------------------------------------------------------------------
 function onOk(val) {
@@ -411,7 +426,7 @@ function onOk(val) {
   const user = EL.uname ? EL.uname.value.trim() : val.user;
   const pass = EL.pwd   ? EL.pwd.value          : '';
   const m3u  = getMode() === 'm3u';
-  try { localStorage.setItem(window.S.credsKey, JSON.stringify({ url: src, user, pass, m3u })); } catch (e) {}
+  saveActive({ url: src, host: val.host, user, pass, m3u });
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
@@ -461,10 +476,67 @@ function onConn(evt) {
 }
 
 // ---------------------------------------------------------------------------
-// onDisc — disconnect button handler
+// onSwOk — handle a successful account-switch connect: populate channels,
+// transition READY, mark the switched account active (ADR-0013), re-render.
 // ---------------------------------------------------------------------------
-function onDisc() {
-  try { localStorage.removeItem(window.S.credsKey); } catch (e) {}
+function onSwOk(acct, val) {
+  window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
+  window.IptvSt.go('READY');
+  window.IptvSt.saveAct(acct.id);
+  const st = window.IptvSt.ST;
+  rndSide(st.cats, st.chs, st.favs);
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
+  rndFoot();
+}
+
+// ---------------------------------------------------------------------------
+// runSwitch — async: reconnect a saved account, replaying its stored m3u mode
+// (ADR-0013, never re-detected). Tears the live session down first; on success
+// the account becomes active, on failure the inline connect error is shown and
+// the store is left untouched.
+// ---------------------------------------------------------------------------
+async function runSwitch(acct) {
+  tearDown();
+  window.IptvSt.go('LOAD');
+  rndFoot();
+  const res = await window.IptvApi.connect(acct.url, { user: acct.user, pass: acct.pass, m3u: acct.m3u });
+  if (res.ok) { onSwOk(acct, res.val); } else { onFail(res.err); }
+}
+
+// ---------------------------------------------------------------------------
+// goSwitch — switch to the saved account with the given id (ADR-0013/ADR-0014).
+// No-op for an unknown id or the already-active account.
+// ---------------------------------------------------------------------------
+function goSwitch(id) {
+  const store = window.IptvSt.loadAccts();
+  const acct  = window.IptvSt.getAct(store.accts, id);
+  if (!acct || id === store.actId) return;
+  runSwitch(acct).catch(function onErr(e) { onFail(e.message); });
+}
+
+// ---------------------------------------------------------------------------
+// onAcctRm — remove the saved account with the given id (ADR-0013/ADR-0014).
+// Always deletes it from iptv_accts; removing the ACTIVE account also clears
+// the active id and tears the live session down. Removing a non-active account
+// leaves the live session untouched.
+// ---------------------------------------------------------------------------
+function onAcctRm(id) {
+  const store = window.IptvSt.loadAccts();
+  const accts = window.IptvSt.rmAcct(store.accts, id);
+  window.IptvSt.saveAccts(accts);
+  if (id === store.actId) {
+    window.IptvSt.clearAct();
+    tearDown();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// tearDown — clear the live session: stop playback, empty the channel state,
+// and walk the phase back to INIT, then re-render the footer/sidebar/grid into
+// the logged-out shell. Used by disconnect, switch (before reconnecting), and
+// remove-active. Does not touch the persisted accounts store.
+// ---------------------------------------------------------------------------
+function tearDown() {
   const cur = window.IptvSt.ST.phase;
   if (window.IptvPlay && cur === 'PLAY') window.IptvPlay.stopPlay();
   window.IptvSt.setChs([], [], '', '');
@@ -480,6 +552,16 @@ function onDisc() {
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
+}
+
+// ---------------------------------------------------------------------------
+// onDisc — disconnect button handler: clear the live session and the active
+// account pointer (ADR-0013), preserving the saved iptv_accts, iptv_sel, and
+// iptv_favs (iptv_creds no longer exists).
+// ---------------------------------------------------------------------------
+function onDisc() {
+  window.IptvSt.clearAct();
+  tearDown();
 }
 
 // ---------------------------------------------------------------------------
@@ -526,4 +608,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm };

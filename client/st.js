@@ -110,37 +110,23 @@ function getM3u(creds) {
 }
 
 // ---------------------------------------------------------------------------
-// loadSt — reads the sel, favs, and legacy creds localStorage keys; populates
-// ST.favs; returns { sel, creds } — called once on page load before any phase
-// transition. The accounts store (loadAccts, ADR-0013) is the forward model;
-// until the connect/reconnect wiring moves to it (TASK-0029), this helper
-// carries the legacy iptv_creds reconnect path so the runtime keeps working.
-// creds resolves its login mode via getM3u (ADR-0008) so legacy records
-// missing the m3u flag still replay correctly.
-// ADR: ADR-0003, ADR-0008
+// loadSt — reads the sel and favs localStorage keys; populates ST.favs and
+// returns { sel } — called once on page load before any phase transition.
+// Credential reconnect is owned by the accounts store (loadAccts, ADR-0013);
+// the legacy single-record iptv_creds path was removed in TASK-0029. The
+// iptv_sel + iptv_favs decisions remain in force under ADR-0003.
+// ADR: ADR-0003
 // ---------------------------------------------------------------------------
 function loadSt() {
   const S     = window.S;
   const ls    = window.localStorage;
   let sel     = null;
-  let creds   = null;
   try { sel = ls.getItem(S.selKey); } catch (e) {}
   try {
     const f = JSON.parse(ls.getItem(S.favsKey));
     if (Array.isArray(f)) ST.favs = f;
   } catch (e) {}
-  try { creds = getCreds(JSON.parse(ls.getItem(S.credsKey))); } catch (e) {}
-  return { sel: sel || null, creds };
-}
-
-// ---------------------------------------------------------------------------
-// getCreds — pure: a stored creds record with its m3u mode resolved via
-// getM3u (ADR-0008), or null when the value is not a usable object.
-// ADR: ADR-0003, ADR-0008
-// ---------------------------------------------------------------------------
-function getCreds(creds) {
-  if (!creds || typeof creds !== 'object') return null;
-  return { url: creds.url, user: creds.user, pass: creds.pass, m3u: getM3u(creds) };
+  return { sel: sel || null };
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +243,18 @@ function saveAct(actId) {
 }
 
 // ---------------------------------------------------------------------------
+// clearAct — removes the active account id key (iptv_act). Used on disconnect
+// and when the active account is removed; the saved accounts list is left
+// intact.
+// ADR: ADR-0013
+// ---------------------------------------------------------------------------
+function clearAct() {
+  const S  = window.S;
+  const ls = window.localStorage;
+  try { ls.removeItem(S.actKey); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
 // getOld — pure: legacy iptv_creds value → a one-account { accts, actId }
 // store, or null when the value is not a usable object. Mints an Acct with
 // the m3u mode resolved via getM3u (ADR-0008).
@@ -328,5 +326,6 @@ window.IptvSt = {
   rmAcct,
   saveAccts,
   saveAct,
+  clearAct,
   loadAccts,
 };

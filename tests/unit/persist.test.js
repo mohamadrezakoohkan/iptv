@@ -1,10 +1,12 @@
 // ADR: ADR-0003, ADR-0008, ADR-0013
 // Unit tests — loadSt() and saveSt() persistence helpers (TASK-0010)
-// + persisted login mode in iptv_creds and reconnect flag (TASK-0019)
-// The forward accounts store (loadAccts, ADR-0013) is covered in
-// tests/unit/acct.test.js. loadSt() still carries the legacy sel + favs + creds
-// reconnect path so the runtime keeps working until the connect/reconnect
-// wiring moves to the accounts store (TASK-0029).
+// + the accounts-store connect/reconnect wiring (TASK-0029, ADR-0013).
+// loadSt() now owns only iptv_sel + iptv_favs; the credential reconnect path
+// moved to the accounts store (loadAccts / iptv_accts + iptv_act). The store
+// helpers themselves are covered in tests/unit/acct.test.js; here we assert
+// the runtime wiring: a successful footer connect saves + activates an
+// account, a failed connect leaves the store untouched, disconnect preserves
+// the accounts, and main.js reconnects the active account on load.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
@@ -106,9 +108,10 @@ describe('loadSt() — malformed JSON in favsKey', function () {
 });
 
 // ---------------------------------------------------------------------------
-// loadSt — legacy iptv_creds reconnect path (carried until TASK-0029)
+// loadSt — no longer carries a credential reconnect path (TASK-0029): the
+// legacy iptv_creds key is gone from S and loadSt returns only { sel }.
 // ---------------------------------------------------------------------------
-describe('loadSt() — legacy iptv_creds reconnect path', function () {
+describe('loadSt() — credential path removed (accounts store owns reconnect)', function () {
   let win, store;
   beforeEach(function () {
     const w = mkWin();
@@ -116,27 +119,18 @@ describe('loadSt() — legacy iptv_creds reconnect path', function () {
     store = w.store;
   });
 
-  it('returns creds null when iptv_creds is absent', function () {
-    expect(win.IptvSt.loadSt().creds).toBeNull();
+  it('returns no creds property at all', function () {
+    expect(win.IptvSt.loadSt()).not.toHaveProperty('creds');
   });
 
-  it('returns the stored creds with explicit m3u untouched', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://portal', user: 'a', pass: 'b', m3u: false });
-    expect(win.IptvSt.loadSt().creds).toEqual({ url: 'http://portal', user: 'a', pass: 'b', m3u: false });
+  it('S.credsKey is no longer declared', function () {
+    expect(win.S.credsKey).toBeUndefined();
   });
 
-  it('resolves a missing m3u flag via getM3u (credential-less → m3u true)', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://example.com/list', user: '', pass: '' });
-    expect(win.IptvSt.loadSt().creds.m3u).toBe(true);
-  });
-
-  it('returns creds null when iptv_creds is corrupt JSON (no throw)', function () {
-    store['iptv_creds'] = '{bad json';
-    let err = null;
-    let res = null;
-    try { res = win.IptvSt.loadSt(); } catch (e) { err = e; }
-    expect(err).toBeNull();
-    expect(res.creds).toBeNull();
+  it('does not touch a stray iptv_creds value (migration is loadAccts only)', function () {
+    store['iptv_creds'] = JSON.stringify({ url: 'http://portal', user: 'a', pass: 'b' });
+    win.IptvSt.loadSt();
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_creds')).toBe(true);
   });
 });
 
@@ -228,8 +222,9 @@ describe('getM3u() — legacy migration rule', function () {
 });
 
 // ---------------------------------------------------------------------------
-// onOk via ui.js — stored creds shape includes the chosen login mode
-// (TASK-0019, ADR-0008)
+// onOk via ui.js — a successful footer connect saves + activates an account
+// (TASK-0029, ADR-0013). The harness loads the REAL cfg.js + st.js so the
+// account-store helpers run against the mocked localStorage.
 // ---------------------------------------------------------------------------
 
 /** Minimal element stub for the ui.js harness. */
@@ -249,9 +244,9 @@ function mkElStub(id) {
 }
 
 /**
- * Execute client/ui.js with a synthetic window, mode radios, and a mocked
- * localStorage. opts: { m3u: boolean } — pre-selects the login mode.
- * Returns { el, api, store }.
+ * Execute client/{cfg,st,ui}.js with a synthetic window, mode radios, and a
+ * mocked localStorage. opts: { m3u: boolean } — pre-selects the login mode.
+ * Returns { el, api, store, win }.
  */
 function mkUiWin(opts) {
   const m3u   = Boolean(opts && opts.m3u);
@@ -260,6 +255,7 @@ function mkUiWin(opts) {
     getItem:    function getItem(k)    { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
     setItem:    function setItem(k, v) { store[k] = String(v); },
     removeItem: function removeItem(k) { delete store[k]; },
+    clear:      function clear()       { Object.keys(store).forEach(function del(k) { delete store[k]; }); },
   };
   const elMap = {};
   const ids = [
@@ -272,22 +268,8 @@ function mkUiWin(opts) {
   for (let i = 0; i < ids.length; i += 1) elMap[ids[i]] = mkElStub(ids[i]);
   elMap['mode-m3u'].checked    = m3u;
   elMap['mode-xtream'].checked = !m3u;
-  const stObj = {
-    phase: 'INIT', chs: [], cats: [], host: '', user: '', err: null,
-    favs: [], cur: null, srch: '', flt: 'all', vol: 1.0, muted: false,
-  };
   const win = {
-    S: { credsKey: 'iptv_creds', selKey: 'iptv_sel', favsKey: 'iptv_favs' },
-    IptvSt: {
-      ST: stObj,
-      go:      function go(nxt) { stObj.phase = nxt; },
-      setErr:  function setErr(msg) { stObj.err = msg; },
-      setChs:  function setChs(c, ct, h, u) { stObj.chs = c; stObj.cats = ct; stObj.host = h; stObj.user = u; },
-      setCur:  function setCur(ch) { stObj.cur = ch; },
-      setSrch: function setSrch(q) { stObj.srch = q; },
-      setFlt:  function setFlt(f) { stObj.flt = f; },
-      setFavs: function setFavs(a) { stObj.favs = a; },
-    },
+    localStorage: ls,
     IptvSrch: { getChs: function getChs() { return []; } },
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
@@ -297,11 +279,17 @@ function mkUiWin(opts) {
       body: { classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() } },
     },
   };
+  const cfgSrc = readFileSync(CFG_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', '"use strict";\n' + cfgSrc)(win);
+  const stSrc = readFileSync(ST_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', '"use strict";\n' + stSrc)(win);
   const src = readFileSync(UI_SRC, 'utf8');
   // eslint-disable-next-line no-new-func
   new Function('window', 'document', 'localStorage', '"use strict";\n' + src)(win, win.document, ls);
   win.IptvUi.mkEL();
-  return { el: elMap, api: win.IptvApi, store };
+  return { el: elMap, api: win.IptvApi, store, win };
 }
 
 /** Fire the registered login-form submit handler and wait one tick. */
@@ -312,63 +300,184 @@ async function runSubmit(el) {
   await new Promise(function nextTick(res) { setTimeout(res, 0); });
 }
 
-describe('onOk — stored creds carry the chosen login mode', function () {
-  it('xtream mode connect stores { url, user, pass, m3u:false }', async function () {
+describe('onOk — successful connect saves + activates an account', function () {
+  it('xtream connect appends an account carrying { url, user, pass, m3u:false }', async function () {
     const { el, api, store } = mkUiWin({ m3u: false });
     api.connect.mockResolvedValue({ ok: true, val: { host: 'http://portal', user: 'alice', categories: [], channels: [] } });
     el['f-url'].value  = 'http://portal';
     el['f-user'].value = 'alice';
     el['f-pass'].value = 'secret';
     await runSubmit(el);
-    expect(JSON.parse(store['iptv_creds'])).toEqual({ url: 'http://portal', user: 'alice', pass: 'secret', m3u: false });
+    const accts = JSON.parse(store['iptv_accts']);
+    expect(accts.length).toBe(1);
+    expect(accts[0]).toMatchObject({ url: 'http://portal', user: 'alice', pass: 'secret', m3u: false });
   });
 
-  it('m3u mode connect stores { url, user, pass, m3u:true }', async function () {
+  it('sets the saved account active in iptv_act', async function () {
+    const { el, api, store } = mkUiWin({ m3u: false });
+    api.connect.mockResolvedValue({ ok: true, val: { host: 'http://portal', user: 'alice', categories: [], channels: [] } });
+    el['f-url'].value  = 'http://portal';
+    el['f-user'].value = 'alice';
+    el['f-pass'].value = 'secret';
+    await runSubmit(el);
+    const accts = JSON.parse(store['iptv_accts']);
+    expect(store['iptv_act']).toBe(accts[0].id);
+  });
+
+  it('m3u connect saves an account with m3u:true', async function () {
     const { el, api, store } = mkUiWin({ m3u: true });
     api.connect.mockResolvedValue({ ok: true, val: { host: 'example.com', user: '', categories: [], channels: [] } });
     el['f-url'].value = 'http://example.com/list.m3u8';
     await runSubmit(el);
-    expect(JSON.parse(store['iptv_creds'])).toEqual({ url: 'http://example.com/list.m3u8', user: '', pass: '', m3u: true });
+    const accts = JSON.parse(store['iptv_accts']);
+    expect(accts[0]).toMatchObject({ url: 'http://example.com/list.m3u8', user: '', pass: '', m3u: true });
   });
 
-  it('demo connect in default xtream mode stores m3u:false', async function () {
+  it('demo connect in default xtream mode saves m3u:false', async function () {
     const { el, api, store } = mkUiWin({ m3u: false });
     api.connect.mockResolvedValue({ ok: true, val: { host: 'demo', user: 'demo', categories: [], channels: [] } });
     el['f-url'].value = 'demo';
     await runSubmit(el);
-    expect(JSON.parse(store['iptv_creds']).m3u).toBe(false);
+    expect(JSON.parse(store['iptv_accts'])[0].m3u).toBe(false);
   });
 
-  it('failed connect writes nothing to iptv_creds', async function () {
+  it('re-connecting the same identity dedupes (one account, not two)', async function () {
+    const { el, api, store } = mkUiWin({ m3u: false });
+    api.connect.mockResolvedValue({ ok: true, val: { host: 'http://portal', user: 'alice', categories: [], channels: [] } });
+    el['f-url'].value  = 'http://portal';
+    el['f-user'].value = 'alice';
+    el['f-pass'].value = 'secret';
+    await runSubmit(el);
+    await runSubmit(el);
+    expect(JSON.parse(store['iptv_accts']).length).toBe(1);
+  });
+
+  it('failed connect writes nothing to the accounts store', async function () {
     const { el, api, store } = mkUiWin({ m3u: true });
     api.connect.mockResolvedValue({ ok: false, err: 'nope' });
     el['f-url'].value = 'http://example.com/list.m3u8';
     await runSubmit(el);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_accts')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_act')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(store, 'iptv_creds')).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// main.js auto-reconnect — passes the stored m3u flag to connect
-// (TASK-0019, ADR-0008)
+// onDisc — disconnect clears the active id but preserves the saved accounts,
+// sel, and favs (TASK-0029, ADR-0013).
+// ---------------------------------------------------------------------------
+describe('onDisc — preserves accounts, clears active id', function () {
+  /** Fire the registered btn-disc click handler. */
+  function runDisc(el) {
+    const calls = el['btn-disc'].addEventListener.mock.calls;
+    const entry = calls.find(function byClick(c) { return c[0] === 'click'; });
+    entry[1]();
+  }
+
+  it('removes iptv_act but keeps iptv_accts, iptv_sel, iptv_favs', async function () {
+    const { el, api, store } = mkUiWin({ m3u: false });
+    api.connect.mockResolvedValue({ ok: true, val: { host: 'http://portal', user: 'alice', categories: [], channels: [] } });
+    el['f-url'].value  = 'http://portal';
+    el['f-user'].value = 'alice';
+    el['f-pass'].value = 'secret';
+    await runSubmit(el);
+    store['iptv_sel']  = '7';
+    store['iptv_favs'] = JSON.stringify(['1', '2']);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_act')).toBe(true);
+    runDisc(el);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_act')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_accts')).toBe(true);
+    expect(store['iptv_sel']).toBe('7');
+    expect(store['iptv_favs']).toBe(JSON.stringify(['1', '2']));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// goSwitch / onAcctRm — account switch + remove wiring (TASK-0029, ADR-0013).
+// ---------------------------------------------------------------------------
+const SW_A = { id: '100', name: 'A', url: 'http://a', user: 'ua', pass: 'pa', m3u: false };
+const SW_B = { id: '200', name: 'B', url: 'http://b', user: 'ub', pass: 'pb', m3u: false };
+
+describe('goSwitch — replays a saved account', function () {
+  it('reconnects the selected account replaying its m3u and sets it active', async function () {
+    const { el, api, store, win } = mkUiWin({ m3u: false });
+    void el;
+    store['iptv_accts'] = JSON.stringify([SW_A, SW_B]);
+    store['iptv_act']   = '100';
+    api.connect.mockResolvedValue({ ok: true, val: { host: 'http://b', user: 'ub', categories: [], channels: [] } });
+    win.IptvUi.goSwitch('200');
+    await new Promise(function nextTick(res) { setTimeout(res, 0); });
+    expect(api.connect).toHaveBeenCalledWith('http://b', { user: 'ub', pass: 'pb', m3u: false });
+    expect(store['iptv_act']).toBe('200');
+  });
+
+  it('is a no-op for the already-active account (no connect call)', async function () {
+    const { api, store, win } = mkUiWin({ m3u: false });
+    store['iptv_accts'] = JSON.stringify([SW_A, SW_B]);
+    store['iptv_act']   = '100';
+    win.IptvUi.goSwitch('100');
+    await new Promise(function nextTick(res) { setTimeout(res, 0); });
+    expect(api.connect).not.toHaveBeenCalled();
+    expect(store['iptv_act']).toBe('100');
+  });
+
+  it('failed switch leaves the active id untouched', async function () {
+    const { api, store, win } = mkUiWin({ m3u: false });
+    store['iptv_accts'] = JSON.stringify([SW_A, SW_B]);
+    store['iptv_act']   = '100';
+    api.connect.mockResolvedValue({ ok: false, err: 'boom' });
+    win.IptvUi.goSwitch('200');
+    await new Promise(function nextTick(res) { setTimeout(res, 0); });
+    expect(store['iptv_act']).toBe('100');
+  });
+});
+
+describe('onAcctRm — removes a saved account', function () {
+  it('removing the active account clears the active id and the session', function () {
+    const { store, win } = mkUiWin({ m3u: false });
+    store['iptv_accts'] = JSON.stringify([SW_A, SW_B]);
+    store['iptv_act']   = '100';
+    win.IptvUi.onAcctRm('100');
+    expect(JSON.parse(store['iptv_accts'])).toEqual([SW_B]);
+    expect(Object.prototype.hasOwnProperty.call(store, 'iptv_act')).toBe(false);
+  });
+
+  it('removing a non-active account leaves the active id intact', function () {
+    const { store, win } = mkUiWin({ m3u: false });
+    store['iptv_accts'] = JSON.stringify([SW_A, SW_B]);
+    store['iptv_act']   = '100';
+    win.IptvUi.onAcctRm('200');
+    expect(JSON.parse(store['iptv_accts'])).toEqual([SW_A]);
+    expect(store['iptv_act']).toBe('100');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// main.js auto-reconnect — reconnects the ACTIVE account on load, replaying
+// its stored m3u flag (TASK-0029, ADR-0013/ADR-0008)
 // ---------------------------------------------------------------------------
 
 /**
- * Execute client/main.js with stubbed modules and a loadSt() returning the
- * given creds; fires DOMContentLoaded. Returns the connect mock.
+ * Execute client/main.js with stubbed modules and a loadAccts()/getAct()
+ * resolving the given active account; fires DOMContentLoaded. Returns the
+ * connect mock. acct === null models "no accounts saved".
  */
-function runMain(creds) {
+function runMain(acct) {
   const listeners = {};
   const doc = {
     addEventListener: function addEvt(t, fn) { listeners[t] = fn; },
     getElementById:   function getEl()       { return null; },
   };
   const connect = vi.fn(function fakeConn() { return new Promise(function never() {}); });
+  const accts = acct ? [acct] : [];
   const win = {
     IptvSt: {
       ST: { chs: [], cats: [], favs: [], srch: '', flt: 'all', cur: null, phase: 'INIT' },
       go: vi.fn(), onPhase: vi.fn(), setChs: vi.fn(), setErr: vi.fn(), setCur: vi.fn(),
-      loadSt: function loadStFake() { return { creds, sel: null }; },
+      loadSt:    function loadStFake()  { return { sel: null }; },
+      loadAccts: function loadAcctsFake() { return { accts, actId: acct ? acct.id : null }; },
+      getAct:    function getActFake(list, id) { return list.find(function byId(a) { return a.id === id; }) || null; },
     },
     IptvUi:   { mkEL: vi.fn(), onPhase: vi.fn(), rndPhase: vi.fn(), rndFoot: vi.fn(), rndSide: vi.fn(), rndGrid: vi.fn() },
     IptvPlay: { mkPlay: vi.fn() },
@@ -382,18 +491,18 @@ function runMain(creds) {
   return connect;
 }
 
-describe('auto-reconnect — stored m3u flag reaches IptvApi.connect', function () {
-  it('m3u:true creds reconnect with m3u:true', function () {
-    const connect = runMain({ url: 'http://example.com/tv', user: '', pass: '', m3u: true });
+describe('auto-reconnect — active account replays through IptvApi.connect', function () {
+  it('m3u:true account reconnects with m3u:true', function () {
+    const connect = runMain({ id: '1', name: 'x', url: 'http://example.com/tv', user: '', pass: '', m3u: true });
     expect(connect).toHaveBeenCalledWith('http://example.com/tv', { user: '', pass: '', m3u: true });
   });
 
-  it('m3u:false creds reconnect with m3u:false', function () {
-    const connect = runMain({ url: 'http://portal', user: 'alice', pass: 'secret', m3u: false });
+  it('m3u:false account reconnects with m3u:false', function () {
+    const connect = runMain({ id: '2', name: 'y', url: 'http://portal', user: 'alice', pass: 'secret', m3u: false });
     expect(connect).toHaveBeenCalledWith('http://portal', { user: 'alice', pass: 'secret', m3u: false });
   });
 
-  it('no stored creds means no reconnect call', function () {
+  it('no active account means no reconnect call', function () {
     const connect = runMain(null);
     expect(connect).not.toHaveBeenCalled();
   });
