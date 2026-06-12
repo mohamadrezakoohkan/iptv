@@ -1,6 +1,10 @@
-// ADR: ADR-0003, ADR-0008
+// ADR: ADR-0003, ADR-0008, ADR-0013
 // Unit tests — loadSt() and saveSt() persistence helpers (TASK-0010)
 // + persisted login mode in iptv_creds and reconnect flag (TASK-0019)
+// The forward accounts store (loadAccts, ADR-0013) is covered in
+// tests/unit/acct.test.js. loadSt() still carries the legacy sel + favs + creds
+// reconnect path so the runtime keeps working until the connect/reconnect
+// wiring moves to the accounts store (TASK-0029).
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
@@ -39,20 +43,14 @@ function mkWin() {
 // ---------------------------------------------------------------------------
 // loadSt — all three keys present and valid
 // ---------------------------------------------------------------------------
-describe('loadSt() — all three keys present and valid', function () {
+describe('loadSt() — sel + favs keys present and valid', function () {
   let win, store;
   beforeEach(function () {
     const w = mkWin();
     win   = w.win;
     store = w.store;
-    store['iptv_creds'] = JSON.stringify({ url: 'http://portal', user: 'alice', pass: 'secret' });
     store['iptv_sel']   = '7';
     store['iptv_favs']  = JSON.stringify(['1', '3', '5']);
-  });
-
-  it('returns correct creds object (legacy value migrated with m3u flag)', function () {
-    const res = win.IptvSt.loadSt();
-    expect(res.creds).toEqual({ url: 'http://portal', user: 'alice', pass: 'secret', m3u: false });
   });
 
   it('returns correct sel string', function () {
@@ -76,11 +74,6 @@ describe('loadSt() — all keys absent', function () {
     win = w.win;
   });
 
-  it('returns creds as null', function () {
-    const res = win.IptvSt.loadSt();
-    expect(res.creds).toBeNull();
-  });
-
   it('returns sel as null', function () {
     const res = win.IptvSt.loadSt();
     expect(res.sel).toBeNull();
@@ -89,27 +82,6 @@ describe('loadSt() — all keys absent', function () {
   it('ST.favs stays []', function () {
     win.IptvSt.loadSt();
     expect(win.IptvSt.ST.favs).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// loadSt — malformed JSON in credsKey
-// ---------------------------------------------------------------------------
-describe('loadSt() — malformed JSON in credsKey', function () {
-  let win, store;
-  beforeEach(function () {
-    const w = mkWin();
-    win   = w.win;
-    store = w.store;
-    store['iptv_creds'] = '{bad json';
-  });
-
-  it('returns creds as null (no exception thrown)', function () {
-    let err = null;
-    let res = null;
-    try { res = win.IptvSt.loadSt(); } catch (e) { err = e; }
-    expect(err).toBeNull();
-    expect(res.creds).toBeNull();
   });
 });
 
@@ -130,6 +102,41 @@ describe('loadSt() — malformed JSON in favsKey', function () {
     try { win.IptvSt.loadSt(); } catch (e) { err = e; }
     expect(err).toBeNull();
     expect(win.IptvSt.ST.favs).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadSt — legacy iptv_creds reconnect path (carried until TASK-0029)
+// ---------------------------------------------------------------------------
+describe('loadSt() — legacy iptv_creds reconnect path', function () {
+  let win, store;
+  beforeEach(function () {
+    const w = mkWin();
+    win   = w.win;
+    store = w.store;
+  });
+
+  it('returns creds null when iptv_creds is absent', function () {
+    expect(win.IptvSt.loadSt().creds).toBeNull();
+  });
+
+  it('returns the stored creds with explicit m3u untouched', function () {
+    store['iptv_creds'] = JSON.stringify({ url: 'http://portal', user: 'a', pass: 'b', m3u: false });
+    expect(win.IptvSt.loadSt().creds).toEqual({ url: 'http://portal', user: 'a', pass: 'b', m3u: false });
+  });
+
+  it('resolves a missing m3u flag via getM3u (credential-less → m3u true)', function () {
+    store['iptv_creds'] = JSON.stringify({ url: 'http://example.com/list', user: '', pass: '' });
+    expect(win.IptvSt.loadSt().creds.m3u).toBe(true);
+  });
+
+  it('returns creds null when iptv_creds is corrupt JSON (no throw)', function () {
+    store['iptv_creds'] = '{bad json';
+    let err = null;
+    let res = null;
+    try { res = win.IptvSt.loadSt(); } catch (e) { err = e; }
+    expect(err).toBeNull();
+    expect(res.creds).toBeNull();
   });
 });
 
@@ -217,48 +224,6 @@ describe('getM3u() — legacy migration rule', function () {
 
   it('explicit m3u:false is returned untouched (no re-derivation)', function () {
     expect(win.IptvSt.getM3u({ url: 'http://example.com/list', user: '', pass: '', m3u: false })).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// loadSt — stored m3u flag read-time behavior (TASK-0019, ADR-0008)
-// ---------------------------------------------------------------------------
-describe('loadSt() — m3u flag in iptv_creds', function () {
-  let win, store;
-  beforeEach(function () {
-    const w = mkWin();
-    win   = w.win;
-    store = w.store;
-  });
-
-  it('preserves explicit m3u:true', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://example.com/tv', user: 'u', pass: 'p', m3u: true });
-    const res = win.IptvSt.loadSt();
-    expect(res.creds.m3u).toBe(true);
-  });
-
-  it('preserves explicit m3u:false', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://example.com/list', user: '', pass: '', m3u: false });
-    const res = win.IptvSt.loadSt();
-    expect(res.creds.m3u).toBe(false);
-  });
-
-  it('migrates legacy credential-less value to m3u:true', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://example.com/list', user: '', pass: '' });
-    const res = win.IptvSt.loadSt();
-    expect(res.creds.m3u).toBe(true);
-  });
-
-  it('migrates legacy credentialled value to m3u:false', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'http://portal', user: 'alice', pass: 'secret' });
-    const res = win.IptvSt.loadSt();
-    expect(res.creds.m3u).toBe(false);
-  });
-
-  it('migrates legacy demo value to m3u:false', function () {
-    store['iptv_creds'] = JSON.stringify({ url: 'demo', user: '', pass: '' });
-    const res = win.IptvSt.loadSt();
-    expect(res.creds.m3u).toBe(false);
   });
 });
 

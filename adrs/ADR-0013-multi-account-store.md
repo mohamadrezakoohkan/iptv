@@ -12,6 +12,7 @@ governs:
   - client/ui.js
   - tests/unit/acct.test.js
   - tests/unit/persist.test.js
+  - tests/unit/cfg.test.js
 ---
 
 # ADR-0013 — Multiple saved accounts — accounts list + active pointer replace the single iptv_creds record

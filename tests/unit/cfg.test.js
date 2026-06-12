@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003
+// ADR: ADR-0001, ADR-0003, ADR-0013
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -28,7 +28,15 @@ describe('S config object', function () {
     expect(Object.isFrozen(s)).toBe(true);
   });
 
-  it('S.credsKey is "iptv_creds"', function () {
+  it('S.acctsKey is "iptv_accts"', function () {
+    expect(s.acctsKey).toBe('iptv_accts');
+  });
+
+  it('S.actKey is "iptv_act"', function () {
+    expect(s.actKey).toBe('iptv_act');
+  });
+
+  it('S.credsKey is "iptv_creds" (legacy reconnect path, until TASK-0029)', function () {
     expect(s.credsKey).toBe('iptv_creds');
   });
 
