@@ -279,14 +279,40 @@ never writes to localStorage. Disconnect removes `iptv_creds` but preserves
    loaded via `new Hls()`; else if the browser plays HLS natively (Safari),
    `video.src` is set directly; else error overlay "HLS not supported."
 5. MPEG-TS engine: if `mpegts.getFeatureList().mseLivePlayback` is true,
-   play via `mpegts.createPlayer({ type: 'mpegts', isLive: true, url })`;
-   else error overlay "MPEG-TS not supported." (`new` only for library
-   built-ins, per CONVENTIONS.md §13 carve-out.)
-6. On fatal engine errors (hls.js `ERROR` type FATAL, mpegts.js
+   play via `mpegts.createPlayer({ type: 'mpegts', isLive: true, url })`.
+   (`new` only for library built-ins, per CONVENTIONS.md §13 carve-out.)
+6. **MSE-less fallback (server remux)**: if `window.mpegts` is missing or
+   `mseLivePlayback` is false (iOS Safari — no usable MSE), the client does
+   **not** error. It instead plays the stream through the server's live
+   remux endpoint: `/api/hls?url=<encoded raw stream URL>` handed to the
+   HLS engine path (hls.js where supported, else native HLS — the iOS
+   case). Only when this fallback itself cannot play (no hls.js, no native
+   HLS) does the error overlay "MPEG-TS not supported" appear.
+7. On fatal engine errors (hls.js `ERROR` type FATAL, mpegts.js
    `ERROR` event), show the error overlay.
-7. Switching channels fully destroys the previous engine instance
+8. Switching channels fully destroys the previous engine instance
    (whichever type) before attaching the new one — no orphaned XHRs.
-8. The HLS/TS format chips reflect the engine actually in use (§5a).
+9. The HLS/TS format chips reflect the engine actually in use (§5a):
+   a `.ts` channel played through the remux fallback highlights **HLS**.
+
+### Server-side TS→HLS remux endpoint
+
+`server/hls.js` (mounted from `server/rtr.js`) converts a raw MPEG-TS
+stream to live HLS on demand using ffmpeg **stream copy** (`-c copy`,
+remux not transcode); the binary comes from the `ffmpeg-static` npm
+package — no system install.
+
+- `GET /api/hls?url=<encoded>` — `url` is validated against the same
+  validation/blocklist as `/api/xtream`; invalid → 400. A valid request
+  starts (or reuses) a remux session keyed by source URL and responds with
+  the live `.m3u8` playlist once produced; ffmpeg failure or startup
+  timeout → 502.
+- `GET /api/hls/<session>/<segment>.ts` — serves session segments; unknown
+  session/segment or path traversal → 404/rejection.
+- One ffmpeg process per source URL (concurrent requests share a session).
+  Short segments, small sliding window, `+delete_segments` keep the
+  per-session temp dir bounded. Sessions idle beyond a reap window are
+  destroyed: ffmpeg killed, temp dir removed.
 
 ---
 
