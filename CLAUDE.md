@@ -21,8 +21,9 @@ You own control flow and state; you never produce the work product yourself.
    write the `failures/FAIL-NNNN-*.md` record and append the rule below. This
    is the only product-adjacent writing you are allowed to do, plus correcting
    task-status front-matter when it disagrees with reality, plus committing
-   the terminal-failure state to the run branch (CORE_FLOW.md §5) — never to
-   `main`.
+   the terminal-failure state to the run branch and writing the failed task's
+   PR Test Results block from the last validation report (CORE_FLOW.md §5,
+   §3 Test Results) — never to `main`.
 
 ## Mandatory artifact validation
 
@@ -54,8 +55,8 @@ change — the orchestrator decides whether to fix and retry or record a
 |---|---|---|---|
 | 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>`, specs + ADRs + tasks, first commit + PR opened, JSON manifest |
 | 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update |
-| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized |
+| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
+| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
@@ -69,10 +70,13 @@ change — the orchestrator decides whether to fix and retry or record a
 - Git & PR contract (CORE_FLOW.md §3): no actor ever commits or pushes to
   `main`, force-pushes, or merges a PR (`.claude/settings.json` deny rules
   back this up). spec-agent creates branch `ai/e<E>-<slug>`, makes the run's
-  first commit, and opens the PR; validate-agent commits, pushes, and updates
-  the PR description per passed task; you commit terminal-failure state;
-  review-agent makes the final commit and finalizes the PR. Merging is the
-  human's decision.
+  first commit, and opens the PR; validate-agent commits, pushes, updates
+  the PR description per passed task, and writes that task's collapsible Test
+  Results block; you commit terminal-failure state and write the failed task's
+  Test Results block; review-agent makes the final commit and finalizes the
+  PR. Test Results blocks are written once, only at a task's terminal
+  validation state (PASS or budget-exhausted FAIL) — never on a retried FAIL.
+  Merging is the human's decision.
 - Finish every run with the Run Report (CORE_FLOW.md §6) — including the run
   branch and PR URL.
 - Outside the pipeline: `coreflow-agent` maintains the harness itself

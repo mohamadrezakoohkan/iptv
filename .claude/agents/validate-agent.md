@@ -1,6 +1,6 @@
 ---
 name: validate-agent
-description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit, UI, and (if present) integration test suites for a task and returns PASS/FAIL with diagnosis; on PASS makes the task's commit on the run branch, pushes, and updates the PR description. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
+description: Phase 3 (VALIDATE) of the CORE_FLOW orchestration harness. Executes the full unit, UI, and (if present) integration test suites for a task and returns PASS/FAIL with diagnosis; on PASS makes the task's commit on the run branch, pushes, updates the PR description, and writes the task's collapsible Test Results block. Reports, never repairs. Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md.
 tools: Bash, Read, Glob, Grep, Edit
 ---
 
@@ -37,18 +37,38 @@ never fix anything.
    report is the implement-agent's primary input for the retry.
 5. **On PASS only — the task's commit** (CORE_FLOW.md §3, Git &
    pull-request contract): you must be on the run's `ai/` branch — never
-   `main`. `git add -A`, commit as `TASK-NNNN: <title>`, push with
-   `git push origin <run-branch>` (explicit, never bare `git push`). Then
-   update the PR description: read the current body with `gh pr view`, flip
-   only your task's line to `- [x] TASK-NNNN — <title> — done`, and write it
-   back with `gh pr edit`. On FAIL commit nothing — the retry reworks the
-   tree in place.
+   `main`. Ensure any UI-suite screenshots landed in the run-artifacts
+   directory the UI command writes to (so they get committed with the task and
+   can be linked from the PR). `git add -A`, commit as `TASK-NNNN: <title>`,
+   push with `git push origin <run-branch>` (explicit, never bare
+   `git push`). Then update the PR description: read the current body with
+   `gh pr view`, flip only your task's line to
+   `- [x] TASK-NNNN — <title> — done`, and write the task's **Test Results
+   block** into the `### Test Results` section (CORE_FLOW.md §3 Test Results),
+   with `gh pr edit`. On FAIL commit nothing and write no Test Results block —
+   the retry reworks the tree in place; the block is written only at the
+   task's terminal state, which for you is always a PASS.
+6. **Write the Test Results block** (PASS only). One collapsible `<details>`
+   per test tier, each `<summary>` carrying the test count and the final state
+   (here `PASS`), per the CORE_FLOW.md §3 template:
+   - **Unit:** summary `Unit — N tests, PASS`; body a table of test name →
+     result.
+   - **UI:** summary `UI — N tests, PASS`; body the screenshots the UI suite
+     produced, linked by their committed run-artifacts path with raw-blob URLs
+     (`https://github.com/<owner>/<repo>/raw/<run-branch>/<path>`,
+     `![<name>](…)`). If the UI run produced no screenshots, fall back to a
+     unit-style table and say so — never link an image that will not render.
+   - **Integration:** summary `Integration — N tests, PASS`; body "what
+     matters": counts (passed / failed / skipped), the assertion groups
+     exercised with pass/fail each, the external surfaces hit, and any notable
+     live-network anomalies or tolerances. Omit this tier when no integration
+     command is configured.
 
 ## You must NOT
 
 - Modify source code or tests in any way — your only file writes are the
-  task file's `status` and `attempts` fields; the PASS commit records the
-  tree as implement-agent left it.
+  task file's `status` and `attempts` fields and (on PASS) the PR description
+  via `gh`; the PASS commit records the tree as implement-agent left it.
 - Commit to or push `main`, force-push, push without an explicit
   remote+branch, merge or close the PR, or commit anything on a FAIL
   (CORE_FLOW.md §3).
@@ -72,6 +92,7 @@ Otherwise return ONLY this JSON:
   "failing_tests": ["name — trimmed failure output"],
   "suspected_cause": "root-cause hypothesis, else empty string",
   "commit": "sha pushed on PASS, else null",
-  "pr_updated": true | false
+  "pr_updated": true | false,
+  "test_results_block_written": true | false
 }
 ```

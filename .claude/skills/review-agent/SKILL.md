@@ -41,6 +41,7 @@ On success the agent returns ONLY this JSON:
   "readme_updated": true | false,
   "commit": "sha of the final commit pushed, else null",
   "pr_finalized": true | false,
+  "test_results_blocks_present": true | false,
   "proposed_rules": ["imperative rule text, if any"]
 }
 ```
@@ -50,7 +51,9 @@ On success the agent returns ONLY this JSON:
 The orchestrator dispatches one remediation round (implement → validate,
 budget 1 initial + 1 retry), then invokes review-agent once more to
 re-check. If still discrepant after that round, apply the failure protocol
-(CORE_FLOW.md §5) — record, do not hide.
+(CORE_FLOW.md §5) — record, do not hide. A concluded task missing its PR Test
+Results block is a discrepancy (`needs: status-fix`): review-agent audits that
+the blocks the terminal actor wrote are present, it never fabricates them.
 
 ## Failure signal
 
