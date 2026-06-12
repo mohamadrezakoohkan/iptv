@@ -2,8 +2,8 @@
 id: TASK-0034
 adr: ADR-0018
 evolution: 9
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -38,5 +38,31 @@ them in name-ascending order. This is the logic the filterable sidebar
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched**
+
+- `client/srch.js` — added pure `getCats(cats, q)` (plus private `catName` and
+  `cmpCat` helpers), exported on `window.IptvSrch`. Added `ADR-0018` to the
+  file's `ADR:` comment.
+- `tests/unit/srch.test.js` — added the `getCats — filter + ordering` describe
+  block (10 unit tests). Added `ADR-0018` to the file's `ADR:` comment.
+
+**Non-obvious notes**
+
+- `getCats` filters by category **name** (`category_name`, fallback `name`),
+  not id — per acceptance criteria and ADR-0018 (the sidebar filter input is
+  name-based). Ordering is `localeCompare` on lower-cased names, mirroring the
+  existing `cmpName` channel comparator. Missing name → `''` (sorts first,
+  never throws).
+- Pure: no `ST`/`window`/DOM reads, input array is copied before sort.
+- `governs:` already lists `client/srch.js` for ADR-0018 — no traceability
+  changes were needed beyond the in-file `ADR:` comment.
+
+**Pre-existing demo cat-casing concern (investigated, NOT fixed here — see
+report concerns):** the demo path in `client/api.js` sets each demo channel's
+`cat` to the category **name** (`'News'`) while the demo category's `id` is the
+lower-cased slug (`'news'`), so `rndSide`'s count and `getChs`'s category filter
+yield zero for demo. This is a demo-fixture inconsistency in the channel↔category
+**id** linkage (api.js / ADR-0008, surfaced in ui.js / ADR-0009), not a defect in
+the genre **name** filter that `getCats` provides — Xtream and M3U both set
+`ch.cat === category_id` consistently. Fixing it would touch a different ADR's
+data and is out of this task's pure-logic scope.
