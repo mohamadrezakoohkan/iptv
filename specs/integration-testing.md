@@ -14,7 +14,9 @@ server proxy → public endpoint → M3U parse → stream manifests — against
 `https://iptv-org.github.io/iptv/index.m3u`, the canonical public iptv-org
 community playlist (10 000+ channels).
 
-## Reference endpoint
+## Reference endpoints
+
+### M3U tier
 
 | Name           | Value                                              |
 |----------------|----------------------------------------------------|
@@ -26,6 +28,35 @@ community playlist (10 000+ channels).
 The endpoint is a stable, CDN-hosted GitHub Pages artifact — the most
 reliable public M3U source available. It is declared once as a constant in
 the integration tests, never scattered.
+
+### Xtream tier (personal testing portal)
+
+| Name        | Value                          |
+|-------------|--------------------------------|
+| Portal URL  | `http://mymax.top:8080`        |
+| Username    | `1ymax5763dy`                  |
+| Password    | `66537535`                     |
+| Live format | raw MPEG-TS (`allowed_output_formats: ["ts"]`); `.m3u8` requests return 405 |
+| Stream URL  | `<portal>/live/<user>/<pass>/<stream_id>.ts`, 302-redirects to a tokenized URL on another host |
+
+This is the project owner's **personal testing environment**, explicitly
+provided for integration testing. Credentials are declared once as
+constants in the integration tests. Behavior under test for this tier:
+
+1. **Auth + listing.** `IptvApi.connect` in Xtream mode against the live
+   portal (through the in-process proxy) resolves `{ ok: true, val }` with
+   more than one category and more than one channel, every sampled channel
+   conforming to the `CH_DEF` schema with a non-empty proxied-playable
+   `url`.
+2. **Proxy redirect-following.** Fetching a live channel's `.ts` stream URL
+   through the proxy returns HTTP 200 (redirects followed server-side) and
+   yields MPEG-TS bytes (first body byte of a 188-byte-aligned read is the
+   sync byte `0x47`); the read is bounded (e.g. first 64 KB) then aborted —
+   tests never download a stream indefinitely.
+3. Stream-level flake policy: as with public streams, at least one of a
+   sample of live channels must produce valid TS bytes; the portal API
+   itself (auth, categories, streams listing) is held to an always-up
+   standard.
 
 ## Behavior under test
 

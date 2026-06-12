@@ -87,9 +87,9 @@ mono labels.
 - Slim bar (40px) above the player.
 - Left: "ON AIR" badge (red, visible only when a channel is playing), channel
   name, category chip.
-- Right: format chips — "HLS" (active by default) and "TS" (disabled; planned
-  mpegts.js integration). Clicking HLS/TS chip reloads the player with the
-  appropriate stream URL.
+- Right: format chips — "HLS" and "TS". The chip matching the active
+  channel's stream format is highlighted automatically; the chips are
+  informational indicators of the engine in use (hls.js vs mpegts.js).
 
 ### 5b. Player card
 
@@ -179,6 +179,19 @@ The design ships `client/api.js` as a self-contained IIFE that exposes
 `/api/xtream?url=<encoded>` requests to the target host, so browser CORS is
 never an issue for portals or remote M3U files.
 
+**Proxy stream delivery.** The same `/api/xtream` proxy also carries live
+media: API JSON, M3U text, HLS manifests/segments, and continuous raw
+MPEG-TS streams. Required proxy behavior:
+
+- **Follows redirects** (301/302/303/307/308) up to 5 hops; each redirect
+  target is re-validated against the same URL validation/blocklist before
+  being followed; exceeding 5 hops returns 502.
+- **Long-lived piping**: no response-size cap and no idle timeout that
+  would cut a continuous TS stream; upstream bytes are piped to the client
+  as they arrive.
+- **Client-disconnect cleanup**: when the browser closes the response, the
+  upstream request is aborted immediately.
+
 `IptvApi.connect(src, opts)` — `opts: { user, pass, m3u }` — returns a
 Promise resolving to a Result (`{ ok, val }` / `{ ok, err }`, RULE-FN-4)
 whose `val` is:
@@ -192,6 +205,25 @@ whose `val` is:
 2. `opts.m3u === true` → M3U path: fetch `src` through the proxy, parse
    `#EXTM3U` text into categories + channels.
 3. otherwise → Xtream path: `player_api.php` categories + live streams.
+
+**Xtream normalization.** The Xtream path must return the same normalized
+`Ch` objects as the M3U and demo paths — `{ id, name, grp, url, img, cat,
+num }` — never raw portal objects. Mapping from `get_live_streams` entries:
+
+| Ch field | Source                                                        |
+|----------|---------------------------------------------------------------|
+| `id`     | `stream_id`                                                   |
+| `name`   | `name`                                                        |
+| `grp`    | category name resolved from `category_id` via `get_live_categories` (`{category_id, category_name}`); unknown id → `"Uncategorized"` |
+| `url`    | `<portal-base>/live/<user>/<pass>/<stream_id>.<ext>` where `<ext>` is the first entry of `user_info.allowed_output_formats` (fallback `"ts"`) |
+| `img`    | `stream_icon` (may be empty)                                  |
+| `cat`    | `category_id`                                                 |
+| `num`    | `num`                                                         |
+
+The Xtream path therefore also calls
+`player_api.php?username=…&password=…` (no action) to read
+`user_info.allowed_output_formats` and verify `auth`; auth failure is a
+`{ ok: false, err }` Result with a human-readable message.
 
 There is **no URL-shape heuristic**: a `.m3u8` URL with `m3u: false` is
 treated as an Xtream portal, and a credential-less plain URL with
@@ -232,16 +264,29 @@ never writes to localStorage. Disconnect removes `iptv_creds` but preserves
 ## 10. Video playback
 
 1. When a channel card is clicked, `client/play.js` is called with the
-   channel's `streamUrl`.
-2. If hls.js is supported (`Hls.isSupported()`) the stream is loaded via
-   `new Hls()` — this is the CDN-loaded library; `play.js` does not use
-   `new` for application objects, only for the hls.js built-in.
-3. If hls.js is not supported but the browser can play HLS natively (Safari),
-   `video.src` is set directly.
-4. If neither is available, show the error overlay with "HLS not supported."
-5. On hls.js `ERROR` events of type `FATAL`, show the error overlay.
-6. The TS format chip is rendered but disabled (placeholder for future
-   mpegts.js integration).
+   channel's normalized `url`.
+2. **Engine selection by stream type** — decided from the URL path
+   extension (query string ignored):
+   - `.m3u8` → HLS engine (hls.js, native fallback as below);
+   - anything else (notably `.ts`, the Xtream live format) → MPEG-TS
+     engine (mpegts.js 1.7+ via CDN, loaded in `index.html` alongside
+     hls.js).
+3. **Proxied delivery**: both engines fetch via XHR, so stream URLs are
+   always routed through the local proxy
+   (`/api/xtream?url=<encoded>`) before being handed to the engine —
+   third-party stream hosts never need CORS headers.
+4. HLS engine: if hls.js is supported (`Hls.isSupported()`) the stream is
+   loaded via `new Hls()`; else if the browser plays HLS natively (Safari),
+   `video.src` is set directly; else error overlay "HLS not supported."
+5. MPEG-TS engine: if `mpegts.getFeatureList().mseLivePlayback` is true,
+   play via `mpegts.createPlayer({ type: 'mpegts', isLive: true, url })`;
+   else error overlay "MPEG-TS not supported." (`new` only for library
+   built-ins, per CONVENTIONS.md §13 carve-out.)
+6. On fatal engine errors (hls.js `ERROR` type FATAL, mpegts.js
+   `ERROR` event), show the error overlay.
+7. Switching channels fully destroys the previous engine instance
+   (whichever type) before attaching the new one — no orphaned XHRs.
+8. The HLS/TS format chips reflect the engine actually in use (§5a).
 
 ---
 
