@@ -5,6 +5,19 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #8 — 2026-06-12 — Community preset accounts: selectable iptv-org playlists in the account panel
+
+- **Prompt:** Add iptv-org as a default account in an "other accounts" list users can select from — a community-provided playlist list.
+- **Outcome:** Shipped. Both tasks completed and validated, first attempt each.
+- **ADRs:** ADR-0015 (community preset accounts — a static, curated, all-M3U `S.psts` catalog of five iptv-org playlists under the durable `https://iptv-org.github.io/iptv/` path, a `Pst` typedef, and a pure `getPst()` helper; selecting a preset connects on the explicit M3U path (ADR-0008) and becomes an ordinary saved `Acct` (ADR-0013) deduped by `url+user+m3u` — no distinct account kind, no second store; introduces the CONVENTIONS `preset → pst` / `presets → psts` tokens) · ADR-0016 (community presets section in the account panel — a default, always-present `#acct-psts` block below the saved-accounts list and above "Add account", read-only catalog rows with no remove control, `is-active` marking the connected preset, one-click M3U connect reusing the `runSwitch`/`onSwOk` machinery; extends ADR-0014 without changing it).
+- **Tasks:** 2 done, 0 failed, 0 blocked. TASK-0031 community presets data: `S.psts` curated list, `Pst` typedef, `getPst()` helper (`client/cfg.js`, `client/st.js`, `tests/unit/preset.test.js`) · TASK-0032 render the community presets section + wire selection to an M3U connect (`index.html`, `client/ui.js`, `client/app.css`, `tests/unit/acctui.test.js`, `tests/ui/acct.test.js`). Both first-attempt passes.
+- **Tests:** 384 unit (Vitest) + 108 UI (Playwright, incl. the Community playlists section present with zero saved accounts, no-remove affordance, panel DOM order, and the active-preset-click no-op) — all passing. Integration tier (25, live network) last run green at TASK-0032 validation; no new integration command this run — every preset URL is an iptv-org M3U already covered end-to-end by the existing live tier (`tests/int/m3u.test.js` exercises `index.m3u`), and the unchanged M3U engine + proxy path adds no endpoints.
+- **Rules earned:** none (no terminal failures).
+- **Artifacts:** `client/cfg.js`, `client/st.js`, `client/ui.js`, `client/app.css`, `index.html`, `CONVENTIONS.md` (§1 `preset`/`presets` tokens), `specs/iptv-player.md`, `tests/unit/{preset,acctui}.test.js`, `tests/ui/acct.test.js`, `adrs/ADR-001{5,6}-*.md`, `tasks/TASK-003{1,2}-*.md`.
+- **Notes:** this run branched from the E7 branch HEAD (`ai/e7-account-switcher-panel`, PR #8), not from `main`, because the feature extends E7's account panel which is not yet merged; PR #9 therefore includes E7's commits and depends on PR #8 merging first (or together).
+
+---
+
 ## #7 — 2026-06-12 — Multiple saved accounts: top-right nav button + right slide-in account panel
 
 - **Prompt:** Add an account feature that displays the connected account and server URL, allows switching and adding accounts, surfaced as a top-right nav button that opens a right-side panel.
