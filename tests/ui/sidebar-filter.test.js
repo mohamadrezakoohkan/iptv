@@ -1,32 +1,13 @@
-// ADR: ADR-0018 (DELETED at E11) / ADR-0009 (surviving demo category browsing)
-// The active-genre chip test below is skipped — TASK-0040 removed the chip; the
-// whole file is deleted in TASK-0041. The two surviving tests cover the plain
-// category-click grid filter (ADR-0009 demo cat-id fix) and its integration
-// with the ADR-0017 sort control — those remain a live regression gate.
+// ADR: ADR-0009 (demo cat-id casing fix, plain category browsing) / ADR-0017 (sort)
+// UI tests — selecting a sidebar category filters the channel grid (plain
+// per-engine category browsing, restored at E11 when ADR-0018 was removed) and
+// that filter integrates with the ADR-0017 sort control without regression.
+// Also asserts the removed ADR-0018 affordances (filter input, #cat-list
+// wrapper, content-head genre chip) are absent from the restored markup.
 
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-
-// ---------------------------------------------------------------------------
-// Demo mode: selecting a channel shows the active-genre chip with its grp.
-// ---------------------------------------------------------------------------
-test.skip('selecting a demo channel shows the active-genre chip with the channel grp', async function ({ page }) {
-  await page.goto('http://localhost:3000');
-  await page.fill('#f-url', 'demo');
-  await page.click('#btn-conn');
-  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
-  await page.locator('.ch-card').first().waitFor({ state: 'visible', timeout: 5000 });
-  // chip hidden before any selection
-  await expect(page.locator('#genre-chip')).toBeHidden();
-  // select the first card ("World News 24", grp "News")
-  await page.locator('.ch-card').first().click();
-  const chip = page.locator('#genre-chip');
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveText('News');
-  await expect(page.locator('#now-info')).toHaveText('World News 24');
-  await page.locator('.content-head').screenshot({ path: 'test-results/genre-chip.png' });
-});
 
 // ---------------------------------------------------------------------------
 // Selecting a genre filters the channel grid by that category (demo category

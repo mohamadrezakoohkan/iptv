@@ -2,8 +2,8 @@
 id: TASK-0041
 adr: ADR-0018
 evolution: 11
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0040]
 ---
 
@@ -48,5 +48,50 @@ full unit + UI suites pass green with no orphaned references.
 
 ## Implementation notes
 
-_Filled by implement-agent. Run a repo-wide grep for the ADR-0018 tokens listed
-above as the final audit; report it in the task notes._
+Final ADR-0018 test cleanup (no behaviour change — cleanup only).
+
+Files removed:
+- `tests/unit/genre.test.js` — deleted wholesale. All 7 tests were
+  `describe.skip` blocks asserting removed ADR-0018 behaviour (pinned
+  All/Favourites ordering, source-order genre buttons, the active-genre chip).
+  No surviving coverage lost: source-order/pinned `rndSide` rendering is already
+  covered by `tests/unit/side.test.js` (labels, counts, both cat shapes) and
+  `tests/ui/sidebar.test.js` (All Channels pinned, active class, badge, click).
+- `tests/ui/genre.test.js` — deleted; its surviving content moved to a renamed
+  file (below); only the `test.skip` active-genre-chip test was dropped.
+
+Files added:
+- `tests/ui/sidebar-filter.test.js` — the two surviving UI tests from the old
+  `tests/ui/genre.test.js`, verbatim ("genre" was a misnomer post-removal): the
+  plain category-click grid filter (regenerates
+  `test-results/task-0040-plain-sidebar.png`) and the category-filter + ADR-0017
+  sort integration test. The skipped chip test was not carried over. Header
+  ADR comment re-attributed to ADR-0009 / ADR-0017. The `#cat-filter`,
+  `#cat-list`, `#genre-chip` mentions in this file are intentional NEGATIVE
+  assertions (`toHaveCount(0)`) that prove the removed ADR-0018 affordances stay
+  gone — they are the regression gate, not live references.
+
+Files edited:
+- `tests/unit/themetoggle.test.js` — removed the orphaned `'genre-chip'` id from
+  the `mkEl` stub list (TASK-0040 removed that element from the markup; the stub
+  was a dead reference).
+
+Audit:
+- `test-results/genre-chip.png` was already absent from disk and never tracked
+  in git (its generating test had been skipped, so it was not regenerated). No
+  `git rm` needed; criterion satisfied.
+- ADR-0018 already carried `governs: []` and `status: deleted` (set by
+  TASK-0039/0040) — no traceability edits made by this task.
+- Repo-wide grep `ADR: ADR-0018` traceability tags: ZERO matches across
+  `*.js` / `*.css` / `*.html`.
+- Token grep across `client/ server/ tests/` for
+  `getCats|catFltMin|cat-filter|cat-list|genre-chip|rndCats|rstFlt|ADR-0018`:
+  the only remaining matches are (a) a descriptive comment in `client/ui.js`
+  noting the restored sidebar has NO filter input / `#cat-list` wrapper, and
+  (b) the negative-assertion comments + `toHaveCount(0)` locators in
+  `tests/ui/sidebar-filter.test.js`. No live ADR-0018 code or traceability tag
+  remains anywhere (the retained `adrs/ADR-0018-*.md` history file, CHANGELOG,
+  specs, and task records excluded by design).
+
+Suites run locally: `npx vitest run` → 19 files, 441 tests, all pass, 0 skipped.
+`npx playwright test` → 133 tests, all pass, 0 skipped.

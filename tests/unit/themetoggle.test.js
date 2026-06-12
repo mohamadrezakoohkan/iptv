@@ -62,7 +62,7 @@ function mkEl(id, attrs) {
 function loadUi() {
   const elMap = {};
   const ids = [
-    'ch-list', 'ch-sort', 'player-video', 'search', 'now-info', 'genre-chip',
+    'ch-list', 'ch-sort', 'player-video', 'search', 'now-info',
     'player-err', 'grp-nav', 'footer', 'player-card', 'player-idle',
     'player-wrap', 'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
