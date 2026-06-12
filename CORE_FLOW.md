@@ -232,7 +232,8 @@ count and the final state (`PASS` / `FAIL`):
 
 <details><summary>UI — N tests, PASS</summary>
 
-![<test name>](https://github.com/<owner>/<repo>/raw/<run-branch>/<artifact-path>)
+<screenshot reference per the screenshot-embed rule below — inline image on a
+publicly readable repo, clickable viewer link otherwise>
 
 </details>
 
@@ -248,12 +249,30 @@ integration command is configured.
 
 UI screenshots are referenced by **committed artifact path** on the run branch,
 not pasted bytes: the UI suite writes its screenshots to a known run-artifacts
-directory that `validate-agent` commits with the task, and the block links them
-with raw-blob URLs (`…/raw/<run-branch>/<path>`) so GitHub renders them inline.
-When a UI run produces no screenshots, the UI block falls back to the same
-table form as the unit block and says so — never promise an image that will not
-render. On terminal FAIL the summary state is `FAIL`, the unit/UI tables mark
-the failing rows, and the integration block records what failed.
+directory that the terminal actor commits with the task, and the block
+references them by their committed path. How the block references them depends
+on the repository's visibility, because GitHub's image proxy fetches an inline
+image's source URL anonymously — that succeeds only for a publicly readable
+repo. The actor that writes the block (validate-agent on PASS, the orchestrator
+on terminal FAIL) determines visibility deterministically from the host's
+metadata before writing it, and then:
+
+- **Publicly readable repo:** embed each screenshot inline as an image whose
+  source is the committed-artifact raw URL on the run branch
+  (`![<name>](…/raw/<run-branch>/<path>)`) — it renders inline.
+- **Non-public repo (private or internal):** reference each screenshot as a
+  clickable link to its file-viewer URL on the run branch
+  (`[<name>](…/blob/<run-branch>/<path>)`) — never an inline image, which would
+  fetch anonymously and 404. Add a one-line note that inline thumbnails on a
+  non-public repo require manually dragging the images into the PR in the web
+  UI (the only reliable path; out of scope for automation).
+
+The contract is absolute: **never emit an inline image whose source is a raw
+URL on a non-public repo** — it renders broken. When a UI run produces no
+screenshots, the UI block falls back to the same table form as the unit block
+and says so. In every case: never promise an image that will not render. On
+terminal FAIL the summary state is `FAIL`, the unit/UI tables mark the failing
+rows, and the integration block records what failed.
 
 The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
 changes in the working tree, and the human decides when harness changes land.
