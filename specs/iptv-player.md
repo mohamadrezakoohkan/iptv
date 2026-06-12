@@ -71,9 +71,19 @@ when none is connected), opening the right-side account panel on click.
 - **Brand row**: amber dot + "IPTV" label in Space Grotesk bold.
 - **Search input**: icon + placeholder "Search channels…". Filters channel
   grid in real time using the `srch` module.
-- **Category list**: scrollable list of buttons, one per category returned by
-  the Xtream API plus a fixed "All Channels" entry and a "Favourites" entry.
-  Each button shows the category name and a channel-count badge.
+- **Category (genre) list**: scrollable list of buttons, one per category/genre
+  derived uniformly from the connected source plus a fixed "All Channels" entry
+  and a "Favourites" entry. Each button shows the category name and a
+  channel-count badge. Categories are derived for **every** engine: Xtream from
+  `get_live_categories`, M3U (and community presets) from each entry's
+  `group-title` (ADR-0018). Category buttons are listed in name-ascending order;
+  "All Channels"/"Favourites" stay first.
+- **Genre filter**: when the source exposes more than `S.catFltMin` (default 12)
+  categories, a "Filter genres…" input appears above the category list. Typing
+  narrows the visible category buttons by case-insensitive substring on the
+  genre name (pure helper `IptvSrch.getCats`); "All Channels"/"Favourites" stay
+  pinned. The filter text is transient (not persisted) and resets when the
+  source changes.
 - Active category button has `--acc` left border + text colour.
 - Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
   brand and search input are hidden.
@@ -86,7 +96,8 @@ when none is connected), opening the right-side account panel on click.
 
 - Slim bar (40px) above the player.
 - Left: "ON AIR" badge (red, visible only when a channel is playing), channel
-  name, category chip.
+  name, and a **genre chip** showing the playing channel's `grp` when a channel
+  is selected (empty/hidden otherwise) — ADR-0018.
 - Right: format chips — "HLS" and "TS". The chip matching the active
   channel's stream format is highlighted automatically; the chips are
   informational indicators of the engine in use (hls.js vs mpegts.js).
@@ -107,8 +118,28 @@ when none is connected), opening the right-side account panel on click.
 ### 5c. Channel grid
 
 - CSS grid with `auto-fill minmax(148px, 1fr)`, gap 12px.
-- Shows channels filtered by active category + search query.
+- A toolbar (`.ch-bar`) above the grid shows the channel count and a **sort
+  control** (§5d).
+- Shows channels filtered by active category + search query, ordered by the
+  active sort.
 - Each **channel card** (see §6) is one grid cell.
+
+### 5d. Channel sort control
+
+- A labelled native `<select id="ch-sort">` in the `.ch-bar` toolbar lets the
+  user order the channel grid (ADR-0017). Options come from `IptvSrch.SORTS`:
+
+  | Token       | Label                | Order                                    |
+  |-------------|----------------------|------------------------------------------|
+  | `num-asc`   | "Number"             | channel number ascending (default)       |
+  | `name-asc`  | "Name A→Z"           | name ascending, case-insensitive locale  |
+  | `name-desc` | "Name Z→A"           | name descending                          |
+  | `fav-first` | "Favourites first"   | favourites first, then number ascending  |
+
+- The sort applies to whatever set is currently shown (after category filter +
+  search) — it is the final ordering step inside `IptvSrch.getChs`.
+- The chosen sort persists in localStorage (`iptv_sort`, §9) and is restored on
+  reload; it is global, not per-account.
 
 ---
 
@@ -246,6 +277,7 @@ public HLS test streams after a 700ms simulated delay.
 | `iptv_act`          | string | `id` of the active account                            |
 | `iptv_sel`          | string | last selected `stream_id`                             |
 | `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)             |
+| `iptv_sort`         | string | active channel sort token (§5d); one of the four known tokens, else default `num-asc` |
 
 Multiple **accounts** are persisted (§13). On page load, if an active account
 resolves, the app silently calls `IptvApi.connect()` with that account's
