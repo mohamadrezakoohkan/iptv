@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015
 /* global window */
 
 'use strict';
@@ -303,6 +303,16 @@ function runMig(ls) {
 }
 
 // ---------------------------------------------------------------------------
+// getPst — pure: a community preset's (ADR-0015) connection identity. Returns
+// the M3U connection options shaped for both connect() (url/user/pass/m3u) and
+// mkAcct() (adds host = the preset url). No side effects; input untouched.
+// ADR: ADR-0015
+// ---------------------------------------------------------------------------
+function getPst(pst) {
+  return { url: pst.url, user: '', pass: '', m3u: true, host: pst.url };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 window.IptvSt = {
@@ -328,4 +338,5 @@ window.IptvSt = {
   saveAct,
   clearAct,
   loadAccts,
+  getPst,
 };

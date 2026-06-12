@@ -2,8 +2,8 @@
 id: TASK-0031
 adr: ADR-0015
 evolution: 8
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0027]
 ---
 
@@ -62,5 +62,31 @@ CONVENTIONS token that TASK-0032 builds on.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+- `client/cfg.js` — added the `Pst` typedef and a `PSTS` constant (the five
+  ADR-0015 iptv-org entries), assigned to `S.psts`. `Object.freeze(S)` is
+  shallow, so each preset object **and** the array are frozen explicitly before
+  `Object.freeze(S)` to satisfy the "frozen array" acceptance criterion (the
+  unit test asserts `Object.isFrozen(S.psts)` and per-entry freezing). Added
+  `ADR-0015` to the file's `ADR:` header comment.
+- `client/st.js` — added the pure `getPst(pst)` helper (1 param, 1-line body,
+  `get` prefix, no side effects) returning `{ url, user:'', pass:'', m3u:true,
+  host: pst.url }`, exported via `window.IptvSt`. Added `ADR-0015` to the
+  header comment. No existing helper shape was changed
+  (`mkAcct`/`addAcct`/`saveAccts`/`saveAct`/`getAct`/`loadAccts` untouched).
+- `tests/unit/preset.test.js` — new unit suite (11 tests): exact five-entry
+  `S.psts` contents, no-credentials/`{name,url}`-only shape, https iptv-org
+  URL checks, array + per-entry + `S` frozen assertions, and `getPst`
+  purity/shape/round-trip (`mkAcct(getPst(S.psts[0]))` yields a valid `Acct`
+  that dedupes by `url+user+m3u`).
+
+Non-obvious / for reviewers:
+- CONVENTIONS.md §1 already carries the `preset → pst` / `presets → psts` token
+  rows (added in this evolution's spec phase, lines 19–20); the new symbols
+  `S.psts`, `Pst`, `getPst` comply. No CONVENTIONS edit was needed.
+- ADR-0015 `governs:` already lists all three files — no traceability true-up
+  required; each governed file carries its `ADR: ADR-0015` comment.
+- Integration: n/a. Every preset URL is an iptv-org M3U already exercised
+  end-to-end by the existing live tier (`tests/int/m3u.test.js` hits
+  `index.m3u`); this task adds no new endpoints, so no new integration test.
+- Full unit suite: 374 passed (16 files). Full UI suite: 104 passed.
