@@ -5,6 +5,30 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #5 — 2026-06-12 — Xtream connect + stream playback against a personal portal
+
+- **Prompt:** iptv can't connect to the personal Xtream test portal `http://mymax.top:8080` — make it connect and play a stream.
+- **Outcome:** Shipped. All 4 tasks completed and validated.
+- **ADRs:** ADR-0009 (Xtream path normalizes portal objects into the canonical `Ch` schema, auth check + `allowed_output_formats`-driven stream-URL construction) · ADR-0010 (MPEG-TS playback via mpegts.js 1.7.x CDN, engine selected by stream-URL extension, HLS/TS chips become live engine indicators; refines ADR-0004) · ADR-0011 (proxy follows validated redirects up to 5 hops, pipes long-lived streams without size/timeout caps, aborts upstream on client disconnect; extends ADR-0002).
+- **Tasks:** 4 done, 0 failed, 0 blocked. TASK-0021 Xtream normalization + stream-URL building (`client/api.js`, `tests/int/xtream.test.js`) · TASK-0022 proxy redirect-following + stream piping (`server/rtr.js`, `tests/{unit,int}/redir.test.js`) · TASK-0023 dual-engine player mpegts.js/hls.js (`client/play.js`, `client/ui.js`, `index.html`, `tests/unit/play.test.js`, `tests/ui/chips.test.js`) · TASK-0024 live end-to-end proof against mymax.top (`tests/int/e2e.test.js`, `tests/ui/live.test.js`). All first-attempt passes.
+- **Tests:** 269 unit (Vitest) + 83 UI (Playwright) + 20 integration (Vitest, live network — including live connect, category/channel listing, and TS-byte playback through the redirect-following proxy) — all passing.
+- **Rules earned:** none.
+- **Artifacts:** `client/api.js`, `client/play.js`, `client/ui.js`, `index.html`, `server/rtr.js`, `specs/iptv-player.md` (§5a, §8, §10), `tests/unit/{play,side,redir}.test.js`, `tests/ui/{chips,live}.test.js`, `tests/int/{xtream,redir,e2e}.test.js`, `adrs/ADR-00{09,10,11}-*.md`, `tasks/TASK-002{1,2,3,4}-*.md`.
+- **Notes:** entry #4 below was recorded retroactively during this review — the E4 run merged (PR #5) without its review-phase CHANGELOG entry, leaving a #3 → #5 gap that this evolution's review closed.
+
+---
+
+## #4 — 2026-06-11 — Explicit login-mode choice (recorded retroactively at E5 review)
+
+- **Prompt:** Explicit login-mode choice — the user picks Xtream vs M3U; URL auto-detection removed.
+- **Outcome:** Shipped (merged to `main` as PR #5). Recorded retroactively: the E4 run's review phase never appended this entry; the facts below come solely from the repository's files and git history.
+- **ADRs:** ADR-0008 (explicit login-mode choice, supersedes ADR-0005's auto-detection).
+- **Tasks:** 4 done, 0 failed, 0 blocked. TASK-0017 engine explicit `opts.m3u` connect routing · TASK-0018 footer login-mode selector UI · TASK-0019 persist login mode in `iptv_creds` + reconnect with stored mode · TASK-0020 remove the `isM3u` auto-detect heuristic.
+- **Rules earned:** none recorded (no E4 failure records exist in `failures/`).
+- **Artifacts:** `client/api.js`, `client/ui.js`, `index.html`, `adrs/ADR-0008-explicit-login-mode.md`, `tasks/TASK-00{17,18,19,20}-*.md` (per ADR-0008 `governs:` and the task files).
+
+---
+
 ## #3 — 2026-06-11 — Live integration tests for the iptv-org M3U engine path
 
 - **Prompt:** Write integration tests validating the engine can connect to and load `https://iptv-org.github.io/iptv/index.m3u` streams over the live network.
