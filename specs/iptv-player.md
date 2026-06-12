@@ -76,19 +76,14 @@ when none is connected), opening the right-side account panel on click.
 - **Brand row**: amber dot + "IPTV" label in Space Grotesk bold.
 - **Search input**: icon + placeholder "Search channels…". Filters channel
   grid in real time using the `srch` module.
-- **Category (genre) list**: scrollable list of buttons, one per category/genre
-  derived uniformly from the connected source plus a fixed "All Channels" entry
-  and a "Favourites" entry. Each button shows the category name and a
-  channel-count badge. Categories are derived for **every** engine: Xtream from
-  `get_live_categories`, M3U (and community presets) from each entry's
-  `group-title` (ADR-0018). Category buttons are listed in name-ascending order;
-  "All Channels"/"Favourites" stay first.
-- **Genre filter**: when the source exposes more than `S.catFltMin` (default 12)
-  categories, a "Filter genres…" input appears above the category list. Typing
-  narrows the visible category buttons by case-insensitive substring on the
-  genre name (pure helper `IptvSrch.getCats`); "All Channels"/"Favourites" stay
-  pinned. The filter text is transient (not persisted) and resets when the
-  source changes.
+- **Category list**: scrollable list of buttons, one per category derived from
+  the connected source plus a fixed "All Channels" entry and a "Favourites"
+  entry. Each button shows the category name and a channel-count badge.
+  Categories come from the source's own grouping in the source's own order:
+  Xtream from `get_live_categories`, M3U (and community presets) from each
+  entry's `group-title` (ADR-0009 / ADR-0005). Clicking a category filters the
+  channel grid by `ch.cat`. There is no genre-filter input and no alphabetical
+  re-ordering — the list is the source's categories as delivered.
 - Active category button has `--acc` left border + text colour.
 - Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
   brand and search input are hidden.
@@ -100,9 +95,8 @@ when none is connected), opening the right-side account panel on click.
 ### 5a. Content-head bar
 
 - Slim bar (40px) above the player.
-- Left: "ON AIR" badge (red, visible only when a channel is playing), channel
-  name, and a **genre chip** showing the playing channel's `grp` when a channel
-  is selected (empty/hidden otherwise) — ADR-0018.
+- Left: "ON AIR" badge (red, visible only when a channel is playing) and the
+  channel name (`#now-info`, set when a channel is selected, empty otherwise).
 - Right: format chips — "HLS" and "TS". The chip matching the active
   channel's stream format is highlighted automatically; the chips are
   informational indicators of the engine in use (hls.js vs mpegts.js).
@@ -270,7 +264,10 @@ stored-session reconnect, or a test) always states the mode.
 
 **Demo mode**: when `src === "demo"` (case-insensitive), `IptvApi.connect()`
 returns a synthetic playlist of 7 categories / 34 channels routed to two
-public HLS test streams after a 700ms simulated delay.
+public HLS test streams after a 700ms simulated delay. Each demo channel's
+`cat` is the category **id** (the slug of its group name) so it matches the
+demo category's `id`, keeping the id-based grid filter consistent with the
+Xtream/M3U normalization (ADR-0009); `grp` stays the human-readable name.
 
 ---
 
