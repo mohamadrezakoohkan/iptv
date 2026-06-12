@@ -5,7 +5,8 @@ Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
 lets you browse live channels by category, search by name, mark favourites,
 and stream the selected channel directly in the browser — HLS (`.m3u8`)
 streams play via hls.js, raw MPEG-TS streams (the common Xtream live output)
-via mpegts.js.
+via mpegts.js. On browsers without Media Source Extensions (e.g. iOS Safari),
+the server remuxes live TS to HLS on the fly so streams still play.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -17,7 +18,7 @@ playlist of publicly accessible HLS test streams — no real credentials require
 | Runtime | Node.js >= 18                                               |
 | Server  | Express 4 (static file serving + Xtream CORS proxy)         |
 | Client  | Vanilla JS ES2020 — no framework, no bundler, no transpiler |
-| Player  | hls.js 1.5 (CDN, + native HLS fallback) for `.m3u8` · mpegts.js 1.7 (CDN) for raw MPEG-TS |
+| Player  | hls.js 1.5 (CDN, + native HLS fallback) for `.m3u8` · mpegts.js 1.7 (CDN) for raw MPEG-TS · server-side TS→HLS remux fallback (ffmpeg-static, stream copy) for MSE-less browsers |
 | CSS     | Plain CSS with custom properties                            |
 | Fonts   | Space Grotesk + IBM Plex Mono (Google Fonts CDN)            |
 
@@ -26,6 +27,10 @@ playlist of publicly accessible HLS test streams — no real credentials require
 ```bash
 npm install
 ```
+
+`npm install` is the only setup step — the ffmpeg binary used for the
+TS→HLS remux fallback ships with the `ffmpeg-static` package (no system
+ffmpeg required).
 
 ## Run
 
@@ -76,6 +81,11 @@ command.
 - **Dual-engine player** — idle, playing, and error states; autoplay on
   channel select; engine chosen from the stream URL (`.m3u8` → hls.js,
   otherwise mpegts.js), with HLS/TS chips indicating the engine in use.
+- **MSE-less fallback (iOS Safari)** — when the browser lacks Media Source
+  Extensions, raw TS streams are remuxed server-side to live HLS
+  (`GET /api/hls?url=…`, ffmpeg stream copy, per-source sessions reaped
+  when idle) and played through native HLS or hls.js — no
+  "MPEG-TS not supported" dead end.
 - **Footer** — login-mode selector + login form + connected status bar
   showing host and channel count.
 - **Persistence** — credentials, login mode, last-selected channel, and
