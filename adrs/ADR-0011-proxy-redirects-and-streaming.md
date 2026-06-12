@@ -6,6 +6,8 @@ evolution: 5
 status: accepted
 governs:
   - server/rtr.js
+  - tests/unit/redir.test.js
+  - tests/int/redir.test.js
 ---
 
 # ADR-0011 — Proxy follows validated redirects and pipes long-lived streams
