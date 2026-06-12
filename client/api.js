@@ -29,9 +29,14 @@
     return typeof src === 'string' && src.trim().toLowerCase() === 'demo';
   }
 
+  /** Slugify a demo category name into its stable category id. */
+  function catSlug(name) {
+    return name.toLowerCase().replace(/\s+/g, '-');
+  }
+
   /** Build a single category object from a DEMO_DATA row. */
   function mkCat(d) {
-    return { name: d[0], id: d[0].toLowerCase().replace(/\s+/g, '-') };
+    return { name: d[0], id: catSlug(d[0]) };
   }
 
   /** Build categories array from DEMO_DATA. */
@@ -39,7 +44,12 @@
     return DEMO_DATA.map(mkCat);
   }
 
-  /** Build a single channel object. opts: { name, grp, cnt } */
+  /**
+   * Build a single channel object. opts: { name, grp, cnt }
+   * cat is the category id (slug of grp) so it matches getDemoCats()'s id —
+   * the id-based grid filter (getChs flt, ADR-0009) keys on ch.cat === cat.id;
+   * grp stays the human-readable category/genre name (Ch schema, §5a chip).
+   */
   function mkDemoCh(opts) {
     return {
       id:  String(opts.cnt),
@@ -47,7 +57,7 @@
       grp:  opts.grp,
       url:  opts.cnt % 2 === 0 ? DEMO_SRC2 : DEMO_SRC1,
       img:  '',
-      cat:  opts.grp,
+      cat:  catSlug(opts.grp),
       num:  opts.cnt,
     };
   }

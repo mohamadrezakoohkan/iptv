@@ -7,6 +7,8 @@ status: accepted
 governs:
   - client/srch.js
   - client/ui.js
+  - client/cfg.js
+  - client/main.js
   - index.html
   - client/app.css
 ---

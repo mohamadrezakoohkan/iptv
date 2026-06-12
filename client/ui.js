@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0018
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -12,6 +12,7 @@ const EL = {
   play: null,   // #player-video
   srch: null,   // #search
   info: null,   // #now-info
+  gchp: null,   // #genre-chip active-genre chip (ADR-0018)
   err:  null,   // #player-err
   nav:  null,   // #grp-nav / .sidebar-list
   foot: null,   // #footer
@@ -52,6 +53,9 @@ const HINT_M3U = 'Paste an .m3u / .m3u8 playlist URL — no login needed.';
 // ---------------------------------------------------------------------------
 let tmp  = null;   // debounce timeout id  (tmp = temporary)
 let srch = '';     // pending search query (srch = search)
+// View-local genre-filter query (ADR-0018) — never persisted, not an ST field;
+// reset by rstFlt() when the category set changes (connect / switch / disconnect).
+let flt  = '';     // pending genre-filter query (flt = filter)
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -168,6 +172,19 @@ function onSrch(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// onFlt — event-delegated input handler on EL.nav for the genre-filter input
+// (#cat-filter, ADR-0018). Records the view-local query and re-renders only the
+// category buttons so the input keeps focus; "All Channels"/"Favourites" stay
+// pinned via mkCats. Ignores input events from any other field.
+// ---------------------------------------------------------------------------
+function onFlt(evt) {
+  if (!evt.target || evt.target.id !== 'cat-filter') return;
+  flt = evt.target.value;
+  const st = window.IptvSt.ST;
+  rndCats(st.cats, st.chs, st.favs);
+}
+
+// ---------------------------------------------------------------------------
 // onCatClick — event-delegated click handler on EL.nav
 // ---------------------------------------------------------------------------
 function onCatClick(evt) {
@@ -210,6 +227,7 @@ function onGridClick(evt) {
   window.IptvSt.setCur(ch);
   if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
   if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  rndHead();
   if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
 }
 
@@ -460,6 +478,7 @@ function mkEL() {
   EL.play  = document.getElementById('player-video');
   EL.srch  = document.getElementById('search');
   EL.info  = document.getElementById('now-info');
+  EL.gchp  = document.getElementById('genre-chip');
   EL.err   = document.getElementById('player-err');
   EL.nav   = document.getElementById('grp-nav');
   EL.foot  = document.getElementById('footer');
@@ -491,6 +510,7 @@ function mkEL() {
   EL.apst  = document.getElementById('acct-psts');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
+  if (EL.nav)  EL.nav.addEventListener('input', onFlt);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
   if (EL.list) EL.list.addEventListener('keydown', onGridKey);
   if (EL.srt)  EL.srt.addEventListener('change', onSort);
@@ -549,38 +569,89 @@ function onSort(evt) {
 }
 
 // ---------------------------------------------------------------------------
-// rndSide — render sidebar category list
+// mkPin — build the pinned "All Channels" + "Favourites" buttons (never
+// filtered or reordered, ADR-0018). opts: { chs, favs, sel } (sel = ST.flt).
+// ---------------------------------------------------------------------------
+function mkPin(opts) {
+  let html = '<button class="cat-btn' + (opts.sel === 'all' ? ' active' : '') + '" data-cat="all">'
+    + '<span class="cat-label">All Channels</span>'
+    + '<span class="cat-count">' + opts.chs.length + '</span>'
+    + '</button>';
+  if (opts.favs.length > 0) {
+    html += '<button class="cat-btn' + (opts.sel === 'favs' ? ' active' : '') + '" data-cat="favs">'
+      + '<span class="cat-label">Favourites</span>'
+      + '<span class="cat-count">' + opts.favs.length + '</span>'
+      + '</button>';
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// mkCats — build the category-button list HTML: pinned All/Favs first, then
+// the genre buttons filtered by the view-local query and name-ascending via
+// IptvSrch.getCats (ADR-0018). opts: { cats, chs, favs }.
+// ---------------------------------------------------------------------------
+function mkCats(opts) {
+  const sel  = window.IptvSt.ST.flt;
+  const list = window.IptvSrch.getCats(opts.cats, flt);
+  let html   = mkPin({ chs: opts.chs, favs: opts.favs, sel });
+  for (let i = 0; i < list.length; i += 1) {
+    const id  = getCatId(list[i]);
+    const cnt = opts.chs.filter(function byCat(ch) { return ch.cat === id; }).length;
+    html += mkCatBtn({ id, label: getCatName(list[i]), cnt, flt: sel });
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// rndCats — re-render only the category buttons (.cat-list) from the current
+// view-local genre-filter query; keeps the filter input element (and its caret
+// focus) intact across keystrokes (ADR-0018).
+// ---------------------------------------------------------------------------
+function rndCats(cats, chs, favs) {
+  const box = document.getElementById('cat-list');
+  if (!box) return;
+  box.innerHTML = mkCats({ cats, chs, favs });
+}
+
+// ---------------------------------------------------------------------------
+// rndSide — render the sidebar: an optional genre-filter input (only when the
+// category count exceeds S.catFltMin, ADR-0018) above the category-button list.
+// The buttons render name-ascending and filtered via the view-local query.
 // ---------------------------------------------------------------------------
 function rndSide(cats, chs, favs) {
   if (!EL.nav) return;
-  const flt    = window.IptvSt.ST.flt;
-  const totAct = (flt === 'all') ? ' active' : '';
-  let html = '<button class="cat-btn' + totAct + '" data-cat="all">'
-    + '<span class="cat-label">All Channels</span>'
-    + '<span class="cat-count">' + chs.length + '</span>'
-    + '</button>';
-  if (favs.length > 0) {
-    const favAct = (flt === 'favs') ? ' active' : '';
-    html += '<button class="cat-btn' + favAct + '" data-cat="favs">'
-      + '<span class="cat-label">Favourites</span>'
-      + '<span class="cat-count">' + favs.length + '</span>'
-      + '</button>';
+  let html = '';
+  if (cats.length > window.S.catFltMin) {
+    html += '<div class="cat-filter"><input id="cat-filter" type="text" '
+      + 'placeholder="Filter genres…" autocomplete="off" value="' + flt + '"></div>';
   }
-  for (let i = 0; i < cats.length; i += 1) {
-    const id  = getCatId(cats[i]);
-    const cnt = chs.filter(function byCat(ch) { return ch.cat === id; }).length;
-    html += mkCatBtn({ id, label: getCatName(cats[i]), cnt, flt });
-  }
+  html += '<div class="cat-list" id="cat-list">' + mkCats({ cats, chs, favs }) + '</div>';
   EL.nav.innerHTML = html;
 }
 
 // ---------------------------------------------------------------------------
-// rndHead — update content-head with current channel name
+// rstFlt — reset the view-local genre-filter query (ADR-0018). Called when the
+// category set changes (connect / account switch / disconnect) so a stale
+// filter never carries across sources.
+// ---------------------------------------------------------------------------
+function rstFlt() {
+  flt = '';
+}
+
+// ---------------------------------------------------------------------------
+// rndHead — update the content-head bar (§5a): the current channel name plus
+// the active-genre chip showing the playing channel's grp (ADR-0018). With no
+// channel selected the name is empty and the chip is hidden/empty.
 // ---------------------------------------------------------------------------
 function rndHead() {
-  if (!EL.info) return;
-  const st = window.IptvSt.ST;
-  EL.info.textContent = st.cur ? st.cur.name : '';
+  const st  = window.IptvSt.ST;
+  const cur = st.cur;
+  if (EL.info) EL.info.textContent = cur ? cur.name : '';
+  if (!EL.gchp) return;
+  const grp = cur && cur.grp ? cur.grp : '';
+  EL.gchp.textContent = grp;
+  EL.gchp.hidden = grp.length === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -667,8 +738,10 @@ function onOk(val) {
   const pass = EL.pwd   ? EL.pwd.value          : '';
   const m3u  = getMode() === 'm3u';
   saveActive({ url: src, host: val.host, user, pass, m3u });
+  rstFlt();
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
+  rndHead();
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
   rndAcct();
@@ -724,10 +797,12 @@ function onSwOk(acct, val) {
   window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
   window.IptvSt.go('READY');
   window.IptvSt.saveAct(acct.id);
+  rstFlt();
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
+  rndHead();
   rndAcct();
 }
 
@@ -791,9 +866,12 @@ function tearDown() {
   if (EL.uname) { EL.uname.value = ''; EL.uname.disabled = false; }
   if (EL.pwd)   { EL.pwd.value   = ''; EL.pwd.disabled   = false; }
   if (EL.bcon)  { EL.bcon.disabled = true; EL.bcon.textContent = 'Connect'; }
+  rstFlt();
+  window.IptvSt.setCur(null);
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
+  rndHead();
   rndAcct();
 }
 
@@ -851,4 +929,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndCats, rstFlt, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };
