@@ -2,8 +2,8 @@
 id: TASK-0032
 adr: ADR-0016
 evolution: 8
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0031, TASK-0030]
 ---
 
@@ -82,8 +82,51 @@ whole panel/grid/sidebar/footer re-render (ADR-0015/ADR-0016).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Implemented additively — no live symbol or storage key renamed/removed.
+
+Files touched:
+- `index.html` — added `#acct-psts` block (`.acct-psts-sec` heading +
+  `.acct-psts` list) between `#acct-list` and `#acct-add`; added `ADR-0016`
+  to the top HTML comment + an inline `ADR: ADR-0016` comment on the section.
+- `client/ui.js` — `EL.apst` (`#acct-psts`); `mkPst(opts)` pure row builder
+  (mirrors `mkRow`, `data-pst="<idx>"`, name + url, `is-active` only when the
+  preset url is the active **M3U** account's connection, no remove control);
+  `rndPsts(act)` renders all of `S.psts` into `#acct-psts`, now called from
+  `rndAcct()`; `onPstList(evt)`/`goPst(idx)`/`runPst(pst)`/`onPstOk(pst,val)`
+  drive the M3U connect by **reusing** the existing plumbing — `runPst` mirrors
+  `runSwitch` (tearDown → go('LOAD') → connect with `{user:'',pass:'',m3u:true}`),
+  and on success `onPstOk` persists via the existing `saveActive`
+  (`mkAcct(getPst(pst))` → `addAcct` dedupe → `saveAccts`/`saveAct`) then
+  delegates the full re-render to the existing `onSwOk`. No-op guard matches
+  `goSwitch` (already-active preset). Listener wired in `mkEL`;
+  `mkPst`/`rndPsts`/`onPstList` exported on `window.IptvUi`.
+- `client/app.css` — `.acct-psts-sec`/`.acct-psts-title`/`.acct-psts` +
+  `.acct-row.acct-pst`, reusing the `.acct-row*` language; `is-active` is a CSS
+  class only (no inline styles); panel is already full-width at the 760px
+  breakpoint (ADR-0014), so presets inherit it. Added `ADR-0016` to the header.
+
+Tests:
+- Unit (`tests/unit/acctui.test.js`): a `loadUiPst` harness registering
+  `#acct-psts` + a `window.S.psts` catalog + `getPst`/`mkAcct`/`addAcct` stubs;
+  covers `mkPst` markup (R-0001: asserts only attributes the emitted HTML
+  carries — `data-pst`, class, role, tabindex; explicitly asserts **no**
+  `data-rm`/`acct-row-rm`), `rndPsts` (one row per `S.psts`, present with zero
+  saved accounts, `is-active` exactly on the matching active row, none when no
+  match), and `onPstList` (M3U connect on select, no-op for active preset,
+  ignores non-row clicks).
+- UI (`tests/ui/acct.test.js`): section present with zero saved accounts and
+  lists `window.S.psts.length` rows; each row shows name + url with no remove
+  control; DOM order list < presets < Add account; clicking the active preset
+  triggers no `connect` (no-op). Remote connect not asserted in the UI tier per
+  the task (offline-deterministic).
+- Integration: n/a — no new external connectivity. Preset URLs are iptv-org
+  M3U playlists already covered by the existing live tier (`tests/int/m3u.test.js`
+  hits `index.m3u`); this reuses the unchanged M3U engine + proxy path and adds
+  no endpoints.
+
+Full `npx vitest run` (384 unit) and `npx playwright test` (108 UI) both green.
+ADR-0016 `governs:` already listed all touched/test files — no change needed;
+no ADR newly emptied.
 
 > Sequencing note (E7/E8 staged-migration lesson): this task **adds** a new
 > panel section and new `ui.js` symbols (`apst`, `mkPst`, `rndPsts`,

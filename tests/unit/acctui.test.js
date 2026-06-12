@@ -391,6 +391,180 @@ describe('onAcctList() — switch / remove / active-no-op delegation', function 
   });
 });
 
+// ===========================================================================
+// TASK-0032 — community presets section (#acct-psts) + select → M3U connect
+// (ADR-0015/ADR-0016)
+// ===========================================================================
+
+// Mirrors S.psts from client/cfg.js (frozen iptv-org catalog).
+const PSTS = [
+  { name: 'iptv-org · All',     url: 'https://iptv-org.github.io/iptv/index.m3u' },
+  { name: 'iptv-org · English', url: 'https://iptv-org.github.io/iptv/languages/eng.m3u' },
+  { name: 'iptv-org · News',    url: 'https://iptv-org.github.io/iptv/categories/news.m3u' },
+  { name: 'iptv-org · Sports',  url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
+  { name: 'iptv-org · Music',   url: 'https://iptv-org.github.io/iptv/categories/music.m3u' },
+];
+
+// getPst — mirrors st.js getPst (M3U connection identity for a preset).
+function getPst(p) {
+  return { url: p.url, user: '', pass: '', m3u: true, host: p.url };
+}
+
+// loadUiPst — like loadUiStore but also registers the #acct-psts element and a
+// window.S carrying the presets catalog, so rndPsts/onPstList run for real.
+// store: { accts, actId }
+function loadUiPst(store) {
+  const elMap = {};
+  const ids = [
+    'ch-list', 'player-video', 'search', 'now-info', 'player-err',
+    'grp-nav', 'footer', 'player-card', 'player-idle', 'player-wrap',
+    'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
+    'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
+    'login-form', 'chip-hls', 'chip-ts',
+    'acct-scrim', 'acct-close', 'acct-add', 'acct-list', 'acct-conn',
+    'acct-label', 'acct-psts',
+  ];
+  for (let i = 0; i < ids.length; i += 1) { elMap[ids[i]] = mkEl(ids[i]); }
+  elMap['acct-btn']   = mkEl('acct-btn', { 'aria-expanded': 'false' });
+  elMap['acct-panel'] = mkEl('acct-panel', { 'aria-hidden': 'true' });
+
+  const calls = { saveAccts: [], saveAct: [], connect: [], mkAcct: [], addAcct: [] };
+  let cur = { accts: store.accts.slice(), actId: store.actId };
+
+  function getAct(accts, actId) {
+    if (!actId) return null;
+    return accts.find(function byId(a) { return a.id === actId; }) || null;
+  }
+
+  const win = {
+    S: { psts: PSTS },
+    IptvSt: {
+      ST: { phase: 'INIT', cats: [], chs: [], favs: [], srch: '', flt: 'all' },
+      loadAccts: function loadAccts() { return { accts: cur.accts.slice(), actId: cur.actId }; },
+      getAct,
+      getPst,
+      mkAcct: function mkAcct(opts) { calls.mkAcct.push(opts); return { id: 'pst-' + opts.url, name: opts.url, url: opts.url, user: '', pass: '', m3u: true }; },
+      addAcct: function addAcct(accts, acct) { calls.addAcct.push(acct); return accts.concat([acct]); },
+      saveAccts: function saveAccts(a) { calls.saveAccts.push(a); cur.accts = a; },
+      saveAct:   function saveAct(id)  { calls.saveAct.push(id); cur.actId = id; },
+      clearAct:  function clearAct()   { cur.actId = null; },
+      setChs:    function setChs() {},
+      go: function go() {},
+    },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
+    IptvPlay: null,
+    document: {
+      getElementById: function getEl(id) { return elMap[id] || null; },
+      querySelector:  function qSel()    { return null; },
+      addEventListener: function addL() {},
+      body: { classList: mkClassList() },
+    },
+    clearTimeout: function cTout() {},
+    setTimeout:   function sTout(fn) { return fn; },
+  };
+
+  const src = readFileSync(UI_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'document', '"use strict";\n' + src)(win, win.document);
+  win.IptvUi.mkEL();
+  return { ui: win.IptvUi, el: elMap, calls };
+}
+
+describe('mkPst() — preset row markup', function () {
+  // R-0001: assert only attributes the emitted HTML actually carries —
+  // data-pst, class, role, tabindex. mkPst emits NO data-rm / remove control.
+  it('emits a data-pst row with the preset name + url and no remove control', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    const html = r.ui.mkPst({ pst: PSTS[2], idx: 2, act: null });
+    expect(html).toContain('data-pst="2"');
+    expect(html).toContain('iptv-org · News');
+    expect(html).toContain('https://iptv-org.github.io/iptv/categories/news.m3u');
+    expect(html).toContain('class="acct-row acct-pst"');
+    expect(html).not.toContain('data-rm');
+    expect(html).not.toContain('acct-row-rm');
+  });
+
+  it('marks the row is-active when the preset url is the active M3U account', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    const act = { id: 'x', name: 'n', url: PSTS[0].url, user: '', pass: '', m3u: true };
+    const html = r.ui.mkPst({ pst: PSTS[0], idx: 0, act });
+    expect(html).toContain('class="acct-row acct-pst is-active"');
+  });
+
+  it('does not mark is-active when the active account is a non-M3U match', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    const act = { id: 'x', name: 'n', url: PSTS[0].url, user: 'u', pass: 'p', m3u: false };
+    const html = r.ui.mkPst({ pst: PSTS[0], idx: 0, act });
+    expect(html).not.toContain('is-active');
+  });
+});
+
+describe('rndPsts() — community section render (#acct-psts)', function () {
+  it('renders one row per S.psts entry with data-pst="<idx>", name + url', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    r.ui.rndAcct();
+    const html = r.el['acct-psts'].innerHTML;
+    for (let i = 0; i < PSTS.length; i += 1) {
+      expect(html).toContain('data-pst="' + i + '"');
+      expect(html).toContain(PSTS[i].name);
+      expect(html).toContain(PSTS[i].url);
+    }
+    expect(html.match(/acct-pst/g).length).toBe(PSTS.length);
+  });
+
+  it('is present with zero saved accounts (the default catalog)', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    r.ui.rndAcct();
+    expect(r.el['acct-psts'].innerHTML).toContain('data-pst="0"');
+    expect(r.el['acct-list'].innerHTML).toContain('No saved accounts');
+  });
+
+  it('marks is-active exactly on the preset row whose url is the active account', function () {
+    const acct = { id: '9', name: 'n', url: PSTS[3].url, user: '', pass: '', m3u: true };
+    const r = loadUiPst({ accts: [acct], actId: '9' });
+    r.ui.rndAcct();
+    const html = r.el['acct-psts'].innerHTML;
+    expect(html.match(/is-active/g).length).toBe(1);
+    expect(html).toMatch(/class="acct-row acct-pst is-active"[^>]*data-pst="3"/);
+  });
+
+  it('marks no row active when no active account matches a preset url', function () {
+    const acct = { id: '9', name: 'n', url: 'http://other', user: '', pass: '', m3u: true };
+    const r = loadUiPst({ accts: [acct], actId: '9' });
+    r.ui.rndAcct();
+    expect(r.el['acct-psts'].innerHTML).not.toContain('is-active');
+  });
+});
+
+describe('onPstList() — select a preset → M3U connect', function () {
+  function tgt(idx) {
+    return { closest: function closest(sel) { return sel === '[data-pst]' ? { getAttribute: function () { return String(idx); } } : null; } };
+  }
+
+  it('connects to the selected preset on the M3U path (user/pass empty, m3u true)', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    r.ui.onPstList({ target: tgt(2) });
+    expect(r.calls.connect.length).toBe(1);
+    expect(r.calls.connect[0].url).toBe(PSTS[2].url);
+    expect(r.calls.connect[0].opts).toEqual({ user: '', pass: '', m3u: true });
+  });
+
+  it('is a no-op when that preset is already the active M3U connection', function () {
+    const acct = { id: '9', name: 'n', url: PSTS[1].url, user: '', pass: '', m3u: true };
+    const r = loadUiPst({ accts: [acct], actId: '9' });
+    r.ui.onPstList({ target: tgt(1) });
+    expect(r.calls.connect.length).toBe(0);
+  });
+
+  it('ignores a click that is not on a preset row', function () {
+    const r = loadUiPst({ accts: [], actId: null });
+    const target = { closest: function closest() { return null; } };
+    r.ui.onPstList({ target });
+    expect(r.calls.connect.length).toBe(0);
+  });
+});
+
 describe('onAcctAdd() — reset to the login form', function () {
   it('closes the panel and focuses the URL field', function () {
     const r = loadUiStore({ accts: [mkAcctStub('1', 'Demo', 'demo')], actId: '1' });

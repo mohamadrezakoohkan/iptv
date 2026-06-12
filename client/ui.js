@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -39,6 +39,7 @@ const EL = {
   aadd: null,   // #acct-add button (ADR-0014)
   alst: null,   // #acct-list container (ADR-0014)
   acon: null,   // #acct-conn connected block (ADR-0014)
+  apst: null,   // #acct-psts community presets list (ADR-0016)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -268,6 +269,26 @@ function mkRow(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// mkPst — build one community-preset row HTML (ADR-0016): the preset name +
+// playlist url, a select target (data-pst="<idx>"), and the is-active marker
+// only when this preset's url is the active account's M3U connection. Mirrors
+// mkRow; no remove control (the catalog is static, ADR-0015).
+// opts: { pst, idx, act }
+// ---------------------------------------------------------------------------
+function mkPst(opts) {
+  const p   = opts.pst;
+  const act = opts.act;
+  const on  = (act && act.m3u && act.url === p.url) ? ' is-active' : '';
+  return '<div class="acct-row acct-pst' + on + '" role="button" tabindex="0" data-pst="' + opts.idx + '">'
+    + '<span class="acct-row-dot" aria-hidden="true"></span>'
+    + '<span class="acct-row-meta">'
+    + '<span class="acct-row-name">' + p.name + '</span>'
+    + '<span class="acct-row-srv">' + p.url + '</span>'
+    + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
 // rndConn — render the connected-account block (#acct-conn): name + server URL
 // + "Connected" dot when an account is active; a "Not connected" line otherwise
 // (ADR-0014). act is the active Acct or null.
@@ -304,9 +325,26 @@ function rndList(store) {
 }
 
 // ---------------------------------------------------------------------------
+// rndPsts — render the community presets section (#acct-psts) from S.psts
+// (ADR-0015/ADR-0016), always present (default catalog, even with zero saved
+// accounts). Marks the row whose url is the active M3U account's connection.
+// act is the active Acct or null.
+// ---------------------------------------------------------------------------
+function rndPsts(act) {
+  if (!EL.apst) return;
+  const psts = window.S.psts;
+  let html = '';
+  for (let i = 0; i < psts.length; i += 1) {
+    html += mkPst({ pst: psts[i], idx: i, act });
+  }
+  EL.apst.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
 // rndAcct — render the whole account panel from the store (ADR-0013/ADR-0014):
-// the nav button label, the connected block, and the list. Called after every
-// connect, disconnect, switch, add, and remove so the surfaces never disagree.
+// the nav button label, the connected block, the list, and the community
+// presets section (ADR-0016). Called after every connect, disconnect, switch,
+// add, and remove so the surfaces never disagree.
 // ---------------------------------------------------------------------------
 function rndAcct() {
   const st    = window.IptvSt;
@@ -316,6 +354,7 @@ function rndAcct() {
   if (lbl) lbl.textContent = act ? act.name : 'Account';
   rndConn(act);
   rndList(store);
+  rndPsts(act);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +368,59 @@ function onAcctList(evt) {
   const row = evt.target.closest('[data-acct]');
   if (!row) return;
   goSwitch(row.getAttribute('data-acct'));
+  rndAcct();
+}
+
+// ---------------------------------------------------------------------------
+// onPstOk — successful preset connect completion (ADR-0016): persist the
+// preset as a saved + active Acct (saveActive: mkAcct→addAcct dedupe→
+// saveAccts/saveAct, ADR-0015), then run the shared switch render lifecycle
+// (onSwOk) so the panel/grid/sidebar/footer reflect the connection and the
+// preset now also appears in the saved list. On failure nothing here runs.
+// ---------------------------------------------------------------------------
+function onPstOk(pst, val) {
+  const acct = saveActive(window.IptvSt.getPst(pst));
+  onSwOk(acct, val);
+}
+
+// ---------------------------------------------------------------------------
+// runPst — async: connect to a community preset on the M3U path (ADR-0016),
+// reusing the runSwitch tear-down + reconnect flow. Tears the live session
+// down first; on success persists + renders via onPstOk, on failure shows the
+// inline connect error and leaves the store untouched (ADR-0013 invariant).
+// ---------------------------------------------------------------------------
+async function runPst(pst) {
+  tearDown();
+  window.IptvSt.go('LOAD');
+  rndFoot();
+  const opts = window.IptvSt.getPst(pst);
+  const res  = await window.IptvApi.connect(opts.url, { user: opts.user, pass: opts.pass, m3u: opts.m3u });
+  if (res.ok) { onPstOk(pst, res.val); } else { onFail(res.err); }
+}
+
+// ---------------------------------------------------------------------------
+// goPst — connect to the community preset at S.psts[idx] (ADR-0015/ADR-0016).
+// No-op when that preset is already the active M3U connection (same guard
+// shape as goSwitch).
+// ---------------------------------------------------------------------------
+function goPst(idx) {
+  const pst = window.S.psts[idx];
+  if (!pst) return;
+  const store = window.IptvSt.loadAccts();
+  const act   = window.IptvSt.getAct(store.accts, store.actId);
+  if (act && act.m3u && act.url === pst.url) return;
+  runPst(pst).catch(function onErr(e) { onFail(e.message); });
+}
+
+// ---------------------------------------------------------------------------
+// onPstList — delegate community-preset clicks (#acct-psts, ADR-0016): a
+// [data-pst] click connects to that preset on the M3U path (goPst); the
+// already-active preset is a no-op. Re-renders the panel after a select.
+// ---------------------------------------------------------------------------
+function onPstList(evt) {
+  const row = evt.target.closest('[data-pst]');
+  if (!row) return;
+  goPst(Number(row.getAttribute('data-pst')));
   rndAcct();
 }
 
@@ -379,6 +471,7 @@ function mkEL() {
   EL.aadd  = document.getElementById('acct-add');
   EL.alst  = document.getElementById('acct-list');
   EL.acon  = document.getElementById('acct-conn');
+  EL.apst  = document.getElementById('acct-psts');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -393,6 +486,7 @@ function mkEL() {
   if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
   if (EL.apnl) document.addEventListener('keydown', onAcctKey);
   if (EL.alst) EL.alst.addEventListener('click', onAcctList);
+  if (EL.apst) EL.apst.addEventListener('click', onPstList);
   if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
 }
 
@@ -715,4 +809,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };

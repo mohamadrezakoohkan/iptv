@@ -219,3 +219,76 @@ test('removing the connected account returns to the footer login and empties the
   const act = await page.evaluate(function () { return localStorage.getItem('iptv_act'); });
   expect(act).toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// Community presets section (TASK-0032, ADR-0015/ADR-0016)
+//
+// The remote preset connect is not asserted here (offline-deterministic): the
+// data round-trip is covered by the unit tier and the live iptv-org M3U fetch
+// by the existing integration tier. These UI tests assert the section is the
+// default catalog (present without any saved account), lists S.psts, carries
+// no remove control, and that clicking the active preset is a no-op.
+// ---------------------------------------------------------------------------
+
+// pstCount — the number of curated presets exposed on window.S.
+async function pstCount(page) {
+  return page.evaluate(function () { return window.S.psts.length; });
+}
+
+test('the community playlists section is present with zero saved accounts', async function ({ page }) {
+  await setup(page);
+  await page.click('#acct-btn');
+  await expect(page.locator('#acct-list')).toContainText('No saved accounts');
+  await expect(page.locator('#acct-panel')).toContainText('Community playlists');
+  const n = await pstCount(page);
+  await expect(page.locator('#acct-psts .acct-pst')).toHaveCount(n);
+});
+
+test('each preset row shows its name + url and has no remove control', async function ({ page }) {
+  await setup(page);
+  await page.click('#acct-btn');
+  const first = page.locator('#acct-psts .acct-pst').first();
+  await expect(first.locator('.acct-row-name')).toContainText('iptv-org');
+  await expect(first.locator('.acct-row-srv')).toContainText('https://iptv-org.github.io/iptv/');
+  await expect(page.locator('#acct-psts [data-rm]')).toHaveCount(0);
+  await expect(page.locator('#acct-psts .acct-row-rm')).toHaveCount(0);
+});
+
+test('the presets section sits below the saved list and above Add account', async function ({ page }) {
+  await setup(page);
+  await page.click('#acct-btn');
+  const order = await page.evaluate(function () {
+    const list = document.getElementById('acct-list').getBoundingClientRect().top;
+    const psts = document.getElementById('acct-psts').getBoundingClientRect().top;
+    const add  = document.getElementById('acct-add').getBoundingClientRect().top;
+    return { list, psts, add };
+  });
+  expect(order.list).toBeLessThan(order.psts);
+  expect(order.psts).toBeLessThan(order.add);
+});
+
+test('clicking the active preset is a no-op (it stays connected)', async function ({ page }) {
+  // Seed an active M3U account whose url matches the first preset, then verify
+  // clicking that preset row does not re-trigger a connect / drop the session.
+  await page.goto('http://localhost:3000');
+  const url = await page.evaluate(function () { return window.S.psts[0].url; });
+  await page.evaluate(function (u) {
+    const acct = { id: 'pst0', name: 'iptv-org', url: u, user: '', pass: '', m3u: true };
+    localStorage.setItem('iptv_accts', JSON.stringify([acct]));
+    localStorage.setItem('iptv_act', 'pst0');
+  }, url);
+  await page.reload();
+  await page.evaluate(function () { window.IptvUi.mkEL(); window.IptvUi.rndAcct(); });
+  await page.click('#acct-btn');
+  const activeBefore = await page.locator('#acct-psts .acct-pst.is-active').count();
+  expect(activeBefore).toBe(1);
+  let connects = 0;
+  await page.exposeFunction('onConnectCall', function () { connects += 1; });
+  await page.evaluate(function () {
+    const orig = window.IptvApi.connect;
+    window.IptvApi.connect = function connect() { window.onConnectCall(); return orig.apply(null, arguments); };
+  });
+  await page.click('#acct-psts .acct-pst.is-active');
+  await page.waitForTimeout(300);
+  expect(connects).toBe(0);
+});
