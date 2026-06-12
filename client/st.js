@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003
+// ADR: ADR-0001, ADR-0003, ADR-0008
 /* global window */
 
 'use strict';
@@ -97,9 +97,22 @@ function setFavs(arr) {
 }
 
 // ---------------------------------------------------------------------------
+// getM3u — login mode of stored creds; migrates legacy iptv_creds lacking
+// the m3u flag at read time: true exactly when user and pass are empty
+// strings and url is not "demo" (case-insensitive). Stored-data migration
+// only — never applied to live form input.
+// ADR: ADR-0008
+// ---------------------------------------------------------------------------
+function getM3u(creds) {
+  if (typeof creds.m3u === 'boolean') return creds.m3u;
+  const demo = typeof creds.url === 'string' && creds.url.trim().toLowerCase() === 'demo';
+  return creds.user === '' && creds.pass === '' && !demo;
+}
+
+// ---------------------------------------------------------------------------
 // loadSt — reads all three localStorage keys; populates ST.favs; returns
 // { creds, sel } — called once on page load before any phase transition.
-// ADR: ADR-0003
+// ADR: ADR-0003, ADR-0008
 // ---------------------------------------------------------------------------
 function loadSt() {
   const S  = window.S;
@@ -107,6 +120,7 @@ function loadSt() {
   let creds = null;
   let sel   = null;
   try { creds = JSON.parse(ls.getItem(S.credsKey)); } catch (e) {}
+  if (creds && typeof creds === 'object') creds.m3u = getM3u(creds);
   try { sel   = ls.getItem(S.selKey); } catch (e) {}
   try {
     const f = JSON.parse(ls.getItem(S.favsKey));
@@ -148,6 +162,7 @@ window.IptvSt = {
   setVol,
   setMuted,
   setFavs,
+  getM3u,
   loadSt,
   saveSt,
 };

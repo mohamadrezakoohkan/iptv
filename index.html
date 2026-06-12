@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,6 +60,19 @@
     <footer class="footer" id="footer">
       <div class="footer-login" id="footer-login">
         <form class="footer-form" id="login-form" autocomplete="on">
+          <div class="field field-mode">
+            <label id="login-mode-label">Login mode</label>
+            <div class="login-mode" id="login-mode" role="radiogroup" aria-labelledby="login-mode-label">
+              <label class="mode-opt">
+                <input type="radio" name="login-mode" id="mode-xtream" value="xtream" checked>
+                <span class="mode-txt">Username &amp; Password</span>
+              </label>
+              <label class="mode-opt">
+                <input type="radio" name="login-mode" id="mode-m3u" value="m3u">
+                <span class="mode-txt">Playlist URL only</span>
+              </label>
+            </div>
+          </div>
           <div class="field grow-2">
             <label for="f-url">Portal URL</label>
             <input id="f-url" type="text" placeholder="http://portal.example.com:8080" autocomplete="url" />
@@ -76,7 +89,7 @@
             Connect
           </button>
         </form>
-        <div class="footer-hint" id="footer-hint">Type "demo" as URL to try with a sample playlist.</div>
+        <div class="footer-hint" id="footer-hint">Type "demo" to try a sample playlist.</div>
         <div class="footer-error" id="footer-err" style="display:none"></div>
       </div>
       <div class="footer-conn" id="footer-conn" style="display:none">

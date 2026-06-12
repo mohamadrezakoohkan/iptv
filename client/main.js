@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003
+// ADR: ADR-0001, ADR-0003, ADR-0008
 /* global window, document */
 
 'use strict';
@@ -31,14 +31,16 @@ function onConnRes(res) {
 }
 
 // ---------------------------------------------------------------------------
-// goLoad — transition to LOAD, connect with stored creds, delegate to onConnRes
+// goLoad — transition to LOAD, connect with stored creds (incl. the stored
+// m3u login mode — ADR-0008: replay the chosen mode, never re-detect),
+// delegate to onConnRes
 // ---------------------------------------------------------------------------
 function goLoad(creds) {
   const { go } = window.IptvSt;
   const { rndFoot } = window.IptvUi;
   go('LOAD');
   rndFoot();
-  window.IptvApi.connect(creds.url, { user: creds.user, pass: creds.pass })
+  window.IptvApi.connect(creds.url, { user: creds.user, pass: creds.pass, m3u: creds.m3u })
     .then(onConnRes);
 }
 

@@ -1,4 +1,4 @@
-// ADR: ADR-0001
+// ADR: ADR-0001, ADR-0008
 // Unit tests — rndFoot + connect/disconnect handlers for TASK-0008
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -212,7 +212,7 @@ describe('connect handler — ok:true result', function () {
     // wait for the async runConn to settle
     await new Promise(function resolveNext(res) { setTimeout(res, 0); });
     expect(fakeEvt.preventDefault).toHaveBeenCalled();
-    expect(api.connect).toHaveBeenCalledWith('demo', { user: 'demo', pass: '' });
+    expect(api.connect).toHaveBeenCalledWith('demo', { user: 'demo', pass: '', m3u: false });
   });
 
   it('calls setChs with channels, categories, host, user on success', async function () {

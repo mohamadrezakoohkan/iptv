@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005
+// ADR: ADR-0001, ADR-0005, ADR-0008
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -262,7 +262,7 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
       text: vi.fn().mockResolvedValue(M3U_FIXTURE),
     });
     const api = loadApi(baseGlobals(ftch));
-    const res = await api.connect(M3U_URL, {});
+    const res = await api.connect(M3U_URL, { m3u: true });
     expect(res.ok).toBe(true);
     expect(res.val.host).toBe('example.com');
     expect(res.val.user).toBe('');
@@ -279,7 +279,7 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
       status: 404,
     });
     const api = loadApi(baseGlobals(ftch));
-    const res = await api.connect(M3U_URL, {});
+    const res = await api.connect(M3U_URL, { m3u: true });
     expect(res.ok).toBe(false);
     expect(typeof res.err).toBe('string');
   });
@@ -290,7 +290,7 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
       text: vi.fn().mockResolvedValue('not m3u'),
     });
     const api = loadApi(baseGlobals(ftch));
-    const res = await api.connect(M3U_URL, {});
+    const res = await api.connect(M3U_URL, { m3u: true });
     expect(res.ok).toBe(false);
     expect(res.err).toBe('not an M3U file');
   });
@@ -301,42 +301,141 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
       text: vi.fn().mockResolvedValue(M3U_FIXTURE),
     });
     const api = loadApi(baseGlobals(ftch));
-    await api.connect(M3U_URL, {});
+    await api.connect(M3U_URL, { m3u: true });
     expect(ftch.mock.calls[0][0]).toBe(PROXY_URL);
   });
 });
 
 // ---------------------------------------------------------------------------
-// isM3u
+// connect — explicit opts.m3u routing (ADR-0008)
 // ---------------------------------------------------------------------------
-describe('isM3u', function () {
+describe('connect — explicit opts.m3u routing', function () {
+  const M3U_FIXTURE = [
+    '#EXTM3U',
+    '#EXTINF:-1 tvg-id="c1" tvg-name="Channel One" group-title="News",Channel One',
+    'http://stream.example.com/c1',
+  ].join('\n');
+
+  function baseGlobals(ftch) {
+    return { fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL };
+  }
+
+  it('m3u: true forces the M3U path for a non-playlist URL despite credentials', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      text: vi.fn().mockResolvedValue(M3U_FIXTURE),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list', { user: 'u', pass: 'p', m3u: true });
+    expect(res.ok).toBe(true);
+    expect(res.val.server).toBeNull();
+    expect(res.val.host).toBe('example.com');
+    expect(ftch).toHaveBeenCalledTimes(1);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).not.toContain('player_api.php');
+  });
+
+  it('m3u: false forces the Xtream path even for a .m3u8 URL', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list.m3u8', { user: '', pass: '', m3u: false });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('action=get_live_categories');
+  });
+
+  it('connect("demo", { m3u: true }) still resolves the demo playlist', async function () {
+    vi.useFakeTimers();
+    const ftch = vi.fn();
+    const api = loadApi(baseGlobals(ftch));
+    const p = api.connect('demo', { m3u: true });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('demo');
+    expect(ftch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('connect("demo", { m3u: false }) still resolves the demo playlist', async function () {
+    vi.useFakeTimers();
+    const ftch = vi.fn();
+    const api = loadApi(baseGlobals(ftch));
+    const p = api.connect('demo', { m3u: false });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('demo');
+    expect(ftch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('absent m3u flag defaults to Xtream: credential-less plain URL calls player_api.php', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('http://portal.example.com', { user: '', pass: '' });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('action=get_live_categories');
+  });
+
+  it('absent m3u flag defaults to Xtream: even a .m3u URL routes to player_api.php', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('https://example.com/list.m3u', { user: '', pass: '' });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
+  });
+
+  it('absent m3u flag defaults to Xtream: credentialled plain URL routes to player_api.php', async function () {
+    const ftch = vi.fn().mockResolvedValue({
+      ok:   true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    const api = loadApi(baseGlobals(ftch));
+    const res = await api.connect('http://portal.example.com', { user: 'admin', pass: '1234' });
+    expect(res.ok).toBe(true);
+    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
+  });
+
+  it('connect("demo", {}) with flag absent still resolves the demo playlist', async function () {
+    vi.useFakeTimers();
+    const ftch = vi.fn();
+    const api = loadApi(baseGlobals(ftch));
+    const p = api.connect('demo', {});
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.val.host).toBe('demo');
+    expect(ftch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// export surface — auto-detect heuristic removed (ADR-0008 / TASK-0020)
+// ---------------------------------------------------------------------------
+describe('IptvApi export surface', function () {
   let api;
   beforeEach(function () {
     api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
   });
 
-  it('returns true for URL with .m3u extension', function () {
-    expect(api.isM3u('https://example.com/list.m3u', '', '')).toBe(true);
+  it('exposes exactly connect, isDemo, parsM3u, loadM3u — no auto-detect heuristic', function () {
+    expect(Object.keys(api).sort()).toEqual(['connect', 'isDemo', 'loadM3u', 'parsM3u']);
   });
 
-  it('returns true for URL with .M3U8 extension (case-insensitive)', function () {
-    expect(api.isM3u('https://example.com/list.M3U8', '', '')).toBe(true);
-  });
-
-  it('returns true for .m3u extension even when credentials are provided (extension takes priority)', function () {
-    expect(api.isM3u('https://example.com/list.m3u', 'user', 'pass')).toBe(true);
-  });
-
-  it('returns true for plain http URL with no credentials (no extension)', function () {
-    expect(api.isM3u('http://portal.example.com', '', '')).toBe(true);
-  });
-
-  it('returns false for "demo" (demo bypass)', function () {
-    expect(api.isM3u('demo', '', '')).toBe(false);
-  });
-
-  it('returns false when credentials are present and no extension (Xtream+creds bypass)', function () {
-    expect(api.isM3u('http://portal.example.com', 'admin', '1234')).toBe(false);
+  it('the removed heuristic key is undefined on the export object', function () {
+    const removed = 'is' + 'M3u';
+    expect(api[removed]).toBeUndefined();
   });
 });
 

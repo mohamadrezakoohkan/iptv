@@ -33,7 +33,8 @@ the integration tests, never scattered.
    proxy (ADR-0002), booted in-process on an ephemeral port, successfully
    fetches the live playlist: HTTP 200, body begins with `#EXTM3U`.
 2. **Engine connect + load.** The client engine's M3U path
-   (`IptvApi.connect` → `loadM3u` → `parsM3u`, ADR-0005), driven against the
+   (`IptvApi.connect` with the explicit `m3u: true` mode flag → `loadM3u` →
+   `parsM3u`, ADR-0008; parse mechanics per ADR-0005), driven against the
    live body, resolves `{ ok: true, val }` with: `val.host` equal to the
    expected host, `val.user === ''`, `val.server === null`, more than 100
    channels, more than one category, and sampled channels conforming to the

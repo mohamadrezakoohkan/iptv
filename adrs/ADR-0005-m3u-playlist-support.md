@@ -3,7 +3,7 @@ id: ADR-0005
 title: M3U playlist support — detection, parse, CORS proxy reuse, footer UI adaptation
 date: 2026-06-11
 evolution: 2
-status: accepted
+status: superseded (by ADR-0008)
 governs:
   - client/api.js
   - client/ui.js
@@ -16,6 +16,12 @@ governs:
 ---
 
 # ADR-0005 — M3U playlist support — detection, parse, CORS proxy reuse, footer UI adaptation
+
+> **Superseded by [ADR-0008](ADR-0008-explicit-login-mode.md)** (E4). The
+> detection heuristic (`isM3u`) and the URL-driven footer adaptation are
+> replaced by an explicit user-selected login mode. The M3U parse strategy
+> and CORS proxy reuse decisions are reaffirmed by ADR-0008 and carry
+> forward unchanged under its governance.
 
 ## Context
 

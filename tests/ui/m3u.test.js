@@ -1,5 +1,5 @@
-// ADR: ADR-0005
-// UI tests — M3U URL connect flow for TASK-0012
+// ADR: ADR-0008
+// UI tests — M3U URL connect flow for TASK-0012 (explicit mode since TASK-0018)
 
 'use strict';
 
@@ -13,6 +13,7 @@ test('connect with M3U URL shows either footer-conn or footer-err within 15s (no
 
   await page.goto('http://localhost:3000');
 
+  await page.check('#mode-m3u');
   await page.fill('#f-url', M3U_URL);
   await page.click('#btn-conn');
 
