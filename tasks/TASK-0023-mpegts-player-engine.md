@@ -2,7 +2,7 @@
 id: TASK-0023
 adr: ADR-0010
 evolution: 5
-status: pending
+status: done
 attempts: 0
 depends_on: []
 ---
@@ -47,4 +47,37 @@ the HLS/TS chips reflect the active engine.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+- `client/play.js` rewritten as a dual-engine wrapper: `getEng(url)` picks
+  the engine from the path extension (query stripped, case-insensitive,
+  `.m3u8` → hls, else ts); `getPrx(url)` wraps absolute URLs as
+  `/api/xtream?url=<encoded>` (relative URLs pass through untouched);
+  `runTs` gates on `mpegts.getFeatureList().mseLivePlayback` and uses
+  `mpegts.createPlayer({ type: 'mpegts', isLive: true, url })`;
+  `stopPlay()` destroys whichever engine instance exists. A shared
+  `onEngErr(msg)` sets `ST.err`, transitions to `ERR` (guarded against an
+  ERR→ERR transition), tears down, and calls `IptvUi.rndPhase()` so the
+  error overlay actually renders (it previously relied on a later render).
+  Both engine-unsupported paths (`HLS not supported`,
+  `MPEG-TS not supported`) now also surface the overlay.
+- `index.html`: added mpegts.js 1.7.3 CDN script next to hls.js, and the
+  HLS/TS format chips (`#fmt-chips`, `#chip-hls`, `#chip-ts`) in the
+  content-head — CSS for `.fmt-chips`/`.fmt-chip(.active)` already existed
+  in `client/app.css`, so no CSS change was needed. Chips were never
+  present in the baseline HTML before this task, so "no longer disabled"
+  is realized by rendering them as plain spans with no disabled
+  attribute/class (verified by UI test).
+- `client/ui.js`: EL registry gains `chls`/`cts`; new `rndChip(eng)`
+  toggles the `active` class; exported on `window.IptvUi`. `loadPlay`
+  calls it lazily (play.js loads before ui.js — module order intact).
+- `tests/unit/play.test.js` updated for proxy wrapping (the prior tests
+  asserted raw URLs handed to hls.js; the E5 spec §10.3 now mandates
+  proxied delivery, so the expectations changed to the wrapped form — all
+  prior behaviors otherwise preserved) plus new coverage: engine
+  selection, proxy wrapping, mpegts supported/unsupported, fatal mpegts
+  error, teardown in both switch directions, chip hook.
+- `tests/ui/chips.test.js` (new): chips baseline (visible, enabled,
+  inactive), engine highlighting both ways, demo-mode flow → HLS chip
+  active, error overlay for unsupported and fatal mpegts (stubbed
+  `window.mpegts`), CDN library presence.
+- ADR-0010 `governs:` trued up with the two test files.
+- Integration tests deliberately none — live TS playback is TASK-0024.

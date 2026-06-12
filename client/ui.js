@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -30,6 +30,8 @@ const EL = {
   mode: null,   // #login-mode (radiogroup container)
   mxt:  null,   // #mode-xtream radio
   mm3u: null,   // #mode-m3u radio
+  chls: null,   // #chip-hls format chip (ADR-0010)
+  cts:  null,   // #chip-ts format chip (ADR-0010)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -206,6 +208,8 @@ function mkEL() {
   EL.mode  = document.getElementById('login-mode');
   EL.mxt   = document.getElementById('mode-xtream');
   EL.mm3u  = document.getElementById('mode-m3u');
+  EL.chls  = document.getElementById('chip-hls');
+  EL.cts   = document.getElementById('chip-ts');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -408,6 +412,15 @@ function onDisc() {
 }
 
 // ---------------------------------------------------------------------------
+// rndChip — highlight the format chip of the engine in use (ADR-0010)
+// ---------------------------------------------------------------------------
+function rndChip(eng) {
+  if (!EL.chls || !EL.cts) return;
+  EL.chls.classList.toggle('active', eng === 'hls');
+  EL.cts.classList.toggle('active', eng === 'ts');
+}
+
+// ---------------------------------------------------------------------------
 // rndPlayer — update player-card visibility based on current phase
 // ---------------------------------------------------------------------------
 function rndPlayer() {
@@ -442,4 +455,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, getMode };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode };

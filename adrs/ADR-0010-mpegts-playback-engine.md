@@ -8,6 +8,8 @@ governs:
   - client/play.js
   - client/ui.js
   - index.html
+  - tests/unit/play.test.js
+  - tests/ui/chips.test.js
 ---
 
 # ADR-0010 — MPEG-TS playback via mpegts.js, engine selected by stream URL extension
