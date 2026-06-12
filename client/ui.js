@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0014
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -32,6 +32,13 @@ const EL = {
   mm3u: null,   // #mode-m3u radio
   chls: null,   // #chip-hls format chip (ADR-0010)
   cts:  null,   // #chip-ts format chip (ADR-0010)
+  apnl: null,   // #acct-panel aside (ADR-0014)
+  abtn: null,   // #acct-btn nav button (ADR-0014)
+  ascr: null,   // #acct-scrim backdrop (ADR-0014)
+  acls: null,   // #acct-close button (ADR-0014)
+  aadd: null,   // #acct-add button (ADR-0014)
+  alst: null,   // #acct-list container (ADR-0014)
+  acon: null,   // #acct-conn connected block (ADR-0014)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -198,6 +205,43 @@ function onGridKey(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// setAcct — set account panel open/closed presentational state (ADR-0014).
+// No ST phase, no boolean flag (CONVENTIONS §6): the is-open class on panel +
+// scrim plus the aria attributes are the single source of truth.
+// ---------------------------------------------------------------------------
+function setAcct(open) {
+  if (!EL.apnl || !EL.ascr || !EL.abtn) return;
+  EL.apnl.classList.toggle('is-open', open);
+  EL.ascr.classList.toggle('is-open', open);
+  EL.abtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  EL.apnl.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+// ---------------------------------------------------------------------------
+// onAcctBtn — nav button click: toggle the panel based on current is-open
+// ---------------------------------------------------------------------------
+function onAcctBtn() {
+  if (!EL.apnl) return;
+  setAcct(!EL.apnl.classList.contains('is-open'));
+}
+
+// ---------------------------------------------------------------------------
+// onAcctClose — close button / scrim click: close the panel
+// ---------------------------------------------------------------------------
+function onAcctClose() {
+  setAcct(false);
+}
+
+// ---------------------------------------------------------------------------
+// onAcctKey — Escape keydown closes the panel only when it is open
+// ---------------------------------------------------------------------------
+function onAcctKey(evt) {
+  if (evt.key !== 'Escape') return;
+  if (!EL.apnl || !EL.apnl.classList.contains('is-open')) return;
+  setAcct(false);
+}
+
+// ---------------------------------------------------------------------------
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
@@ -226,6 +270,13 @@ function mkEL() {
   EL.mm3u  = document.getElementById('mode-m3u');
   EL.chls  = document.getElementById('chip-hls');
   EL.cts   = document.getElementById('chip-ts');
+  EL.apnl  = document.getElementById('acct-panel');
+  EL.abtn  = document.getElementById('acct-btn');
+  EL.ascr  = document.getElementById('acct-scrim');
+  EL.acls  = document.getElementById('acct-close');
+  EL.aadd  = document.getElementById('acct-add');
+  EL.alst  = document.getElementById('acct-list');
+  EL.acon  = document.getElementById('acct-conn');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -235,6 +286,10 @@ function mkEL() {
   if (EL.url) EL.url.addEventListener('input', onUrlInput);
   if (EL.mode) EL.mode.addEventListener('change', onMode);
   if (EL.bdis) EL.bdis.addEventListener('click', onDisc);
+  if (EL.abtn) EL.abtn.addEventListener('click', onAcctBtn);
+  if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
+  if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
+  if (EL.apnl) document.addEventListener('keydown', onAcctKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,4 +526,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey };

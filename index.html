@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +35,13 @@
             <span class="fmt-chip" id="chip-hls">HLS</span>
             <span class="fmt-chip" id="chip-ts">TS</span>
           </div>
+          <button type="button" class="acct-btn" id="acct-btn" aria-haspopup="dialog" aria-controls="acct-panel" aria-expanded="false">
+            <svg class="acct-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" fill="currentColor"/>
+              <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" fill="currentColor"/>
+            </svg>
+            <span class="acct-label" id="acct-label">Account</span>
+          </button>
         </div>
         <div class="player-wrap" id="player-wrap">
           <div id="player-card" class="player-card player-idle">
@@ -104,6 +111,16 @@
         </div>
       </div>
     </footer>
+    <div class="acct-scrim" id="acct-scrim"></div>
+    <aside class="acct-panel" id="acct-panel" role="dialog" aria-label="Accounts" aria-hidden="true">
+      <div class="acct-head">
+        <span class="acct-title">Accounts</span>
+        <button type="button" class="acct-close" id="acct-close" aria-label="Close accounts panel">&#10005;</button>
+      </div>
+      <div class="acct-conn" id="acct-conn"></div>
+      <div class="acct-list" id="acct-list"></div>
+      <button type="button" class="btn btn-ghost acct-add" id="acct-add">Add account</button>
+    </aside>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>

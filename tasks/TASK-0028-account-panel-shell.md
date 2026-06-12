@@ -2,8 +2,8 @@
 id: TASK-0028
 adr: ADR-0014
 evolution: 7
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -64,5 +64,46 @@ in TASK-0030.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `index.html` — added `#acct-btn` (account glyph + `#acct-label` span) at the
+  right end of `.content-head` with `aria-haspopup="dialog"`,
+  `aria-controls="acct-panel"`, `aria-expanded="false"`; added `#acct-scrim`
+  backdrop and `#acct-panel` aside (`role="dialog"`, `aria-label="Accounts"`,
+  `aria-hidden="true"`) inside `.app`, containing a header with `#acct-close`,
+  an empty `#acct-conn` block, an empty `#acct-list`, and an `#acct-add`
+  button. Added `ADR-0014` to the file's ADR comment.
+- `client/app.css` — `.acct-btn` (margin-left:auto, right-edge), `.acct-scrim`
+  (fixed, dimmed, `is-open` shows it), `.acct-panel` (fixed right, 320px, full
+  height, `--sur` bg, left border `--ln`, z-index above content,
+  `transform: translateX(100%)` off-screen by default; `.is-open` slides in via
+  CSS transition). Mobile `< 760px`: panel becomes full-width and the button
+  label is hidden. Added `ADR-0014` to the file's ADR comment.
+- `client/ui.js` — `EL` gains `apnl, abtn, ascr, acls, aadd, alst, acon`;
+  `mkEL` resolves them and wires button click → `onAcctBtn`, close click +
+  scrim click → `onAcctClose`, and a document keydown → `onAcctKey`.
+  `setAcct(open)` is the single presentational toggle (no ST phase, no boolean
+  flag — CONVENTIONS §6): it toggles `is-open` on panel + scrim and sets the
+  button `aria-expanded` and panel `aria-hidden`. `onAcctBtn` toggles based on
+  the panel's current `is-open` class; `onAcctClose` closes; `onAcctKey` closes
+  on Escape only when open. New handlers exported on `window.IptvUi`. Added
+  `ADR-0014` to the file's ADR comment.
+- `tests/unit/side.test.js` — added `addEventListener() {}` to the synthetic
+  `document` stub. Non-weakening infra fix: this test's lazy `getElementById`
+  auto-creates an `#acct-panel` stub, so `mkEL` now reaches the guarded
+  `document.addEventListener('keydown', …)`. No assertions changed.
+
+Non-obvious notes:
+
+- The document-level Escape listener is guarded by `if (EL.apnl)` so unit-test
+  fixtures that stub `document` without an `#acct-panel` element (and without
+  `addEventListener`) are unaffected — mirrors the existing `if (EL.x)` guard
+  style and respects the §13 ban on `typeof` undefined checks.
+- Panel open/closed is asserted in the Playwright suite via the `is-open`
+  class, `aria-hidden`, and the panel's on-screen x position rather than
+  `toBeVisible()`, because a panel translated off-screen by `transform` still
+  counts as "visible" to Playwright.
+- `#acct-conn`/`#acct-list` ship empty here; TASK-0030 fills them via `rndAcct`.
+
+Tests: `tests/unit/acctui.test.js` (16 cases) + `tests/ui/acct.test.js` (8
+cases). Full unit suite 343 passing; full UI suite 97 passing.
