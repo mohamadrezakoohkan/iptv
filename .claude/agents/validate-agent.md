@@ -54,10 +54,24 @@ never fix anything.
    - **Unit:** summary `Unit — N tests, PASS`; body a table of test name →
      result.
    - **UI:** summary `UI — N tests, PASS`; body the screenshots the UI suite
-     produced, linked by their committed run-artifacts path with raw-blob URLs
-     (`https://github.com/<owner>/<repo>/raw/<run-branch>/<path>`,
-     `![<name>](…)`). If the UI run produced no screenshots, fall back to a
-     unit-style table and say so — never link an image that will not render.
+     produced, referenced by their committed run-artifacts path on the run
+     branch. **First detect repository visibility deterministically** —
+     `gh repo view --json visibility -q .visibility` (`PUBLIC` /
+     `PRIVATE` / `INTERNAL`) — because GitHub's image proxy fetches an inline
+     image's source anonymously, which only succeeds on a publicly readable
+     repo. Then, per CORE_FLOW.md §3 screenshot-embed rule (the same rule binds
+     the orchestrator when it writes a failed task's block on terminal FAIL):
+     - `visibility == PUBLIC`: embed each inline as
+       `![<name>](https://github.com/<owner>/<repo>/raw/<run-branch>/<path>)`.
+     - any other visibility (private or internal): reference each as a
+       clickable file-viewer link
+       `[<name>](https://github.com/<owner>/<repo>/blob/<run-branch>/<path>)` —
+       never an inline `![…](…/raw/…)` image, which would 404 anonymously and
+       render broken — and add a one-line note that inline thumbnails on a
+       non-public repo require manually dragging the images into the PR in the
+       web UI (out of scope for automation).
+     If the UI run produced no screenshots, fall back to a unit-style table and
+     say so. In every case, never reference an image that will not render.
    - **Integration:** summary `Integration — N tests, PASS`; body "what
      matters": counts (passed / failed / skipped), the assertion groups
      exercised with pass/fail each, the external surfaces hit, and any notable
