@@ -42,17 +42,24 @@ On success the agent returns ONLY this JSON:
   "title": "the entry's short title",
   "user_input": "the human's idea, verbatim",
   "assumptions": ["term: assumption", "..."],
-  "backlog_path": "BACKLOG.md"
+  "backlog_path": "BACKLOG.md",
+  "branch": "backlog/<slug>",
+  "pr_url": "the opened PR URL"
 }
 ```
 
 ## Failure signal
 
-`PHASE-FAILURE: <reason>` — the entry could not be appended (e.g. `BACKLOG.md`
-not writable). No entry is written. Report to the human.
+`PHASE-FAILURE: <reason>` — the capture could not complete: `BACKLOG.md` not
+writable, or `git` / an authenticated `gh` CLI unavailable so the worktree,
+commit, push, or PR could not be created. No entry is published. Report to the
+human.
 
 ## Post-condition
 
-The new entry is appended to `BACKLOG.md` in the working tree, uncommitted.
-No evolution number is consumed and no pipeline phase runs. Committing the
-backlog is the human's decision.
+The new entry is appended to `BACKLOG.md` in a dedicated git worktree on a
+`backlog/<slug>` branch, committed, pushed, and opened as a PR against `main`
+whose description contains only the verbatim idea and the resolved assumptions.
+No evolution number is consumed and no pipeline phase runs. Nothing is ever
+committed, pushed, or merged to `main` — merging the backlog PR is the human's
+decision.
