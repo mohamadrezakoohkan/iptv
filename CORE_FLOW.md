@@ -47,12 +47,14 @@ outside the pipeline.
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
 | **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
-| **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, or git-commit/push anything (the backlog awaits the human) |
+| **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only — in its own dedicated worktree, where it commits, pushes, and opens the backlog PR (§4.5) | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, commit/push/merge to `main`, or force-push |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
 to `main`, pushes to `main`, force-pushes, or merges a pull request.** All run
 work lands on the run's `ai/` branch and reaches `main` only through a PR
-merged by the human (§3, Git & pull-request contract).
+merged by the human (§3, Git & pull-request contract). The backlog path is the
+one path that always commits, pushes, and opens its own PR (§4.5), but on its
+own branch only — never to `main`.
 
 The subagents are defined in `.claude/agents/<name>.md` and are spawned by the
 orchestrator via the Agent tool with `subagent_type` set to the agent name.
@@ -280,7 +282,10 @@ rows, and the integration block records what failed.
 The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
 changes in the working tree, and the human decides when harness changes land.
 (Rule-ledger appends during a build run are different: the orchestrator's
-terminal-failure commit carries them, as part of the run's record.)
+terminal-failure commit carries them, as part of the run's record.) The backlog
+path (§4.5) is the opposite: `backlog-agent` always commits, pushes, and opens a
+PR for its single appended entry — on a dedicated branch in its own worktree,
+never on `main`.
 
 ## 4. The pipeline
 
@@ -298,7 +303,8 @@ Every human prompt takes exactly one of four routes:
 - **Backlog prompt** — an explicit request to park an idea for later ("add to
   the backlog", "note this down") → `backlog-agent` (§4.5). No pipeline, no
   evolution number; non-blocking, may run in the background and in parallel
-  with anything else.
+  with anything else. It always captures the idea in a new worktree, commits,
+  pushes, and opens a PR (§4.5).
 - **Question / status request** → the orchestrator answers directly from the
   files. Nothing is spawned, nothing is written.
 
@@ -469,10 +475,25 @@ spawn, with two fields — `user input:` (the idea verbatim) and `assumptions:`
 (one bullet per resolved term) — and never edits or removes prior entries
 (`BACKLOG.md` is append-only).
 
-The backlog path never touches git history and consumes no evolution number:
-`backlog-agent` commits nothing and pushes nothing. The new entry stays in the
-working tree until the human commits it — committing the backlog is the
-human's decision.
+The backlog path **always** self-publishes — it consumes no evolution number
+but, unlike every other path, never leaves its work in the working tree for the
+human to commit. On every spawn `backlog-agent`:
+
+1. creates a **new git worktree** off the current HEAD on a dedicated branch
+   `backlog/<slug>` (2–5 kebab-case words condensing the idea), so the capture
+   is isolated from any in-flight run sharing the main working tree,
+2. appends its single entry to `BACKLOG.md` in that worktree,
+3. commits it (`backlog: <slug>`),
+4. pushes the branch (`git push -u origin backlog/<slug>`),
+5. opens a PR against `main` (`gh pr create`) whose description contains
+   **only** the exact verbatim user input and the resolved assumptions — no
+   other sections.
+
+It commits and pushes to its own `backlog/<slug>` branch only and opens the PR;
+it never commits, pushes, or merges to `main`, and never force-pushes. Merging
+the backlog PR is the human's decision. If `git` or an authenticated `gh` CLI
+is unavailable, that is a `PHASE-FAILURE` — the backlog path does not fall back
+to an uncommitted write.
 
 ## 5. Failure → Rule protocol
 

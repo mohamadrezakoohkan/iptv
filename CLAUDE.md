@@ -52,8 +52,11 @@ change — the orchestrator decides whether to fix and retry or record a
   backlog", "note this down") → spawn `backlog-agent` with the idea verbatim +
   the Rule Pack. No pipeline, no evolution number. It appends one entry to
   `BACKLOG.md` and is non-blocking: it may run in the background and in
-  parallel with anything else. Relay its report; the entry stays uncommitted
-  until the human decides.
+  parallel with anything else. Unlike every other path, it always self-publishes:
+  it captures the entry in a new git worktree on a `backlog/<slug>` branch,
+  commits, pushes, and opens a PR whose description contains only the verbatim
+  idea and the resolved assumptions. Relay its report and the PR URL; merging
+  the backlog PR is the human's decision.
 
 ## Pipeline summary (canonical version: CORE_FLOW.md §4)
 
@@ -91,7 +94,9 @@ change — the orchestrator decides whether to fix and retry or record a
   `.claude/hooks/**`, and `.github/workflows/validate-ai-instructions.yml`,
   and never touches product artifacts. Also outside the pipeline:
   `backlog-agent` (CORE_FLOW.md §4.5) parks ideas as append-only entries in
-  `BACKLOG.md`, non-blocking and in parallel, and owns nothing else.
+  `BACKLOG.md`, non-blocking and in parallel, and owns nothing else — it always
+  works in a new worktree and commits, pushes, and opens a PR for its entry
+  (never to `main`).
 
 ## Directory map
 
