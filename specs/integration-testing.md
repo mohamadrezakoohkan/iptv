@@ -53,10 +53,15 @@ constants in the integration tests. Behavior under test for this tier:
    yields MPEG-TS bytes (first body byte of a 188-byte-aligned read is the
    sync byte `0x47`); the read is bounded (e.g. first 64 KB) then aborted —
    tests never download a stream indefinitely.
-3. Stream-level flake policy: as with public streams, at least one of a
-   sample of live channels must produce valid TS bytes; the portal API
-   itself (auth, categories, streams listing) is held to an always-up
-   standard.
+3. **TS→HLS remux endpoint.** Requesting `/api/hls?url=<encoded>` for a
+   sampled live channel's `.ts` URL against the in-process server returns
+   HTTP 200 with a body starting `#EXTM3U`, and at least one listed
+   segment fetches with 200 and the TS sync byte `0x47` at offset 0; reads
+   are bounded and the remux session is torn down at test end.
+4. Stream-level flake policy: as with public streams, at least one of a
+   sample of live channels must produce valid TS bytes (or a valid remuxed
+   playlist); the portal API itself (auth, categories, streams listing) is
+   held to an always-up standard.
 
 ## Behavior under test
 

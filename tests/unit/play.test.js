@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010
+// ADR: ADR-0004, ADR-0010, ADR-0012
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -12,6 +12,11 @@ const ST_SRC     = join(__dir, '../../client/st.js');
 // Proxy wrapping expected for every absolute stream URL (ADR-0010)
 function prxOf(url) {
   return '/api/xtream?url=' + encodeURIComponent(url);
+}
+
+// Remux wrapping expected for the MSE-less TS fallback (ADR-0012)
+function rmxOf(url) {
+  return '/api/hls?url=' + encodeURIComponent(url);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,26 +275,128 @@ describe('loadPlay() — mpegts supported', function () {
 });
 
 // ---------------------------------------------------------------------------
-// loadPlay() — mpegts unsupported (mseLivePlayback false / global absent)
+// getRmx() — remux URL construction (ADR-0012)
 // ---------------------------------------------------------------------------
-describe('loadPlay() — mpegts unsupported', function () {
-  it('returns the error Result when mseLivePlayback is false', function () {
-    const ctx = loadPlay({ hls: mkHlsStub(true), ts: mkTsStub(false), native: false });
-    const res = ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
-    expect(res).toEqual({ ok: false, err: 'MPEG-TS not supported' });
+describe('getRmx() — remux URL construction', function () {
+  let ctx;
+
+  beforeEach(function () {
+    ctx = loadPlay({ hls: mkHlsStub(true), ts: null, native: false });
   });
 
-  it('returns the error Result when window.mpegts is absent', function () {
-    const ctx = loadPlay({ hls: mkHlsStub(true), ts: null, native: false });
-    const res = ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
-    expect(res).toEqual({ ok: false, err: 'MPEG-TS not supported' });
+  it('wraps a raw stream URL as /api/hls?url=<encoded>', function () {
+    const url = 'http://h.test/live/u/p/1.ts';
+    expect(ctx.iptvPlay.getRmx(url)).toBe(rmxOf(url));
   });
 
-  it('transitions state to ERR with "MPEG-TS not supported"', function () {
+  it('encodes query strings in the raw URL', function () {
+    const url = 'http://h.test/1.ts?token=a&b=c';
+    expect(ctx.iptvPlay.getRmx(url)).toBe('/api/hls?url=' + encodeURIComponent(url));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadPlay() — MSE-less TS fallback to remuxed HLS (ADR-0012)
+// ---------------------------------------------------------------------------
+describe('loadPlay() — mpegts unsupported, remux fallback', function () {
+  it('falls back ok via hls.js when mseLivePlayback is false', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: mkTsStub(false), native: false });
+    const url = 'http://stream.test/1.ts';
+    const res = ctx.iptvPlay.loadPlay(url);
+    expect(res).toEqual({ ok: true, val: null });
+    expect(hls.log.loadSourceCalls).toEqual([rmxOf(url)]);
+  });
+
+  it('falls back ok via hls.js when window.mpegts is absent', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    const url = 'http://stream.test/1.ts';
+    const res = ctx.iptvPlay.loadPlay(url);
+    expect(res).toEqual({ ok: true, val: null });
+    expect(hls.log.loadSourceCalls).toEqual([rmxOf(url)]);
+  });
+
+  it('hands the remux URL — not the /api/xtream wrapper — to the HLS path', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    const url = 'http://stream.test/live/u/p/9.ts';
+    ctx.iptvPlay.loadPlay(url);
+    expect(hls.log.loadSourceCalls[0]).toBe(rmxOf(url));
+    expect(hls.log.loadSourceCalls[0]).not.toContain('/api/xtream');
+    expect(hls.log.loadSourceCalls[0]).not.toContain(encodeURIComponent(prxOf(url)));
+  });
+
+  it('falls back to native HLS with the remux URL when hls.js is unsupported', function () {
+    const ctx = loadPlay({ hls: mkHlsStub(false), ts: null, native: true });
+    const url = 'http://stream.test/1.ts';
+    const res = ctx.iptvPlay.loadPlay(url);
+    expect(res).toEqual({ ok: true, val: null });
+    expect(ctx.vid.src).toBe(rmxOf(url));
+  });
+
+  it('does not transition to ERR when the fallback engages', function () {
     const ctx = loadPlay({ hls: mkHlsStub(true), ts: mkTsStub(false), native: false });
     ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
+    expect(ctx.win.IptvSt.ST.phase).not.toBe('ERR');
+    expect(ctx.win.IptvSt.ST.err).toBe(null);
+  });
+
+  it('errors "MPEG-TS not supported" only when the fallback HLS path cannot play', function () {
+    const ctx = loadPlay({ hls: null, ts: null, native: false });
+    const res = ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
+    expect(res).toEqual({ ok: false, err: 'MPEG-TS not supported' });
     expect(ctx.win.IptvSt.ST.phase).toBe('ERR');
     expect(ctx.win.IptvSt.ST.err).toBe('MPEG-TS not supported');
+  });
+
+  it('keeps "HLS not supported" for an unplayable .m3u8 URL', function () {
+    const ctx = loadPlay({ hls: null, ts: null, native: false });
+    const res = ctx.iptvPlay.loadPlay('http://stream.test/live.m3u8');
+    expect(res).toEqual({ ok: false, err: 'HLS not supported' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadPlay() — fallback engine teardown across switches (ADR-0012)
+// ---------------------------------------------------------------------------
+describe('loadPlay() — remux fallback teardown', function () {
+  it('destroys the fallback hls instance when switching to another TS channel', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    ctx.iptvPlay.loadPlay('http://stream.test/ch1.ts');
+    ctx.iptvPlay.loadPlay('http://stream.test/ch2.ts');
+    expect(hls.log.destroyCalls).toBe(1);
+    expect(hls.log.loadSourceCalls.length).toBe(2);
+  });
+
+  it('destroys the fallback hls instance when switching to a .m3u8 channel', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    ctx.iptvPlay.loadPlay('http://stream.test/ch1.ts');
+    ctx.iptvPlay.loadPlay('http://stream.test/ch2.m3u8');
+    expect(hls.log.destroyCalls).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadPlay() — chip reflects the engine actually in use (ADR-0012)
+// ---------------------------------------------------------------------------
+describe('loadPlay() — fallback chip rendering', function () {
+  it('renders the hls chip when the TS fallback engages', function () {
+    const ctx  = loadPlay({ hls: mkHlsStub(true), ts: null, native: false });
+    const engs = [];
+    ctx.win.IptvUi = { rndChip: function rndChip(e) { engs.push(e); } };
+    ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
+    expect(engs).toEqual(['hls']);
+  });
+
+  it('renders the ts chip when MSE live playback is available', function () {
+    const ctx  = loadPlay({ hls: mkHlsStub(true), ts: mkTsStub(true), native: false });
+    const engs = [];
+    ctx.win.IptvUi = { rndChip: function rndChip(e) { engs.push(e); } };
+    ctx.iptvPlay.loadPlay('http://stream.test/1.ts');
+    expect(engs).toEqual(['ts']);
   });
 });
 

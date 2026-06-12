@@ -1,4 +1,4 @@
-// ADR: ADR-0010
+// ADR: ADR-0010, ADR-0012
 // Integration — TASK-0024 acceptance gate, full stack:
 // engine (IptvApi.connect, Xtream mode) → in-process proxy → live portal,
 // then the engine's own normalized channel URLs fetched through the proxy
@@ -14,10 +14,13 @@ import { dirname, join } from 'path';
 const req = createRequire(import.meta.url);
 const express = req('express');
 const rtr     = req('../../server/rtr.js');
+const hls     = req('../../server/hls.js');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dir      = dirname(__filename);
 const API_SRC    = join(__dir, '../../client/api.js');
+const PLAY_SRC   = join(__dir, '../../client/play.js');
+const ST_SRC     = join(__dir, '../../client/st.js');
 
 // Personal testing portal — specs/integration-testing.md, Xtream tier.
 const PORTAL  = 'http://mymax.top:8080';
@@ -73,6 +76,39 @@ async function loadBytes(url) {
   }
 }
 
+/**
+ * Build the exact fallback URL client/play.js produces on an MSE-less
+ * browser (ADR-0012): run play.js with no window.mpegts and a recording
+ * Hls stub, call loadPlay with the raw channel URL, return loadSource arg.
+ */
+function getFall(url) {
+  const win = {};
+  const stSrc = readFileSync(ST_SRC, 'utf8');
+  new Function('window', '"use strict";\n' + stSrc)(win);
+  win.IptvSt.go('LOAD');
+  win.IptvSt.go('READY');
+  const calls = [];
+  function HlsCtor() {
+    this.loadSource  = function loadSource(u) { calls.push(u); };
+    this.attachMedia = function attachMedia() {};
+    this.on          = function on() {};
+    this.destroy     = function destroy() {};
+  }
+  HlsCtor.isSupported = function isSupported() { return true; };
+  HlsCtor.Events = { MANIFEST_PARSED: 'm', ERROR: 'e' };
+  win.Hls = HlsCtor;
+  const src = readFileSync(PLAY_SRC, 'utf8');
+  const play = new Function('window', '"use strict";\n' + src + '\nreturn window.IptvPlay;')(win);
+  play.mkPlay({
+    src: '',
+    canPlayType: function canPlayType() { return ''; },
+    play:        function play2() { return Promise.resolve(); },
+    load:        function load() {},
+  });
+  play.loadPlay(url);
+  return calls[0];
+}
+
 beforeAll(async function onBoot() {
   const app = express();
   app.use(rtr);
@@ -87,6 +123,8 @@ beforeAll(async function onBoot() {
 });
 
 afterAll(function onDown() {
+  // Tear every remux session down: ffmpeg killed, temp dirs removed (ADR-0012).
+  for (const sess of [...hls._sess.values()]) hls._rmSess(sess);
   return new Promise(function onWait(done) {
     if (srv === null) { done(); return; }
     srv.close(done);
@@ -128,5 +166,23 @@ describe('e2e — live Xtream connect, list, and stream bytes (acceptance gate)'
     expect(hit).not.toBeNull();
     expect(hit.head).toBe(0x47);
     expect(hit.tot).toBeGreaterThan(0);
+  });
+
+  it('the exact /api/hls URL the MSE-less client fallback builds returns a valid HLS playlist', async function () {
+    const chs = res.val.channels;
+    const msg = [];
+    let hit = null;
+    for (let i = 0; i < Math.min(SAMPLE, chs.length); i++) {
+      const fall = getFall(chs[i].url);
+      expect(fall.startsWith('/api/hls?url=')).toBe(true);
+      expect(fall).toBe('/api/hls?url=' + encodeURIComponent(chs[i].url));
+      const rsp = await fetch(base + fall);
+      if (rsp.status !== 200) { msg.push(`${chs[i].name} -> http ${rsp.status}`); continue; }
+      const txt = await rsp.text();
+      if (!txt.startsWith('#EXTM3U')) { msg.push(`${chs[i].name} -> body not #EXTM3U`); continue; }
+      hit = chs[i].name;
+      break; // flake policy satisfied; do not hammer the portal
+    }
+    expect(hit, `expected >= 1 sampled fallback URL to remux\n${msg.join('\n')}`).not.toBeNull();
   });
 });

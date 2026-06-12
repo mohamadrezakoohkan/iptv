@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010
+// ADR: ADR-0004, ADR-0010, ADR-0012
 /* global window */
 
 'use strict';
@@ -12,6 +12,9 @@ let _ts  = null;   // current mpegts.js player instance
 
 // Local proxy prefix — both engines fetch via XHR; stream hosts lack CORS
 const PRX = '/api/xtream?url=';
+
+// Server remux prefix — TS→HLS fallback for MSE-less browsers (ADR-0012)
+const RMX = '/api/hls?url=';
 
 // ---------------------------------------------------------------------------
 // mkPlay — stores video element reference; called once from main.js
@@ -36,6 +39,20 @@ function getEng(url) {
 function getPrx(url) {
   if (String(url).charAt(0) === '/') return url;
   return PRX + encodeURIComponent(url);
+}
+
+// ---------------------------------------------------------------------------
+// getRmx — pure: wrap a raw stream URL through the server remux endpoint
+// ---------------------------------------------------------------------------
+function getRmx(url) {
+  return RMX + encodeURIComponent(url);
+}
+
+// ---------------------------------------------------------------------------
+// updChip — reflect the engine actually in use on the format chips (ADR-0012)
+// ---------------------------------------------------------------------------
+function updChip(eng) {
+  if (window.IptvUi && window.IptvUi.rndChip) window.IptvUi.rndChip(eng);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,23 +150,28 @@ function stopPlay() {
 
 // ---------------------------------------------------------------------------
 // runHls — hls.js path with native fallback (ADR-0004); returns Result<T>
+// msg overrides the failure message (remux fallback double failure, ADR-0012)
 // ---------------------------------------------------------------------------
-function runHls(url) {
+function runHls(url, msg) {
   if (window.Hls && window.Hls.isSupported()) return loadHls(url);
   if (_vid.canPlayType('application/vnd.apple.mpegurl')) return loadNative(url);
-  onEngErr('HLS not supported');
-  return { ok: false, err: 'HLS not supported' };
+  const err = msg ?? 'HLS not supported';
+  onEngErr(err);
+  return { ok: false, err };
 }
 
 // ---------------------------------------------------------------------------
-// runTs — mpegts.js path gated on feature support; returns Result<T>
+// runTs — mpegts.js direct when MSE live playback exists; otherwise fall
+// back to the server TS→HLS remux of the raw URL (ADR-0012). Takes the
+// raw (un-proxied) stream URL; the chip reflects the engine actually used.
 // ---------------------------------------------------------------------------
 function runTs(url) {
-  if (!hasTs()) {
-    onEngErr('MPEG-TS not supported');
-    return { ok: false, err: 'MPEG-TS not supported' };
+  if (hasTs()) {
+    updChip('ts');
+    return loadTs(getPrx(url));
   }
-  return loadTs(url);
+  updChip('hls');
+  return runHls(getRmx(url), 'MPEG-TS not supported');
 }
 
 // ---------------------------------------------------------------------------
@@ -157,13 +179,12 @@ function runTs(url) {
 // ---------------------------------------------------------------------------
 function loadPlay(url) {
   if (_hls || _ts) stopPlay();
-  const eng = getEng(url);
-  if (window.IptvUi && window.IptvUi.rndChip) window.IptvUi.rndChip(eng);
-  if (eng === 'ts') return runTs(getPrx(url));
+  if (getEng(url) === 'ts') return runTs(url);
+  updChip('hls');
   return runHls(getPrx(url));
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvPlay = { mkPlay, loadPlay, stopPlay, getEng, getPrx };
+window.IptvPlay = { mkPlay, loadPlay, stopPlay, getEng, getPrx, getRmx };

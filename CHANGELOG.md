@@ -5,6 +5,18 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #6 — 2026-06-12 — TS→HLS remux fallback for MSE-less devices (iOS Safari)
+
+- **Prompt:** Fix "MPEG-TS not supported" when opening streams after login (MSE-less devices, e.g. iOS Safari).
+- **Outcome:** Shipped. Both tasks completed and validated, first attempt each.
+- **ADRs:** ADR-0012 (server-side TS→HLS live remux fallback — ffmpeg stream copy via the `ffmpeg-static` npm package, `/api/hls` endpoint with per-source sessions, idle reaping, and segment serving; client falls back to the remuxed HLS through the existing hls.js/native-HLS path when MSE is unavailable; extends ADR-0010/ADR-0011, both stay accepted).
+- **Tasks:** 2 done, 0 failed, 0 blocked. TASK-0025 server remux endpoint (`server/hls.js`, mounted from `server/rtr.js`: SSRF-gated `GET /api/hls?url=`, session reuse, `+delete_segments` sliding window, 502 on ffmpeg failure/startup timeout, traversal-safe segment route, idle-reap teardown) · TASK-0026 client fallback (`client/play.js`: `hasTs()` false → `runHls(getRmx(url))` with the raw stream URL, HLS chip reflects the engine in use, "MPEG-TS not supported" only on double failure; MSE-capable behavior byte-identical to E5).
+- **Tests:** 297 unit (Vitest) + 89 UI (Playwright, incl. MSE-less stubbed fallback) + 25 integration (Vitest, live network — incl. live remux of a real portal channel to a fetchable `#EXTM3U` playlist with valid TS segments, and the client-built fallback URL proven against the in-process server) — all passing.
+- **Rules earned:** none.
+- **Artifacts:** `server/hls.js` (new), `server/rtr.js`, `client/play.js`, `package.json` (`ffmpeg-static`), `specs/iptv-player.md`, `specs/integration-testing.md`, `tests/unit/{hls,play}.test.js`, `tests/ui/{fallback,chips}.test.js`, `tests/int/{remux,e2e}.test.js`, `adrs/ADR-0012-server-hls-remux-fallback.md`, `tasks/TASK-002{5,6}-*.md`.
+
+---
+
 ## #5 — 2026-06-12 — Xtream connect + stream playback against a personal portal
 
 - **Prompt:** iptv can't connect to the personal Xtream test portal `http://mymax.top:8080` — make it connect and play a stream.

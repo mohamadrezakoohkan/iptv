@@ -1,4 +1,4 @@
-// ADR: ADR-0010
+// ADR: ADR-0010, ADR-0012
 // UI tests — HLS/TS format chips + dual-engine error overlay for TASK-0023.
 // Live TS playback is proven by integration tests in TASK-0024; here the
 // mpegts global is stubbed where needed.
@@ -98,7 +98,9 @@ test('demo mode playback activates the HLS chip', async function ({ page }) {
 });
 
 // ---------------------------------------------------------------------------
-// Error overlay — unsupported MPEG-TS engine
+// Error overlay — MSE-less AND the HLS fallback path cannot play (ADR-0012:
+// with MSE missing the player now falls back to remuxed HLS, so the overlay
+// appears only when hls.js and native HLS are both unavailable too)
 // ---------------------------------------------------------------------------
 test('unsupported mpegts shows the error overlay', async function ({ page }) {
   await setup(page);
@@ -108,6 +110,8 @@ test('unsupported mpegts shows the error overlay', async function ({ page }) {
       getFeatureList: function () { return { mseLivePlayback: false }; },
       createPlayer: function () {},
     };
+    window.Hls = { isSupported: function () { return false; } };
+    document.getElementById('player-video').canPlayType = function () { return ''; };
     window.IptvSt.go('LOAD');
     window.IptvSt.go('READY');
     window.IptvSt.setCur({ id: '1', name: 'TS Channel', url: '', img: '', cat: 'news', num: 1 });
