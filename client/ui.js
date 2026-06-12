@@ -242,6 +242,108 @@ function onAcctKey(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// getSrv — pure: the server URL shown for an account; the demo playlist shows
+// the literal "demo" (its stored url), any other account shows its url (ADR-0014).
+// ---------------------------------------------------------------------------
+function getSrv(acct) {
+  return acct.url || acct.name;
+}
+
+// ---------------------------------------------------------------------------
+// mkRow — build one account-list row HTML: name + server url, the active
+// marker (is-active class + indicator), a switch target (data-acct) and a
+// remove control (data-rm). opts: { acct, act } (ADR-0014).
+// ---------------------------------------------------------------------------
+function mkRow(opts) {
+  const a   = opts.acct;
+  const on  = (opts.act && a.id === opts.act) ? ' is-active' : '';
+  return '<div class="acct-row' + on + '" role="button" tabindex="0" data-acct="' + a.id + '">'
+    + '<span class="acct-row-dot" aria-hidden="true"></span>'
+    + '<span class="acct-row-meta">'
+    + '<span class="acct-row-name">' + a.name + '</span>'
+    + '<span class="acct-row-srv">' + getSrv(a) + '</span>'
+    + '</span>'
+    + '<button type="button" class="acct-row-rm" data-rm="' + a.id + '" aria-label="Remove account">&#10005;</button>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndConn — render the connected-account block (#acct-conn): name + server URL
+// + "Connected" dot when an account is active; a "Not connected" line otherwise
+// (ADR-0014). act is the active Acct or null.
+// ---------------------------------------------------------------------------
+function rndConn(act) {
+  if (!EL.acon) return;
+  if (!act) {
+    EL.acon.innerHTML = '<span class="acct-conn-off">Not connected</span>';
+    return;
+  }
+  EL.acon.innerHTML = '<span class="acct-conn-dot" aria-hidden="true"></span>'
+    + '<span class="acct-conn-meta">'
+    + '<span class="acct-conn-name">' + act.name + '</span>'
+    + '<span class="acct-conn-srv">' + getSrv(act) + '</span>'
+    + '</span>'
+    + '<span class="acct-conn-stat">Connected</span>';
+}
+
+// ---------------------------------------------------------------------------
+// rndList — render the account-list rows (#acct-list), one per saved account,
+// the active one marked. store: { accts, actId } (ADR-0014).
+// ---------------------------------------------------------------------------
+function rndList(store) {
+  if (!EL.alst) return;
+  if (!store.accts || store.accts.length === 0) {
+    EL.alst.innerHTML = '<p class="acct-empty">No saved accounts.</p>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < store.accts.length; i += 1) {
+    html += mkRow({ acct: store.accts[i], act: store.actId });
+  }
+  EL.alst.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// rndAcct — render the whole account panel from the store (ADR-0013/ADR-0014):
+// the nav button label, the connected block, and the list. Called after every
+// connect, disconnect, switch, add, and remove so the surfaces never disagree.
+// ---------------------------------------------------------------------------
+function rndAcct() {
+  const st    = window.IptvSt;
+  const store = st.loadAccts();
+  const act   = st.getAct(store.accts, store.actId);
+  const lbl   = document.getElementById('acct-label');
+  if (lbl) lbl.textContent = act ? act.name : 'Account';
+  rndConn(act);
+  rndList(store);
+}
+
+// ---------------------------------------------------------------------------
+// onAcctList — delegate account-list clicks (ADR-0014): a [data-rm] click
+// removes that account; a non-active [data-acct] click switches to it; the
+// already-active row is a no-op. Re-renders the panel after any of these.
+// ---------------------------------------------------------------------------
+function onAcctList(evt) {
+  const rm = evt.target.closest('[data-rm]');
+  if (rm) { onAcctRm(rm.getAttribute('data-rm')); rndAcct(); return; }
+  const row = evt.target.closest('[data-acct]');
+  if (!row) return;
+  goSwitch(row.getAttribute('data-acct'));
+  rndAcct();
+}
+
+// ---------------------------------------------------------------------------
+// onAcctAdd — add-account action (#acct-add): close the panel, reset the footer
+// to the logged-out login form, and focus the URL field (ADR-0014). A later
+// successful footer connect saves it as a new active account (onOk).
+// ---------------------------------------------------------------------------
+function onAcctAdd() {
+  setAcct(false);
+  tearDown();
+  if (EL.url && EL.url.focus) EL.url.focus();
+}
+
+// ---------------------------------------------------------------------------
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
@@ -290,6 +392,8 @@ function mkEL() {
   if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
   if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
   if (EL.apnl) document.addEventListener('keydown', onAcctKey);
+  if (EL.alst) EL.alst.addEventListener('click', onAcctList);
+  if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +535,7 @@ function onOk(val) {
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
   rndFoot();
+  rndAcct();
   if (EL.bcon) { EL.bcon.textContent = 'Connect'; EL.bcon.disabled = false; }
   if (EL.url)   EL.url.disabled   = false;
   if (EL.uname) EL.uname.disabled = false;
@@ -487,6 +592,7 @@ function onSwOk(acct, val) {
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
   rndFoot();
+  rndAcct();
 }
 
 // ---------------------------------------------------------------------------
@@ -552,6 +658,7 @@ function tearDown() {
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
+  rndAcct();
 }
 
 // ---------------------------------------------------------------------------
@@ -608,4 +715,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd };

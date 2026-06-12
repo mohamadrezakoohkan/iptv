@@ -479,7 +479,7 @@ function runMain(acct) {
       loadAccts: function loadAcctsFake() { return { accts, actId: acct ? acct.id : null }; },
       getAct:    function getActFake(list, id) { return list.find(function byId(a) { return a.id === id; }) || null; },
     },
-    IptvUi:   { mkEL: vi.fn(), onPhase: vi.fn(), rndPhase: vi.fn(), rndFoot: vi.fn(), rndSide: vi.fn(), rndGrid: vi.fn() },
+    IptvUi:   { mkEL: vi.fn(), onPhase: vi.fn(), rndPhase: vi.fn(), rndFoot: vi.fn(), rndSide: vi.fn(), rndGrid: vi.fn(), rndAcct: vi.fn() },
     IptvPlay: { mkPlay: vi.fn() },
     IptvApi:  { connect },
     IptvSrch: { getChs: function getChs() { return []; } },

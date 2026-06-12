@@ -169,3 +169,53 @@ test('disconnect shows the footer login but keeps the saved account', async func
   expect(after.accts.length).toBe(1);
   expect(after.act).toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// Panel contents after connect (TASK-0030, ADR-0014)
+// ---------------------------------------------------------------------------
+
+test('after a demo connect the panel shows the connected account name + server url', async function ({ page }) {
+  await connectDemo(page);
+  await page.click('#acct-btn');
+  await expect(page.locator('#acct-conn')).toContainText('Demo');
+  await expect(page.locator('#acct-conn')).toContainText('demo');
+  await expect(page.locator('#acct-conn .acct-conn-stat')).toHaveText('Connected');
+});
+
+test('the nav button label shows the active account name after connect', async function ({ page }) {
+  await connectDemo(page);
+  await expect(page.locator('#acct-label')).toHaveText('Demo');
+});
+
+test('the list shows one row marked active for the connected account', async function ({ page }) {
+  await connectDemo(page);
+  await page.click('#acct-btn');
+  const rows = page.locator('#acct-list .acct-row');
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('#acct-list .acct-row.is-active')).toHaveCount(1);
+  await expect(page.locator('#acct-list .acct-row.is-active')).toContainText('Demo');
+});
+
+test('"Add account" closes the panel and reveals the footer login with the URL field focused', async function ({ page }) {
+  await connectDemo(page);
+  await page.click('#acct-btn');
+  await expect(page.locator('#acct-panel')).toHaveClass(/is-open/);
+  await page.click('#acct-add');
+  await expect(page.locator('#acct-panel')).not.toHaveClass(/is-open/);
+  await page.locator('#footer-login').waitFor({ state: 'visible', timeout: 3000 });
+  const focused = await page.evaluate(function () {
+    return document.activeElement && document.activeElement.id === 'f-url';
+  });
+  expect(focused).toBe(true);
+});
+
+test('removing the connected account returns to the footer login and empties the list', async function ({ page }) {
+  await connectDemo(page);
+  await page.click('#acct-btn');
+  await page.click('#acct-list .acct-row.is-active [data-rm]');
+  await page.locator('#footer-login').waitFor({ state: 'visible', timeout: 3000 });
+  await expect(page.locator('#acct-list')).toContainText('No saved accounts');
+  await expect(page.locator('#acct-label')).toHaveText('Account');
+  const act = await page.evaluate(function () { return localStorage.getItem('iptv_act'); });
+  expect(act).toBeNull();
+});

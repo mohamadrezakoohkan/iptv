@@ -58,6 +58,7 @@ function onReady() {
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
+  window.IptvUi.rndAcct();
   const loadStFn = window.IptvSt.loadSt;
   _stored = loadStFn ? loadStFn() : null;
   const { loadAccts, getAct } = window.IptvSt;

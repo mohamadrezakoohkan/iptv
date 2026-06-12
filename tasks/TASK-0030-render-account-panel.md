@@ -2,8 +2,8 @@
 id: TASK-0030
 adr: ADR-0014
 evolution: 7
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0027, TASK-0028, TASK-0029]
 ---
 
@@ -64,5 +64,51 @@ helpers (TASK-0027) and lifecycle paths (TASK-0029).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched**
+
+- `client/ui.js` — new render + handler functions: `getSrv` (pure: server URL
+  shown for an account; demo → its stored `"demo"` url), `mkRow` (one
+  `.acct-row` HTML string: `data-acct`/`data-rm`, `is-active` marker + dot),
+  `rndConn` (connected block: name + server url + green Connected dot, or a
+  "Not connected" line), `rndList` (one row per saved account, empty-state
+  line when none), `rndAcct` (composes the nav-button label, connected block,
+  and list from `loadAccts()`/`getAct()`), `onAcctList` (delegates row clicks:
+  `[data-rm]` → `onAcctRm` then re-render; non-active `[data-acct]` →
+  `goSwitch`; active row → no-op), `onAcctAdd` (closes the panel, `tearDown` to
+  the logged-out footer, focuses `#f-url`). Listeners for `#acct-list` and
+  `#acct-add` wired in `mkEL`; the three new entry points exported on
+  `window.IptvUi`. `rndAcct()` is now called from `onOk` (connect), `onSwOk`
+  (switch complete), and `tearDown` (disconnect / add / remove-active), so the
+  nav button, connected block, list, and footer never disagree.
+- `client/main.js` — `onReady` calls `window.IptvUi.rndAcct()` once at init so
+  the button + panel reflect the active account on load.
+- `client/app.css` — styles for `.acct-conn*` (connected block) and
+  `.acct-row*` (list rows incl. `.is-active`), plus an `.acct-empty` line.
+- `tests/unit/acctui.test.js` — TASK-0030 unit tests: a richer loader
+  (`loadUiStore`) providing a configurable account store + a real
+  `#acct-label`; covers the button label, connected vs not-connected block,
+  demo server-url rendering, list rows with `data-acct`/`data-rm` and the
+  `is-active` marker, the empty state, and `onAcctList` switch / remove /
+  active-no-op + `onAcctAdd` reset.
+- `tests/ui/acct.test.js` — TASK-0030 e2e: after a demo connect the panel
+  shows the connected name + server url, the nav label shows the name, the
+  list has one active row; "Add account" closes the panel and focuses
+  `#f-url`; removing the connected account returns to the footer login and
+  empties the list.
+- `tests/unit/foot.test.js`, `tests/unit/persist.test.js` — test-stub upkeep
+  only: added `getAct` (foot) and a `rndAcct: vi.fn()` (persist) to the
+  hand-rolled `IptvSt`/`IptvUi` stubs so they match the new contract
+  (`onOk`/`onReady` now call `rndAcct`). No assertions weakened.
+
+**Non-obvious**
+
+- Switch is asynchronous: `onAcctList` calls `goSwitch` (which tears down then
+  reconnects); the final panel state is rendered by `onSwOk`/`tearDown`, not by
+  the immediate post-call `rndAcct` (kept only for the active-no-op case).
+- Per R-0001: the rendered rows are produced fresh by `rndAcct` (not mutated
+  in place), and the asserted `data-acct`/`data-rm`/`is-active` attributes are
+  exactly the ones `mkRow` emits — confirmed against the emitted HTML, not
+  against pre-existing baseline markup.
+- No `governs:` change needed: every file touched is already governed by its
+  ADR (ui.js/app.css/index.html/acctui/acct → ADR-0014; main.js → ADR-0013)
+  and carries its `ADR:` comment.
