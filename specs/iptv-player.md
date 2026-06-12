@@ -82,14 +82,16 @@ when none is connected), opening the right-side account panel on click.
   and a channel-count badge. Categories come from the source's own grouping in
   the source's own order: **Xtream** from `get_live_categories` (ADR-0009),
   **demo** from its curated category set. **M3U / playlist sources (including
-  the community presets, which all connect via the M3U path) expose NO
-  categories** — their sidebar is the flat list of just "All Channels" and
-  "Favourites", with no per-group buttons (ADR-0020). M3U `group-title`
-  categorization is removed: public M3U files pack semicolon-joined genres
-  (e.g. `Classic;Comedy;Public;Series`) into one `group-title`, which produced
-  useless category buttons. Clicking a category button (Xtream/demo only)
-  filters the channel grid by `ch.cat`. There is no genre-filter input and no
-  alphabetical re-ordering — the list is the source's categories as delivered.
+  the community presets, which all connect via the M3U path) derive categories
+  from the first-level segment of `group-title`** — the text before the first
+  `;`, trimmed and deduped (ADR-0020). Public M3U files pack a hierarchical,
+  semicolon-joined path (`category;subcategory;…`, e.g.
+  `Classic;Comedy;Public;Series`) into one `group-title`; only the first-level
+  segment is a real category, so `Classic;Comedy`, `Classic;Series`, and
+  `Classic;Music` all collapse to a single `Classic` category button. Clicking
+  a category button filters the channel grid by `ch.cat`. There is no
+  genre-filter input and no alphabetical re-ordering — the list is the source's
+  categories as delivered.
 - Active category button has `--acc` left border + text colour.
 - Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
   brand and search input are hidden.
@@ -241,10 +243,13 @@ whose `val` is:
 
 1. `src === "demo"` (case-insensitive) → demo playlist, in either mode.
 2. `opts.m3u === true` → M3U path: fetch `src` through the proxy, parse
-   `#EXTM3U` text into channels. The M3U path returns an **empty `categories`
-   array** — playlist sources are not categorized (ADR-0020); the sidebar
-   shows only "All Channels" + "Favourites". Parsed channels keep `cat` as an
-   empty string (no group).
+   `#EXTM3U` text into channels. The M3U path returns `categories` derived from
+   the **first-level segment** of each channel's `group-title` — the text
+   before the first `;`, trimmed and deduped in first-seen order (ADR-0020);
+   `Classic;Comedy`, `Classic;Series`, `Classic;Music` collapse to one
+   `Classic`. Each parsed channel's `grp` and `cat` are that first-level
+   segment (fallback `"Other"` when `group-title` is absent/empty), so the grid
+   filter `ch.cat === id` matches the sidebar button.
 3. otherwise → Xtream path: `player_api.php` categories + live streams.
 
 **Xtream normalization.** The Xtream path must return the same normalized
