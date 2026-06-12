@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -345,8 +345,10 @@ describe('connect(m3uUrl) — loadM3u integration', function () {
     expect(res.val.host).toBe('example.com');
     expect(res.val.user).toBe('');
     expect(res.val.server).toBeNull();
-    expect(Array.isArray(res.val.categories)).toBe(true);
-    expect(res.val.categories.length).toBeGreaterThan(0);
+    expect(res.val.categories).toEqual([
+      { category_id: 'News', category_name: 'News' },
+      { category_id: 'Sports', category_name: 'Sports' },
+    ]);
     expect(Array.isArray(res.val.channels)).toBe(true);
     expect(res.val.channels.length).toBeGreaterThan(0);
   });
@@ -552,24 +554,47 @@ describe('parsM3u', function () {
     expect(ch2.num).toBe(2);
   });
 
-  it('derives deduplicated ordered categories from channels', function () {
+  it('derives deduplicated first-level categories from semicolon group-titles (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
-      '#EXTINF:-1 group-title="Sports",Sport A',
+      '#EXTINF:-1 group-title="Classic;Comedy;Public;Series",Channel A',
       'http://stream.example.com/a',
-      '#EXTINF:-1 group-title="News",News A',
+      '#EXTINF:-1 group-title="Classic;Series",Channel B',
       'http://stream.example.com/b',
-      '#EXTINF:-1 group-title="Sports",Sport B',
+      '#EXTINF:-1 group-title="Classic;Music",Channel C',
       'http://stream.example.com/c',
+      '#EXTINF:-1 group-title="News;World",Channel D',
+      'http://stream.example.com/d',
     ].join('\n');
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
-    expect(res.val.categories).toHaveLength(2);
-    expect(res.val.categories[0]).toEqual({ category_id: 'Sports', category_name: 'Sports' });
-    expect(res.val.categories[1]).toEqual({ category_id: 'News', category_name: 'News' });
+    // The three Classic;* variants collapse to a single Classic entry.
+    expect(res.val.categories).toEqual([
+      { category_id: 'Classic', category_name: 'Classic' },
+      { category_id: 'News', category_name: 'News' },
+    ]);
+    // No derived category id or name contains a semicolon.
+    expect(res.val.categories.every(function noSemi(c) {
+      return c.category_id.indexOf(';') === -1 && c.category_name.indexOf(';') === -1;
+    })).toBe(true);
+    expect(res.val.channels).toHaveLength(4);
+    expect(res.val.channels.map(function nm(ch) { return ch.name; }))
+      .toEqual(['Channel A', 'Channel B', 'Channel C', 'Channel D']);
+    expect(res.val.channels.map(function ur(ch) { return ch.url; })).toEqual([
+      'http://stream.example.com/a',
+      'http://stream.example.com/b',
+      'http://stream.example.com/c',
+      'http://stream.example.com/d',
+    ]);
+    // Each channel's cat and grp equal its first-level segment, and cat === grp.
+    expect(res.val.channels.map(function cat(ch) { return ch.cat; }))
+      .toEqual(['Classic', 'Classic', 'Classic', 'News']);
+    expect(res.val.channels.every(function sameCatGrp(ch) {
+      return ch.cat === ch.grp && ch.cat.indexOf(';') === -1;
+    })).toBe(true);
   });
 
-  it('defaults grp to "Other" when group-title is absent', function () {
+  it('defaults grp/cat to "Other" when group-title is absent (ADR-0020)', function () {
     const txt = [
       '#EXTM3U',
       '#EXTINF:-1 tvg-name="No Group Channel",No Group Channel',
@@ -578,7 +603,8 @@ describe('parsM3u', function () {
     const res = api.parsM3u(txt);
     expect(res.ok).toBe(true);
     expect(res.val.channels[0].grp).toBe('Other');
-    expect(res.val.categories[0]).toEqual({ category_id: 'Other', category_name: 'Other' });
+    expect(res.val.channels[0].cat).toBe('Other');
+    expect(res.val.categories).toEqual([{ category_id: 'Other', category_name: 'Other' }]);
   });
 
   it('skips an #EXTINF entry whose following stream URL line is absent', function () {

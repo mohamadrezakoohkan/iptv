@@ -22,6 +22,14 @@ governs:
 > replaced by an explicit user-selected login mode. The M3U parse strategy
 > and CORS proxy reuse decisions are reaffirmed by ADR-0008 and carry
 > forward unchanged under its governance.
+>
+> **Parse-strategy step 5 (deriving categories from `group-title`) refined
+> by [ADR-0020](ADR-0020-m3u-first-level-categories.md)** (E12): M3U categories
+> are derived from the **first-level segment** of `group-title` (the text
+> before the first `;`, trimmed and deduped) rather than the raw string, so
+> `Classic;Comedy`, `Classic;Series`, `Classic;Music` collapse to one `Classic`
+> category. M3U categorization is kept, not removed. The rest of the parse
+> strategy is unchanged.
 
 ## Context
 

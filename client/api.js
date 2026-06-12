@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -259,20 +259,33 @@
     return idx >= 0 ? line.slice(idx + 1).trim() : '';
   }
 
-  /** Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num} */
+  /**
+   * First-level segment of a group-title (ADR-0020): the text before the first
+   * ';', trimmed. Empty/absent input falls back to 'Other'. The iptv-org
+   * convention uses ';' strictly as the category;subcategory hierarchy
+   * separator, so "Classic;Comedy;Series" → "Classic".
+   */
+  function firstSeg(groupTitle) {
+    const seg = String(groupTitle == null ? '' : groupTitle).split(';')[0].trim();
+    return seg.length > 0 ? seg : 'Other';
+  }
+
+  /**
+   * Build a Ch-conformant object from parsed M3U entry info. opts: {tvgId, tvgName, grp, img, chanName, strUrl, num}
+   * grp and cat are both the first-level segment of group-title (ADR-0020), so
+   * the grid filter (ch.cat === id) matches the sidebar button id — mirroring
+   * the M3U convention where category_id is the grp string. Fallback 'Other'.
+   */
   function mkM3uCh(opts) {
-    const grp = opts.grp || 'Other';
+    const seg = firstSeg(opts.grp);
     return {
-      id:          opts.tvgId || String(opts.num),
-      name:        opts.tvgName || opts.chanName,
-      grp,
-      url:         opts.strUrl,
-      img:         opts.img,
-      cat:         grp,
-      num:         opts.num,
-      stream_id:   opts.num,
-      category_id: grp,
-      categoryId:  grp,
+      id:   opts.tvgId || String(opts.num),
+      name: opts.tvgName || opts.chanName,
+      grp:  seg,
+      url:  opts.strUrl,
+      img:  opts.img,
+      cat:  seg,
+      num:  opts.num,
     };
   }
 
@@ -306,15 +319,20 @@
     return chs;
   }
 
-  /** Derive deduplicated ordered categories array from channels list. */
+  /**
+   * Derive deduplicated, first-seen-ordered categories from a channels list
+   * (ADR-0020). Each channel's cat is already its first-level group-title
+   * segment, so the category id and name are that same string — shaped as
+   * { category_id, category_name } to match the Xtream/sidebar category object.
+   */
   function getM3uCats(chs) {
     const seen = new Set();
     const cats = [];
     for (let i = 0; i < chs.length; i += 1) {
-      const grp = chs[i].grp;
-      if (!seen.has(grp)) {
-        seen.add(grp);
-        cats.push({ category_id: grp, category_name: grp });
+      const seg = chs[i].cat;
+      if (!seen.has(seg)) {
+        seen.add(seg);
+        cats.push({ category_id: seg, category_name: seg });
       }
     }
     return cats;
@@ -330,6 +348,8 @@
 
   /**
    * Pure M3U parser. Returns Result<{categories, channels}>.
+   * categories are the deduplicated first-level group-title segments
+   * (ADR-0020): "Classic;Comedy" and "Classic;Music" collapse to one "Classic".
    * @param {string} text - raw M3U playlist text
    */
   function parsM3u(text) {
