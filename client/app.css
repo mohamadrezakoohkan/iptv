@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -193,6 +193,13 @@ body.is-err .player-wrap { display: none; }
 .acct-row-rm { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--dim); cursor: pointer; font-size: 12px; line-height: 1; }
 .acct-row-rm:hover { border-color: var(--live); color: var(--live); }
 .acct-row-rm:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Community presets section (#acct-psts) — ADR-0016. Reuses the .acct-row*
+   visual language; rows carry no remove control (static catalog). */
+.acct-psts-sec { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.acct-psts-title { font: 700 11px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); padding: 0 2px; }
+.acct-psts { display: flex; flex-direction: column; gap: 6px; }
+.acct-row.acct-pst { padding-right: 12px; }
 
 @media (max-width: 760px) {
   .acct-panel { width: 100%; }

@@ -433,3 +433,44 @@ Panel contents, top to bottom:
   footer login); removing a non-active account leaves the session untouched.
 - A failed connect (switch or add) never mutates the saved-accounts store and
   surfaces the existing inline connect error (§7).
+
+### 13e. Community playlists (presets)
+
+The app ships a small, curated **default account list provided by the
+community**: public IPTV playlists from the [iptv-org](https://github.com/iptv-org/iptv)
+project. The user can connect to any of them with **one click — no URL typing**.
+
+- The list is a static, frozen catalog (no runtime fetch). It is **always
+  present** in the account panel, even when the user has saved zero accounts of
+  their own — it is the "default" account list the user can pick from.
+- Entries are all standard M3U playlists served from
+  `https://iptv-org.github.io/iptv/`. The curated set is deliberately small (a
+  handful — the iptv-org index plus a few popular themed lists) so it does not
+  become a maintenance or flakiness burden:
+
+  | Name               | Playlist URL                                            |
+  |--------------------|---------------------------------------------------------|
+  | iptv-org · All     | `https://iptv-org.github.io/iptv/index.m3u`             |
+  | iptv-org · English | `https://iptv-org.github.io/iptv/languages/eng.m3u`     |
+  | iptv-org · News    | `https://iptv-org.github.io/iptv/categories/news.m3u`   |
+  | iptv-org · Sports  | `https://iptv-org.github.io/iptv/categories/sports.m3u` |
+  | iptv-org · Music   | `https://iptv-org.github.io/iptv/categories/music.m3u`  |
+
+- The community list renders as its own **section** in the account panel,
+  below the saved-accounts list (§13c) and above "Add account". Each row shows
+  the preset name and its playlist URL and is a one-click **connect shortcut**.
+  Community rows have **no remove control** — the catalog is static.
+- **Selecting a preset** connects on the M3U path (the explicit `m3u` login
+  mode, §7 — never auto-detected) exactly like a saved-account switch (§13d):
+  any live session is torn down first, then `IptvApi.connect()` runs with the
+  preset URL and `m3u: true`.
+  - On **success** the preset becomes an ordinary saved + active account (§13a)
+    — appended to `iptv_accts` (deduped by `url + user + m3u`, so re-selecting a
+    preset never duplicates it) and made active — and it then also appears in
+    the saved-accounts list and can be switched to or removed thereafter. The
+    panel/grid/sidebar/footer re-render.
+  - On **failure** nothing is written to the store (§13d invariant) and the
+    existing inline connect error shows (§7).
+- When a preset's playlist is the currently active account's connection, its
+  community-section row is **visually marked** so the user sees which community
+  playlist is connected. Clicking the already-active preset is a no-op.

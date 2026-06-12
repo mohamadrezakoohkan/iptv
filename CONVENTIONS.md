@@ -16,6 +16,8 @@ Implement agents MUST NOT invent abbreviations. If a concept is absent, request 
 | streams                | strms  | 5         | var, prop          |
 | playlist               | pl     | 2         | var, prop          |
 | playlists              | pls    | 3         | var, prop          |
+| preset                 | pst    | 3         | var, prop, module  |
+| presets                | psts   | 4         | var, prop          |
 | program                | prg    | 3         | var, prop          |
 | programs               | prgs   | 4         | var, prop          |
 | group                  | grp    | 3         | var, prop          |

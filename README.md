@@ -10,7 +10,9 @@ the server remuxes live TS to HLS on the fly so streams still play.
 
 It remembers **multiple accounts** at once: a top-right nav button opens a
 right slide-in panel that names the connected account and its server URL, and
-lets you switch between saved accounts, add a new one, or remove one.
+lets you switch between saved accounts, add a new one, or remove one. The same
+panel offers a built-in **Community playlists** section — a curated list of
+public iptv-org playlists you can connect to with one click, no URL typing.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -96,6 +98,12 @@ command.
   no re-typing), add a new account (returns to the footer login), or remove a
   saved account. All saved accounts persist across refreshes; a pre-existing
   single-account install is migrated automatically on first load.
+- **Community playlists** — the account panel includes an always-present,
+  curated list of public iptv-org playlists (All, English, News, Sports,
+  Music). Click one to connect on the M3U path with no typing; on success it
+  becomes an ordinary saved account (deduped, switchable, removable). The
+  list is read-only — present even before you have saved any account of your
+  own — so it is the default account list provided by the community.
 - **Footer** — login-mode selector + login form + connected status bar
   showing host and channel count.
 - **Persistence** — saved accounts and the active account, login mode (per
