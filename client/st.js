@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015, ADR-0017
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015, ADR-0017, ADR-0019
 /* global window */
 
 'use strict';
@@ -33,6 +33,17 @@ const ST = {
 // browser global scope — non-module client scripts share one scope.
 // ---------------------------------------------------------------------------
 const SRTS = ['num-asc', 'name-asc', 'name-desc', 'fav-first'];
+
+// ---------------------------------------------------------------------------
+// Theme tokens (ADR-0019) — the two valid theme values + the default. Theme is
+// presentational chrome, NOT an ST phase field (§6 unaffected): it lives here
+// only because st.js owns localStorage read/write. Named THMS / THM_DEF
+// (unique across the shared non-module client scope) to avoid an "Identifier
+// already declared" load error — the recurring shared-window-scope lesson.
+// ADR: ADR-0019
+// ---------------------------------------------------------------------------
+const THMS    = ['light', 'dark'];
+const THM_DEF = 'dark';
 
 const PHASES = {
   INIT:  ['LOAD'],
@@ -170,6 +181,32 @@ function saveSt(fld) {
   if (fld === 'sort') {
     try { ls.setItem(S.sortKey, String(ST.sort)); } catch (e) {}
   }
+}
+
+// ---------------------------------------------------------------------------
+// loadTheme — reads the persisted theme token from iptv_theme (ADR-0019).
+// Returns the stored token only when it is exactly 'light' or 'dark';
+// any absent, empty, unrecognised, or non-string value (and any localStorage
+// access exception) falls back to the THM_DEF ('dark') default. Never throws.
+// ADR: ADR-0019
+// ---------------------------------------------------------------------------
+function loadTheme() {
+  const ls = window.localStorage;
+  let val  = null;
+  try { val = ls.getItem(window.S.themeKey); } catch (e) {}
+  if (THMS.indexOf(val) !== -1) return val;
+  return THM_DEF;
+}
+
+// ---------------------------------------------------------------------------
+// saveTheme — persists a theme token (string) to iptv_theme (ADR-0019).
+// Guarded against localStorage exceptions like the other writers. The caller
+// (onTheme, TASK-0038) passes a valid 'light'/'dark' token.
+// ADR: ADR-0019
+// ---------------------------------------------------------------------------
+function saveTheme(thm) {
+  const ls = window.localStorage;
+  try { ls.setItem(window.S.themeKey, String(thm)); } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +394,8 @@ window.IptvSt = {
   getM3u,
   loadSt,
   saveSt,
+  loadTheme,
+  saveTheme,
   mkAcct,
   getAct,
   addAcct,

@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0018 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0018, ADR-0019 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -14,6 +14,21 @@ html, body { height: 100%; }
   --live: #E5484D;
   --font-ui:   'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+}
+
+/* Light theme (ADR-0019) — re-defines the same eight colour tokens with
+   light-mode values; the dark :root values above are the default. The
+   attribute is set on <html> by script (rndTheme, TASK-0038); absent = dark.
+   Every existing rule reads these tokens, so it recolours automatically. */
+:root[data-theme="light"] {
+  --bg:   #F4F6F8;
+  --sur:  #FFFFFF;
+  --sur2: #EAEEF2;
+  --ln:   #D3DAE1;
+  --tx:   #1A2129;
+  --dim:  #5C6975;
+  --acc:  #C97614;
+  --live: #D32F35;
 }
 
 body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); overflow: hidden; -webkit-font-smoothing: antialiased; }
