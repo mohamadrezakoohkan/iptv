@@ -35,6 +35,7 @@ function loadUi() {
       return els[id];
     },
     querySelector: function qSel() { return null; },
+    addEventListener() {},
     body: { classList: { add() {}, remove() {} } },
   };
   const win = {

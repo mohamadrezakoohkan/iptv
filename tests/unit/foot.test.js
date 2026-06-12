@@ -58,6 +58,7 @@ function loadUi(opts) {
     favs: [], cur: null, srch: '', flt: 'all', vol: 1.0, muted: false,
   };
 
+  const acctStore = { accts: [], actId: null };
   const win = {
     IptvSt: {
       ST: stObj,
@@ -68,6 +69,14 @@ function loadUi(opts) {
       setSrch:   function setSrch(q) { stObj.srch = q; },
       setFlt:    function setFlt(f) { stObj.flt = f; },
       setFavs:   function setFavs(a) { stObj.favs = a; },
+      // Account-store stubs (ADR-0013) — onOk persists the active account.
+      loadAccts: function loadAccts() { return { accts: acctStore.accts, actId: acctStore.actId }; },
+      getAct:    function getAct(list, id) { return list.find(function byId(a) { return a.id === id; }) || null; },
+      mkAcct:    function mkAcct(o) { return { id: '1', name: o.host || o.url || 'Account', url: o.url || '', user: o.user || '', pass: o.pass || '', m3u: Boolean(o.m3u) }; },
+      addAcct:   function addAcct(list, a) { return list.concat([a]); },
+      saveAccts: function saveAccts(a) { acctStore.accts = a; },
+      saveAct:   function saveAct(id) { acctStore.actId = id; },
+      clearAct:  function clearAct() { acctStore.actId = null; },
     },
     IptvSrch: { getChs: function getChs() { return []; } },
     IptvApi:  { connect: vi.fn() },

@@ -5,6 +5,18 @@ entry. Maintained by review-agent (format below); numbers are contiguous.
 
 ---
 
+## #7 — 2026-06-12 — Multiple saved accounts: top-right nav button + right slide-in account panel
+
+- **Prompt:** Add an account feature that displays the connected account and server URL, allows switching and adding accounts, surfaced as a top-right nav button that opens a right-side panel.
+- **Outcome:** Shipped. All 4 tasks completed and validated.
+- **ADRs:** ADR-0013 (multiple saved accounts — an `iptv_accts` list of `Acct` records + an `iptv_act` active-pointer replace the single `iptv_creds` record; pure `st.js` helpers `loadAccts`/`getAct`/`addAcct` (dedupe by `url+user+m3u`)/`rmAcct`/`mkAcct`/`saveAccts`/`saveAct`/`clearAct`, plus a one-time read-time migration of any legacy `iptv_creds`; supersedes ADR-0003's credential-persistence portion only — `iptv_sel`/`iptv_favs` carry forward) · ADR-0014 (account nav button at the right of `.content-head` + a right slide-in `#acct-panel` aside with scrim, open/close driven solely by an `is-open` CSS class, no new ST phase).
+- **Tasks:** 4 done, 0 failed, 0 blocked. TASK-0027 account store: `Acct` type, `S` keys, `st.js` helpers + legacy migration (`client/cfg.js`, `client/st.js`, `tests/unit/{acct,persist,cfg}.test.js`) — required 2 attempts: attempt 1 dropped the legacy `iptv_creds` runtime path before the rewiring task, breaking 6 UI persist tests; attempt 2 retained a compatibility shim that TASK-0029 then removed · TASK-0028 nav button + right slide-in panel shell, CSS, open/close (`index.html`, `client/app.css`, `client/ui.js`, `tests/unit/acctui.test.js`, `tests/ui/acct.test.js`) · TASK-0029 wire connect/reconnect/switch/disconnect through the account store, removing the legacy shim (`client/{cfg,st,main,ui}.js`) · TASK-0030 render panel contents: connected block, list, switch/remove/add (`client/{ui,main,app.css}.js/css`). TASK-0028/0029/0030 first-attempt passes.
+- **Tests:** 363 unit (Vitest) + 104 UI (Playwright, incl. the account panel open/close, switch, add, and remove flows) — all passing. Integration tier (25, live network) last run green at TASK-0029 validation; no integration command added this run (reuses the existing `IptvApi.connect`/proxy path).
+- **Rules earned:** none (no terminal failures).
+- **Artifacts:** `client/cfg.js`, `client/st.js`, `client/main.js`, `client/ui.js`, `client/app.css`, `index.html`, `specs/iptv-player.md` (§13 Accounts + §5a/§9/§12 updates), `tests/unit/{acct,acctui,persist,cfg,foot,side}.test.js`, `tests/ui/{acct,persist}.test.js`, `adrs/ADR-001{3,4}-*.md`, `adrs/ADR-0003-persistence.md` (supersede note), `tasks/TASK-002{7,8,9}-*.md`, `tasks/TASK-0030-*.md`.
+
+---
+
 ## #6 — 2026-06-12 — TS→HLS remux fallback for MSE-less devices (iOS Safari)
 
 - **Prompt:** Fix "MPEG-TS not supported" when opening streams after login (MSE-less devices, e.g. iOS Safari).

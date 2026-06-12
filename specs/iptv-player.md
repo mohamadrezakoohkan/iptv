@@ -58,10 +58,10 @@ mono labels.
 
 ## 3. Header bar
 
-- Fixed 56px height, background `--sur`, bottom border `--ln`.
-- Left: red live dot + "LIVE" label.
-- Center: optional (empty on first load).
-- Right: reserved for future controls.
+There is no separate top header bar; the top-of-content bar is the
+**content-head** (§5a, 56px). Its right edge hosts the **account navigation
+button** (§13): an account glyph + the connected account name (or "Account"
+when none is connected), opening the right-side account panel on click.
 
 ---
 
@@ -90,6 +90,8 @@ mono labels.
 - Right: format chips — "HLS" and "TS". The chip matching the active
   channel's stream format is highlighted automatically; the chips are
   informational indicators of the engine in use (hls.js vs mpegts.js).
+- Far right (pushed to the bar's right edge): the **account navigation
+  button** (§13).
 
 ### 5b. Player card
 
@@ -240,24 +242,30 @@ public HLS test streams after a 700ms simulated delay.
 
 | Key                 | Type   | Contents                                              |
 |---------------------|--------|-------------------------------------------------------|
-| `iptv_creds`        | JSON   | `{ url, user, pass, m3u }` — auto-reconnect on load   |
+| `iptv_accts`        | JSON   | `Acct[]` — all saved accounts (see §13)               |
+| `iptv_act`          | string | `id` of the active account                            |
 | `iptv_sel`          | string | last selected `stream_id`                             |
 | `iptv_favs`         | JSON   | array of `stream_id` numbers (favourites)             |
 
-On page load, if `iptv_creds` is present, the app silently calls
-`IptvApi.connect()` with stored credentials **and the stored `m3u` mode
-flag**. On success the session is restored (including last-selected channel
-and favourites).
+Multiple **accounts** are persisted (§13). On page load, if an active account
+resolves, the app silently calls `IptvApi.connect()` with that account's
+stored `{ url, user, pass }` **and its stored `m3u` mode flag** (replayed,
+never re-detected). On success the session is restored (including
+last-selected channel and favourites). If no accounts exist, the app starts at
+INIT with the footer login.
 
-Legacy migration: a stored `iptv_creds` value written before the mode flag
-existed has no `m3u` property. It is interpreted once, deterministically:
-`m3u` is `true` when both `user` and `pass` are empty and `url` is not
-`"demo"`, else `false`. This is a read-time migration of stored data only —
-never applied to live form input.
+An account is stored/updated only after a **successful** connect (footer login
+or "add account"); a failed connect never writes to the accounts store.
+Switching accounts replays the chosen account's stored connection. Removing
+an account deletes it from `iptv_accts`; disconnecting clears the active
+session but preserves the saved accounts, `iptv_sel`, and `iptv_favs`.
 
-Credentials are stored only after a successful connect; a failed connect
-never writes to localStorage. Disconnect removes `iptv_creds` but preserves
-`iptv_sel` and `iptv_favs`.
+**Legacy migration** (one-time, read-time): a pre-account install has
+`iptv_creds` = `{ url, user, pass, m3u? }` but no `iptv_accts`. On first load
+it is wrapped into a single saved + active account (id minted, name derived,
+`m3u` resolved by the legacy rule: `true` when both `user` and `pass` are
+empty and `url` is not `"demo"`, else the stored flag); the new keys are
+written and `iptv_creds` is removed. Migration applies to stored data only.
 
 ---
 
@@ -342,3 +350,86 @@ READY→ERR, PLAY→READY, PLAY→ERR, SRCH→READY, ERR→INIT.
 - Error messages are surfaced as visible text (not console-only).
 - Loading spinner in the Connect button while connecting.
 - On mobile, the channel grid min-width adapts so cards remain tappable.
+- The account nav button exposes `aria-haspopup="dialog"`,
+  `aria-expanded`, and `aria-controls`; the account panel is
+  `role="dialog"` with an accessible label and is closable by its close
+  button, the backdrop scrim, and the Escape key (§13).
+
+---
+
+## 13. Accounts
+
+The app remembers **multiple connection identities** (accounts) and lets the
+user see which one is connected, switch between saved accounts, and add a new
+one. An account is the connection identity from §7–§8 plus a stable id and a
+display name.
+
+### 13a. Account record
+
+```
+/** @typedef {{ id, name, url, user, pass, m3u }} Acct */
+```
+
+| Field  | Meaning                                                            |
+|--------|--------------------------------------------------------------------|
+| `id`   | stable unique string (e.g. `String(Date.now())`); switch/remove key |
+| `name` | display label, derived at save time from the connection — Xtream `host · user`, or playlist `host`, or `"Demo"` for the demo playlist; never blank |
+| `url`  | portal/playlist URL (or the literal `demo`)                        |
+| `user` | username (empty in M3U / demo)                                     |
+| `pass` | password (empty in M3U / demo)                                     |
+| `m3u`  | login mode flag (§7) — preserved per account, replayed on reconnect |
+
+Saved accounts and the active-account id persist in localStorage (§9).
+Re-saving an existing identity (same `url` + `user` + `m3u`) updates that
+account in place rather than creating a duplicate.
+
+### 13b. Account navigation button (top-right)
+
+- Lives at the right edge of the content-head bar (§5a).
+- Shows an account glyph + the **active account's name** when connected, or a
+  generic "Account" label when no account is active. The name is truncated to
+  fit.
+- Keyboard-focusable; `aria-haspopup="dialog"`, `aria-controls="acct-panel"`,
+  `aria-expanded` mirroring the panel's open state.
+- Clicking it toggles the account panel.
+
+### 13c. Account panel (right slide-in)
+
+- A right-edge, full-height panel (~320px wide; full-width on mobile
+  `< 760px`) that is **off-screen by default** and slides in from the right
+  when opened. A dimmed backdrop scrim sits behind it.
+- Opening/closing is purely presentational (an `is-open` CSS class — no state
+  machine phase). It is closed by: the panel's close button, a click on the
+  scrim, or the Escape key.
+- `role="dialog"`, accessible label "Accounts", `aria-hidden` toggled with
+  open state.
+
+Panel contents, top to bottom:
+
+1. **Header** — "Accounts" title + close button.
+2. **Connected account** — when an account is active: its **name** and its
+   **server URL** (the account `url`; `demo` for the demo playlist) plus a
+   green "Connected" status dot. When none is active: a "Not connected" line.
+3. **Account list** — one row per saved account showing name + server URL.
+   The active account is visually marked. Clicking a **non-active** row
+   switches to that account (reconnects with its stored connection, replaying
+   its `m3u` mode). Each row has a remove control that deletes that saved
+   account; removing the active account also clears the active session.
+4. **Add account** — a button that closes the panel, resets the footer to the
+   logged-out login form, and focuses the URL field. Completing the footer
+   connect (§7) for a new identity saves it as a new active account.
+
+### 13d. Switching, adding, removing
+
+- **Switch**: clicking a saved account replays its stored connection through
+  `IptvApi.connect()` exactly like load-time reconnect; on success it becomes
+  the active account and the grid/sidebar/footer/panel re-render. A switch
+  while a channel is playing first tears the current stream down.
+- **Add**: handled by the existing footer login flow (§7). A successful
+  connect of a not-yet-saved identity appends a new account (§13a) and makes
+  it active.
+- **Remove**: deletes the account from the store. Removing the currently
+  connected account also disconnects (clears the session, returns to the
+  footer login); removing a non-active account leaves the session untouched.
+- A failed connect (switch or add) never mutates the saved-accounts store and
+  surfaces the existing inline connect error (§7).

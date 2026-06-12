@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -32,6 +32,13 @@ const EL = {
   mm3u: null,   // #mode-m3u radio
   chls: null,   // #chip-hls format chip (ADR-0010)
   cts:  null,   // #chip-ts format chip (ADR-0010)
+  apnl: null,   // #acct-panel aside (ADR-0014)
+  abtn: null,   // #acct-btn nav button (ADR-0014)
+  ascr: null,   // #acct-scrim backdrop (ADR-0014)
+  acls: null,   // #acct-close button (ADR-0014)
+  aadd: null,   // #acct-add button (ADR-0014)
+  alst: null,   // #acct-list container (ADR-0014)
+  acon: null,   // #acct-conn connected block (ADR-0014)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -198,6 +205,145 @@ function onGridKey(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// setAcct — set account panel open/closed presentational state (ADR-0014).
+// No ST phase, no boolean flag (CONVENTIONS §6): the is-open class on panel +
+// scrim plus the aria attributes are the single source of truth.
+// ---------------------------------------------------------------------------
+function setAcct(open) {
+  if (!EL.apnl || !EL.ascr || !EL.abtn) return;
+  EL.apnl.classList.toggle('is-open', open);
+  EL.ascr.classList.toggle('is-open', open);
+  EL.abtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  EL.apnl.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+// ---------------------------------------------------------------------------
+// onAcctBtn — nav button click: toggle the panel based on current is-open
+// ---------------------------------------------------------------------------
+function onAcctBtn() {
+  if (!EL.apnl) return;
+  setAcct(!EL.apnl.classList.contains('is-open'));
+}
+
+// ---------------------------------------------------------------------------
+// onAcctClose — close button / scrim click: close the panel
+// ---------------------------------------------------------------------------
+function onAcctClose() {
+  setAcct(false);
+}
+
+// ---------------------------------------------------------------------------
+// onAcctKey — Escape keydown closes the panel only when it is open
+// ---------------------------------------------------------------------------
+function onAcctKey(evt) {
+  if (evt.key !== 'Escape') return;
+  if (!EL.apnl || !EL.apnl.classList.contains('is-open')) return;
+  setAcct(false);
+}
+
+// ---------------------------------------------------------------------------
+// getSrv — pure: the server URL shown for an account; the demo playlist shows
+// the literal "demo" (its stored url), any other account shows its url (ADR-0014).
+// ---------------------------------------------------------------------------
+function getSrv(acct) {
+  return acct.url || acct.name;
+}
+
+// ---------------------------------------------------------------------------
+// mkRow — build one account-list row HTML: name + server url, the active
+// marker (is-active class + indicator), a switch target (data-acct) and a
+// remove control (data-rm). opts: { acct, act } (ADR-0014).
+// ---------------------------------------------------------------------------
+function mkRow(opts) {
+  const a   = opts.acct;
+  const on  = (opts.act && a.id === opts.act) ? ' is-active' : '';
+  return '<div class="acct-row' + on + '" role="button" tabindex="0" data-acct="' + a.id + '">'
+    + '<span class="acct-row-dot" aria-hidden="true"></span>'
+    + '<span class="acct-row-meta">'
+    + '<span class="acct-row-name">' + a.name + '</span>'
+    + '<span class="acct-row-srv">' + getSrv(a) + '</span>'
+    + '</span>'
+    + '<button type="button" class="acct-row-rm" data-rm="' + a.id + '" aria-label="Remove account">&#10005;</button>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndConn — render the connected-account block (#acct-conn): name + server URL
+// + "Connected" dot when an account is active; a "Not connected" line otherwise
+// (ADR-0014). act is the active Acct or null.
+// ---------------------------------------------------------------------------
+function rndConn(act) {
+  if (!EL.acon) return;
+  if (!act) {
+    EL.acon.innerHTML = '<span class="acct-conn-off">Not connected</span>';
+    return;
+  }
+  EL.acon.innerHTML = '<span class="acct-conn-dot" aria-hidden="true"></span>'
+    + '<span class="acct-conn-meta">'
+    + '<span class="acct-conn-name">' + act.name + '</span>'
+    + '<span class="acct-conn-srv">' + getSrv(act) + '</span>'
+    + '</span>'
+    + '<span class="acct-conn-stat">Connected</span>';
+}
+
+// ---------------------------------------------------------------------------
+// rndList — render the account-list rows (#acct-list), one per saved account,
+// the active one marked. store: { accts, actId } (ADR-0014).
+// ---------------------------------------------------------------------------
+function rndList(store) {
+  if (!EL.alst) return;
+  if (!store.accts || store.accts.length === 0) {
+    EL.alst.innerHTML = '<p class="acct-empty">No saved accounts.</p>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < store.accts.length; i += 1) {
+    html += mkRow({ acct: store.accts[i], act: store.actId });
+  }
+  EL.alst.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// rndAcct — render the whole account panel from the store (ADR-0013/ADR-0014):
+// the nav button label, the connected block, and the list. Called after every
+// connect, disconnect, switch, add, and remove so the surfaces never disagree.
+// ---------------------------------------------------------------------------
+function rndAcct() {
+  const st    = window.IptvSt;
+  const store = st.loadAccts();
+  const act   = st.getAct(store.accts, store.actId);
+  const lbl   = document.getElementById('acct-label');
+  if (lbl) lbl.textContent = act ? act.name : 'Account';
+  rndConn(act);
+  rndList(store);
+}
+
+// ---------------------------------------------------------------------------
+// onAcctList — delegate account-list clicks (ADR-0014): a [data-rm] click
+// removes that account; a non-active [data-acct] click switches to it; the
+// already-active row is a no-op. Re-renders the panel after any of these.
+// ---------------------------------------------------------------------------
+function onAcctList(evt) {
+  const rm = evt.target.closest('[data-rm]');
+  if (rm) { onAcctRm(rm.getAttribute('data-rm')); rndAcct(); return; }
+  const row = evt.target.closest('[data-acct]');
+  if (!row) return;
+  goSwitch(row.getAttribute('data-acct'));
+  rndAcct();
+}
+
+// ---------------------------------------------------------------------------
+// onAcctAdd — add-account action (#acct-add): close the panel, reset the footer
+// to the logged-out login form, and focus the URL field (ADR-0014). A later
+// successful footer connect saves it as a new active account (onOk).
+// ---------------------------------------------------------------------------
+function onAcctAdd() {
+  setAcct(false);
+  tearDown();
+  if (EL.url && EL.url.focus) EL.url.focus();
+}
+
+// ---------------------------------------------------------------------------
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
@@ -226,6 +372,13 @@ function mkEL() {
   EL.mm3u  = document.getElementById('mode-m3u');
   EL.chls  = document.getElementById('chip-hls');
   EL.cts   = document.getElementById('chip-ts');
+  EL.apnl  = document.getElementById('acct-panel');
+  EL.abtn  = document.getElementById('acct-btn');
+  EL.ascr  = document.getElementById('acct-scrim');
+  EL.acls  = document.getElementById('acct-close');
+  EL.aadd  = document.getElementById('acct-add');
+  EL.alst  = document.getElementById('acct-list');
+  EL.acon  = document.getElementById('acct-conn');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -235,6 +388,12 @@ function mkEL() {
   if (EL.url) EL.url.addEventListener('input', onUrlInput);
   if (EL.mode) EL.mode.addEventListener('change', onMode);
   if (EL.bdis) EL.bdis.addEventListener('click', onDisc);
+  if (EL.abtn) EL.abtn.addEventListener('click', onAcctBtn);
+  if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
+  if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
+  if (EL.apnl) document.addEventListener('keydown', onAcctKey);
+  if (EL.alst) EL.alst.addEventListener('click', onAcctList);
+  if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
 }
 
 // ---------------------------------------------------------------------------
@@ -347,6 +506,21 @@ function onUrlInput() {
 }
 
 // ---------------------------------------------------------------------------
+// saveActive — turn a successful connection into a saved + active account
+// (ADR-0013): build an Acct via mkAcct, dedupe-add it, persist the accounts
+// list and the active id. opts: { url, host, user, pass, m3u }
+// ---------------------------------------------------------------------------
+function saveActive(opts) {
+  const st = window.IptvSt;
+  const store = st.loadAccts();
+  const acct  = st.mkAcct(opts);
+  const accts = st.addAcct(store.accts, acct);
+  st.saveAccts(accts);
+  st.saveAct(acct.id);
+  return acct;
+}
+
+// ---------------------------------------------------------------------------
 // onOk — handle successful connect result
 // ---------------------------------------------------------------------------
 function onOk(val) {
@@ -356,11 +530,12 @@ function onOk(val) {
   const user = EL.uname ? EL.uname.value.trim() : val.user;
   const pass = EL.pwd   ? EL.pwd.value          : '';
   const m3u  = getMode() === 'm3u';
-  try { localStorage.setItem(window.S.credsKey, JSON.stringify({ url: src, user, pass, m3u })); } catch (e) {}
+  saveActive({ url: src, host: val.host, user, pass, m3u });
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
   rndFoot();
+  rndAcct();
   if (EL.bcon) { EL.bcon.textContent = 'Connect'; EL.bcon.disabled = false; }
   if (EL.url)   EL.url.disabled   = false;
   if (EL.uname) EL.uname.disabled = false;
@@ -406,10 +581,68 @@ function onConn(evt) {
 }
 
 // ---------------------------------------------------------------------------
-// onDisc — disconnect button handler
+// onSwOk — handle a successful account-switch connect: populate channels,
+// transition READY, mark the switched account active (ADR-0013), re-render.
 // ---------------------------------------------------------------------------
-function onDisc() {
-  try { localStorage.removeItem(window.S.credsKey); } catch (e) {}
+function onSwOk(acct, val) {
+  window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
+  window.IptvSt.go('READY');
+  window.IptvSt.saveAct(acct.id);
+  const st = window.IptvSt.ST;
+  rndSide(st.cats, st.chs, st.favs);
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
+  rndFoot();
+  rndAcct();
+}
+
+// ---------------------------------------------------------------------------
+// runSwitch — async: reconnect a saved account, replaying its stored m3u mode
+// (ADR-0013, never re-detected). Tears the live session down first; on success
+// the account becomes active, on failure the inline connect error is shown and
+// the store is left untouched.
+// ---------------------------------------------------------------------------
+async function runSwitch(acct) {
+  tearDown();
+  window.IptvSt.go('LOAD');
+  rndFoot();
+  const res = await window.IptvApi.connect(acct.url, { user: acct.user, pass: acct.pass, m3u: acct.m3u });
+  if (res.ok) { onSwOk(acct, res.val); } else { onFail(res.err); }
+}
+
+// ---------------------------------------------------------------------------
+// goSwitch — switch to the saved account with the given id (ADR-0013/ADR-0014).
+// No-op for an unknown id or the already-active account.
+// ---------------------------------------------------------------------------
+function goSwitch(id) {
+  const store = window.IptvSt.loadAccts();
+  const acct  = window.IptvSt.getAct(store.accts, id);
+  if (!acct || id === store.actId) return;
+  runSwitch(acct).catch(function onErr(e) { onFail(e.message); });
+}
+
+// ---------------------------------------------------------------------------
+// onAcctRm — remove the saved account with the given id (ADR-0013/ADR-0014).
+// Always deletes it from iptv_accts; removing the ACTIVE account also clears
+// the active id and tears the live session down. Removing a non-active account
+// leaves the live session untouched.
+// ---------------------------------------------------------------------------
+function onAcctRm(id) {
+  const store = window.IptvSt.loadAccts();
+  const accts = window.IptvSt.rmAcct(store.accts, id);
+  window.IptvSt.saveAccts(accts);
+  if (id === store.actId) {
+    window.IptvSt.clearAct();
+    tearDown();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// tearDown — clear the live session: stop playback, empty the channel state,
+// and walk the phase back to INIT, then re-render the footer/sidebar/grid into
+// the logged-out shell. Used by disconnect, switch (before reconnecting), and
+// remove-active. Does not touch the persisted accounts store.
+// ---------------------------------------------------------------------------
+function tearDown() {
   const cur = window.IptvSt.ST.phase;
   if (window.IptvPlay && cur === 'PLAY') window.IptvPlay.stopPlay();
   window.IptvSt.setChs([], [], '', '');
@@ -425,6 +658,17 @@ function onDisc() {
   rndFoot();
   rndSide([], [], []);
   rndGrid([]);
+  rndAcct();
+}
+
+// ---------------------------------------------------------------------------
+// onDisc — disconnect button handler: clear the live session and the active
+// account pointer (ADR-0013), preserving the saved iptv_accts, iptv_sel, and
+// iptv_favs (iptv_creds no longer exists).
+// ---------------------------------------------------------------------------
+function onDisc() {
+  window.IptvSt.clearAct();
+  tearDown();
 }
 
 // ---------------------------------------------------------------------------
@@ -471,4 +715,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd };
