@@ -48,6 +48,12 @@ change — the orchestrator decides whether to fix and retry or record a
   Relay its report, and flag that agent, skill-frontmatter, or settings
   changes load at next session start. The agent leaves its changes
   uncommitted — committing harness changes is the human's decision.
+- **Backlog prompt** (explicit request to park an idea for later — "add to the
+  backlog", "note this down") → spawn `backlog-agent` with the idea verbatim +
+  the Rule Pack. No pipeline, no evolution number. It appends one entry to
+  `BACKLOG.md` and is non-blocking: it may run in the background and in
+  parallel with anything else. Relay its report; the entry stays uncommitted
+  until the human decides.
 
 ## Pipeline summary (canonical version: CORE_FLOW.md §4)
 
@@ -83,14 +89,17 @@ change — the orchestrator decides whether to fix and retry or record a
   (CORE_FLOW.md §4.4) — it owns `CORE_FLOW.md`, this file, the agent
   definitions, `.claude/skills/**`, templates, `.claude/settings.json`,
   `.claude/hooks/**`, and `.github/workflows/validate-ai-instructions.yml`,
-  and never touches product artifacts.
+  and never touches product artifacts. Also outside the pipeline:
+  `backlog-agent` (CORE_FLOW.md §4.5) parks ideas as append-only entries in
+  `BACKLOG.md`, non-blocking and in parallel, and owns nothing else.
 
 ## Directory map
 
 `specs/` living specs (incl. required `specs/project.md` with canonical
 build/test commands) · `adrs/` decisions · `tasks/` work units with status
 front-matter · `failures/` failure records · `CHANGELOG.md` numbered Evolution
-Log · `README.md` product doc · `.claude/agents/` the five subagents ·
+Log · `BACKLOG.md` parked ideas (backlog-agent, append-only, optional) ·
+`README.md` product doc · `.claude/agents/` the six subagents ·
 `.claude/skills/` invocation interfaces + the validate-ai-instructions
 checklist.
 
@@ -107,6 +116,7 @@ referring to a phase by name:
 | `/validate-agent` | 3 VALIDATE | one task (pass task ID) |
 | `/review-agent` | 4 REVIEW | end of every run |
 | `/coreflow` | harness | harness change instructions |
+| `/backlog-agent` | backlog | parking an idea for later in `BACKLOG.md` |
 
 The full agent procedure lives in `.claude/agents/<name>.md`. The skill is the
 caller-facing contract only — trigger, inputs, outputs, failure signal.
