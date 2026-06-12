@@ -180,8 +180,27 @@ body.is-load .player-wrap,
 body.is-load .ch-section { opacity: 0.4; pointer-events: none; }
 body.is-err .player-wrap { display: none; }
 
+/* Sun/moon theme toggle (top-right, immediately left of the account button) — ADR-0019.
+   margin-left:auto anchors the top-right cluster; the adjacent .acct-btn rule
+   below resets its own auto margin to a fixed gap so the pair stays together
+   at the right edge on both breakpoints. */
+.thm-toggle { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--ln); border-radius: 6px; background: var(--sur2); color: var(--dim); cursor: pointer; }
+.thm-toggle:hover { border-color: var(--dim); color: var(--tx); }
+.thm-toggle:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.thm-ico { width: 16px; height: 16px; flex: none; }
+/* Show one glyph at a time: moon in dark (default), sun in light. The is-light
+   class is toggled by rndTheme (ui.js) to mirror the active theme. */
+.thm-toggle .thm-sun { display: none; }
+.thm-toggle .thm-moon { display: block; }
+.thm-toggle.is-light { color: var(--acc); }
+.thm-toggle.is-light .thm-sun { display: block; }
+.thm-toggle.is-light .thm-moon { display: none; }
+
 /* Account nav button (right edge of content-head) — ADR-0014 */
 .acct-btn { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; max-width: 180px; padding: 0 11px; border: 1px solid var(--ln); border-radius: 6px; background: var(--sur2); color: var(--tx); cursor: pointer; font: 500 12px/1 var(--font-ui); }
+/* When the theme toggle precedes it, the toggle owns the auto margin; the
+   account button sits a fixed gap to its right (keeps both at the right edge). */
+.thm-toggle + .acct-btn { margin-left: 8px; }
 .acct-btn:hover { border-color: var(--dim); }
 .acct-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .acct-ico { width: 16px; height: 16px; flex: none; color: var(--dim); }

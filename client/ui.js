@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0018
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0018, ADR-0019
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -42,6 +42,7 @@ const EL = {
   alst: null,   // #acct-list container (ADR-0014)
   acon: null,   // #acct-conn connected block (ADR-0014)
   apst: null,   // #acct-psts community presets list (ADR-0016)
+  thm:  null,   // #theme-toggle sun/moon switch (ADR-0019)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -470,6 +471,39 @@ function onAcctAdd() {
 }
 
 // ---------------------------------------------------------------------------
+// rndTheme — apply a theme token (ADR-0019). Pure presentational chrome, no ST
+// phase: 'light' sets data-theme="light" on <html> and emphasises the sun
+// (is-light + aria-checked="true"); any other token ('dark' default) removes
+// the attribute (baseline = no data-theme, Rule R-0001) and emphasises the
+// moon. Idempotent; safe before/independent of any connect flow.
+// ---------------------------------------------------------------------------
+function rndTheme(theme) {
+  const light = theme === 'light';
+  const root  = document.documentElement;
+  if (light) {
+    root.setAttribute('data-theme', 'light');
+  } else {
+    root.removeAttribute('data-theme');
+  }
+  if (!EL.thm) return;
+  EL.thm.classList.toggle('is-light', light);
+  EL.thm.setAttribute('aria-checked', light ? 'true' : 'false');
+  EL.thm.setAttribute('aria-label', light ? 'Switch to dark theme' : 'Switch to light theme');
+}
+
+// ---------------------------------------------------------------------------
+// onTheme — theme-toggle click handler (ADR-0019): flip dark↔light from the
+// current data-theme on <html>, apply via rndTheme, and persist via saveTheme
+// (TASK-0037 writer). One synchronous handler, no phase transition.
+// ---------------------------------------------------------------------------
+function onTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const nxt = cur === 'light' ? 'dark' : 'light';
+  rndTheme(nxt);
+  window.IptvSt.saveTheme(nxt);
+}
+
+// ---------------------------------------------------------------------------
 // mkEL — initialize EL from DOM, wire event listeners
 // ---------------------------------------------------------------------------
 function mkEL() {
@@ -508,6 +542,8 @@ function mkEL() {
   EL.alst  = document.getElementById('acct-list');
   EL.acon  = document.getElementById('acct-conn');
   EL.apst  = document.getElementById('acct-psts');
+  EL.thm   = document.getElementById('theme-toggle');
+  if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.nav)  EL.nav.addEventListener('input', onFlt);
@@ -929,4 +965,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndCats, rstFlt, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndCats, rstFlt, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };

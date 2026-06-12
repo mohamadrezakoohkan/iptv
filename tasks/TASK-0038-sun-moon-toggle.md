@@ -2,8 +2,8 @@
 id: TASK-0038
 adr: ADR-0019
 evolution: 10
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0037]
 ---
 
@@ -78,5 +78,46 @@ theme — all while coexisting cleanly with the account button.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched (production):
+
+- `index.html` — added `#theme-toggle` `<button role="switch" aria-checked="false">`
+  immediately BEFORE `#acct-btn` in `.content-head`, with two inline SVG glyphs
+  (`.thm-sun`, `.thm-moon`). Baseline ships aria-checked="false" and `<html>`
+  still has NO data-theme (R-0001). Updated the file ADR header to add ADR-0019.
+- `client/app.css` — `.thm-toggle` styled to match the other content-head
+  controls (30×30 square, border, focus ring). `margin-left:auto` on the toggle
+  anchors the top-right cluster; `.thm-toggle + .acct-btn { margin-left: 8px }`
+  resets the account button's own auto-margin to a fixed gap so the pair stays
+  together at the right edge (verified on both the default and `<760px`
+  breakpoints). `.is-light` swaps which glyph shows (moon = dark default, sun =
+  light) and tints the active glyph with `--acc`. No inline styles.
+- `client/ui.js` — `EL.thm` added to the `EL` literal and resolved in `mkEL`,
+  wired with a `click` listener. `rndTheme(theme)` sets `data-theme="light"` /
+  removes it (dark = no attribute, R-0001) and updates the toggle `is-light`
+  class + `aria-checked` + `aria-label`. `onTheme()` reads the current
+  `data-theme`, flips dark↔light, applies via `rndTheme`, persists via
+  `IptvSt.saveTheme` (TASK-0037). Both exported on `window.IptvUi`.
+- `client/main.js` — `onReady` now calls `rndTheme(loadTheme())` right after
+  `mkEL`, before `mkPlay`, so the persisted theme + toggle state apply on load.
+  Existing init order otherwise unchanged.
+
+Tests:
+
+- `tests/unit/themetoggle.test.js` (new, 12 tests) — rndTheme add/remove of
+  data-theme + toggle state/ARIA, onTheme flip + saveTheme persistence call,
+  mkEL click wiring, R-0001 baseline checks.
+- `tests/ui/themetoggle.test.js` (new, 10 tests) — visible top-right, coexists
+  with the account button (no overlap, independent activation), click switches
+  + recolours (computed tokens change), sun/moon state reflects theme, persists
+  across reload, keyboard-activatable, dark+light screenshots to `test-results/`.
+- `tests/unit/persist.test.js` — extended the existing `runMain` harness stub
+  to provide `IptvSt.loadTheme` and `IptvUi.rndTheme` (main.js now calls them on
+  init). No assertion weakened; only the stub gained the new init dependencies.
+
+Non-obvious: no top-level binding was added in ui.js (rndTheme/onTheme read
+`data-theme` directly), so there is no shared-window-scope collision risk; the
+full UI suite (137 tests) passes with no "Identifier already declared" load
+error. Theme is presentational chrome only — no ST phase, no ST field
+(THMS/THM_DEF + loadTheme/saveTheme already live in st.js from TASK-0037).
+
+Screenshots: `test-results/theme-dark.png`, `test-results/theme-light.png`.

@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0018 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0018, ADR-0019 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,6 +37,25 @@
             <span class="fmt-chip" id="chip-hls">HLS</span>
             <span class="fmt-chip" id="chip-ts">TS</span>
           </div>
+          <!-- sun/moon theme toggle (ADR-0019) — top-right, immediately before the account button -->
+          <button type="button" class="thm-toggle" id="theme-toggle" role="switch" aria-checked="false" aria-label="Toggle light theme">
+            <svg class="thm-ico thm-sun" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.2" fill="currentColor"/>
+              <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="2.5" x2="12" y2="5"/>
+                <line x1="12" y1="19" x2="12" y2="21.5"/>
+                <line x1="2.5" y1="12" x2="5" y2="12"/>
+                <line x1="19" y1="12" x2="21.5" y2="12"/>
+                <line x1="5.2" y1="5.2" x2="7" y2="7"/>
+                <line x1="17" y1="17" x2="18.8" y2="18.8"/>
+                <line x1="18.8" y1="5.2" x2="17" y2="7"/>
+                <line x1="7" y1="17" x2="5.2" y2="18.8"/>
+              </g>
+            </svg>
+            <svg class="thm-ico thm-moon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5z" fill="currentColor"/>
+            </svg>
+          </button>
           <button type="button" class="acct-btn" id="acct-btn" aria-haspopup="dialog" aria-controls="acct-panel" aria-expanded="false">
             <svg class="acct-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <circle cx="12" cy="8" r="4" fill="currentColor"/>
