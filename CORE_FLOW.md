@@ -3,8 +3,8 @@
 This document is the standalone, canonical definition of the orchestration
 harness that drives this repository. It defines **how work happens**, never
 **what is being built**. If you copied this file — together with `CLAUDE.md`,
-`.claude/agents/`, and the folder templates — into an empty directory, the
-harness would work unchanged for any product.
+`.claude/agents/`, `.claude/skills/`, and the folder templates — into an empty
+directory, the harness would work unchanged for any product.
 
 **Hard rule: no product specifics in this file.** Product knowledge lives in
 `specs/`, `adrs/`, `README.md`, and the source tree. This file changes only
@@ -45,7 +45,7 @@ agents, plus one harness maintainer that runs outside the pipeline.
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, and PR description update (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
-| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, the three templates, `.claude/settings.json` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
+| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
 to `main`, pushes to `main`, force-pushes, or merges a pull request.** All run
@@ -54,6 +54,9 @@ merged by the human (§3, Git & pull-request contract).
 
 The subagents are defined in `.claude/agents/<name>.md` and are spawned by the
 orchestrator via the Agent tool with `subagent_type` set to the agent name.
+Each subagent also has a caller-facing invocation interface in
+`.claude/skills/` (trigger, inputs, outputs, failure signal); the agent
+definition remains the full procedure.
 Agents are **stateless workers**: everything they need arrives in their prompt
 or is read from files; everything they produce is written to files plus a
 structured final report back to the orchestrator. Agents never spawn other
@@ -75,7 +78,9 @@ agents and never talk to the human.
 │   └── TEMPLATE.md
 ├── failures/            Terminal-failure records that earn rules (orchestrator writes)
 │   └── TEMPLATE.md
-└── .claude/agents/      The five subagent definitions
+├── .claude/agents/      The five subagent definitions
+└── .claude/skills/      Invocation interfaces (one per subagent) + the
+                         validate-ai-instructions checklist
 ```
 
 ### Identifiers
@@ -214,10 +219,10 @@ Every human prompt takes exactly one of three routes:
 - **Build prompt** — adds, changes, or removes product behavior or structure
   → the full pipeline below: one run, one Evolution entry.
 - **Harness prompt** — an explicit request to change the harness itself
-  (`CORE_FLOW.md`, `CLAUDE.md`, agent definitions, templates, the rule
-  ledger, harness settings) → `coreflow-agent` (§4.4). No pipeline, no
-  evolution number. This is how humans contribute to the harness instead of
-  the product.
+  (`CORE_FLOW.md`, `CLAUDE.md`, agent definitions, skills, templates, the
+  rule ledger, harness settings, hooks, the CI validation workflow) →
+  `coreflow-agent` (§4.4). No pipeline, no evolution number. This is how
+  humans contribute to the harness instead of the product.
 - **Question / status request** → the orchestrator answers directly from the
   files. Nothing is spawned, nothing is written.
 
@@ -340,15 +345,22 @@ discrepant → failure protocol; the discrepancy is recorded, not hidden.
 Harness prompts bypass the pipeline entirely: the orchestrator spawns
 `coreflow-agent` with the human instruction verbatim plus the Rule Pack, and
 relays its report. The agent owns the whole harness surface — `CORE_FLOW.md`
-(canonical), `CLAUDE.md`, `.claude/agents/*.md`, the three templates,
-`.claude/settings.json` — and nothing else: it never touches product
-artifacts and never runs pipeline phases.
+(canonical), `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the
+three templates, `.claude/settings.json`, `.claude/hooks/**`,
+`.github/workflows/validate-ai-instructions.yml` — and nothing else: it never
+touches product artifacts and never runs pipeline phases.
 
 Its core obligation is **consistency**: a harness change must land on every
 affected layer in one pass (canonical definition → operating summary → agent
-definitions → templates), because drift between layers is how a harness rots.
-Changes to agent definitions or settings take effect at the next session
-start; the agent's report says so whenever that applies.
+definitions → skills → templates), because drift between layers is how a
+harness rots. Changes to agent definitions, skill frontmatter, or settings
+take effect at the next session start; the agent's report says so whenever
+that applies. Additionally, before completing any run that touches
+instruction artifacts (`CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`,
+`.claude/skills/**`), coreflow-agent reads
+`.claude/skills/validate-ai-instructions/SKILL.md` and applies its 15-point
+checklist to every changed artifact, including the full scored report with
+`VERDICT:` line in its return.
 
 The harness path never touches git history: `coreflow-agent` commits nothing
 and pushes nothing. Its changes stay in the working tree until the human

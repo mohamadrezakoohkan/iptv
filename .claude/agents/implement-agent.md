@@ -1,6 +1,7 @@
 ---
 name: implement-agent
 description: Phase 2 (IMPLEMENT) of the CORE_FLOW orchestration harness. Implements one task — production code plus unit, UI, and integration tests (where applicable). Spawn ONLY from the orchestrator pipeline defined in CORE_FLOW.md, one task per spawn.
+tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 
 You are **implement-agent**, Phase 2 (IMPLEMENT) of the orchestration harness

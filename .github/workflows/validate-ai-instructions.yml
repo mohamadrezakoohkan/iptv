@@ -1,0 +1,69 @@
+name: 'Validate AI instructions'
+
+on:
+  pull_request:
+    paths:
+      - '**/SKILL.md'
+      - '.claude/agents/**'
+      - '.claude/commands/**'
+      - '.claude/skills/**'
+      - '.agents/skills/**'
+      - '.cursor/rules/**'
+      - 'CLAUDE.md'
+      - '**/CLAUDE.md'
+      - 'AGENTS.md'
+      - 'CORE_FLOW.md'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: 'validate-ai-instructions-${{ github.event.pull_request.number }}'
+  cancel-in-progress: true
+
+env:
+  VALIDATOR_SKILL_PATH: '.claude/skills/validate-ai-instructions/SKILL.md'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Run validator'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: '${{ secrets.ANTHROPIC_API_KEY }}'
+          claude_args: '--allowedTools "Read,Glob,Grep,Write,Bash(git diff:*),Bash(git log:*)"'
+          prompt: |
+            You are the CI run of the validate-ai-instructions checklist.
+
+            1. Read the checklist at ${{ env.VALIDATOR_SKILL_PATH }}. It is the
+               single source of truth — do not invent or reorder validators.
+            2. List the changed instruction files:
+               git diff --name-only --diff-filter=d 'origin/${{ github.base_ref }}...HEAD' -- '**/SKILL.md' '.claude/agents/**' '.claude/commands/**' '.claude/skills/**' '.agents/skills/**' '.cursor/rules/**' 'CLAUDE.md' '**/CLAUDE.md' 'AGENTS.md' 'CORE_FLOW.md'
+            3. Classify each file (S, A, or R) and score every applicable
+               validator 0-2, exactly as the skill's procedure describes,
+               including reading sibling artifacts for validators 1 and 15.
+            4. Write the full report to validation-report.md following the
+               skill's output contract. The last line must be exactly
+               'VERDICT: PASS' or 'VERDICT: FAIL'. FAIL only when an
+               applicable blocker (1, 3, 5, 10, 11) scores 0.
+
+      - name: 'Post report and gate'
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          PR_NUMBER: '${{ github.event.pull_request.number }}'
+        run: |
+          if [ ! -f validation-report.md ]; then
+            echo 'validation-report.md was not produced — failing.'
+            exit 1
+          fi
+          gh pr comment "$PR_NUMBER" --body-file validation-report.md
+          grep -qx 'VERDICT: PASS' validation-report.md
