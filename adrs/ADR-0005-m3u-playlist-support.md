@@ -22,6 +22,11 @@ governs:
 > replaced by an explicit user-selected login mode. The M3U parse strategy
 > and CORS proxy reuse decisions are reaffirmed by ADR-0008 and carry
 > forward unchanged under its governance.
+>
+> **Parse-strategy step 5 (deriving categories from `group-title`) superseded
+> by [ADR-0020](ADR-0020-m3u-no-categories.md)** (E12): M3U sources now expose
+> **no** categories (the sidebar is a flat All Channels + Favourites list). The
+> rest of the parse strategy is unchanged.
 
 ## Context
 

@@ -76,14 +76,20 @@ when none is connected), opening the right-side account panel on click.
 - **Brand row**: amber dot + "IPTV" label in Space Grotesk bold.
 - **Search input**: icon + placeholder "Search channels…". Filters channel
   grid in real time using the `srch` module.
-- **Category list**: scrollable list of buttons, one per category derived from
-  the connected source plus a fixed "All Channels" entry and a "Favourites"
-  entry. Each button shows the category name and a channel-count badge.
-  Categories come from the source's own grouping in the source's own order:
-  Xtream from `get_live_categories`, M3U (and community presets) from each
-  entry's `group-title` (ADR-0009 / ADR-0005). Clicking a category filters the
-  channel grid by `ch.cat`. There is no genre-filter input and no alphabetical
-  re-ordering — the list is the source's categories as delivered.
+- **Category list**: a fixed "All Channels" entry, a "Favourites" entry (shown
+  only when favourites exist), then a scrollable list of buttons — one per
+  category derived from the connected source — each showing the category name
+  and a channel-count badge. Categories come from the source's own grouping in
+  the source's own order: **Xtream** from `get_live_categories` (ADR-0009),
+  **demo** from its curated category set. **M3U / playlist sources (including
+  the community presets, which all connect via the M3U path) expose NO
+  categories** — their sidebar is the flat list of just "All Channels" and
+  "Favourites", with no per-group buttons (ADR-0020). M3U `group-title`
+  categorization is removed: public M3U files pack semicolon-joined genres
+  (e.g. `Classic;Comedy;Public;Series`) into one `group-title`, which produced
+  useless category buttons. Clicking a category button (Xtream/demo only)
+  filters the channel grid by `ch.cat`. There is no genre-filter input and no
+  alphabetical re-ordering — the list is the source's categories as delivered.
 - Active category button has `--acc` left border + text colour.
 - Mobile: sidebar becomes horizontal strip (overflow-x: auto, no wrapping);
   brand and search input are hidden.
@@ -235,7 +241,10 @@ whose `val` is:
 
 1. `src === "demo"` (case-insensitive) → demo playlist, in either mode.
 2. `opts.m3u === true` → M3U path: fetch `src` through the proxy, parse
-   `#EXTM3U` text into categories + channels.
+   `#EXTM3U` text into channels. The M3U path returns an **empty `categories`
+   array** — playlist sources are not categorized (ADR-0020); the sidebar
+   shows only "All Channels" + "Favourites". Parsed channels keep `cat` as an
+   empty string (no group).
 3. otherwise → Xtream path: `player_api.php` categories + live streams.
 
 **Xtream normalization.** The Xtream path must return the same normalized
