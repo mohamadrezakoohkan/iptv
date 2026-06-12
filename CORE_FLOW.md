@@ -35,8 +35,9 @@ Three properties the harness must always preserve:
 
 ## 2. Actors
 
-Six actors: **one orchestrator + five subagents** — four pipeline phase
-agents, plus one harness maintainer that runs outside the pipeline.
+Seven actors: **one orchestrator + six subagents** — four pipeline phase
+agents, plus one harness maintainer and one backlog capturer that both run
+outside the pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
@@ -46,11 +47,14 @@ agents, plus one harness maintainer that runs outside the pipeline.
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
 | **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
+| **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only — in its own dedicated worktree, where it commits, pushes, and opens the backlog PR (§4.5) | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, commit/push/merge to `main`, or force-push |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
 to `main`, pushes to `main`, force-pushes, or merges a pull request.** All run
 work lands on the run's `ai/` branch and reaches `main` only through a PR
-merged by the human (§3, Git & pull-request contract).
+merged by the human (§3, Git & pull-request contract). The backlog path is the
+one path that always commits, pushes, and opens its own PR (§4.5), but on its
+own branch only — never to `main`.
 
 The subagents are defined in `.claude/agents/<name>.md` and are spawned by the
 orchestrator via the Agent tool with `subagent_type` set to the agent name.
@@ -70,6 +74,7 @@ agents and never talk to the human.
 ├── CORE_FLOW.md         This file — the harness definition
 ├── README.md            Product-facing doc (review-agent maintains)
 ├── CHANGELOG.md         Numbered Evolution Log (review-agent maintains)
+├── BACKLOG.md           Parked ideas, append-only (backlog-agent maintains; optional, created on first use)
 ├── specs/               Living specifications (spec-agent maintains)
 │   └── project.md       REQUIRED: product overview, stack, canonical build/test commands
 ├── adrs/                Architecture Decision Records (spec-agent creates)
@@ -78,7 +83,7 @@ agents and never talk to the human.
 │   └── TEMPLATE.md
 ├── failures/            Terminal-failure records that earn rules (orchestrator writes)
 │   └── TEMPLATE.md
-├── .claude/agents/      The five subagent definitions
+├── .claude/agents/      The six subagent definitions
 └── .claude/skills/      Invocation interfaces (one per subagent) + the
                          validate-ai-instructions checklist
 ```
@@ -277,13 +282,16 @@ rows, and the integration block records what failed.
 The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
 changes in the working tree, and the human decides when harness changes land.
 (Rule-ledger appends during a build run are different: the orchestrator's
-terminal-failure commit carries them, as part of the run's record.)
+terminal-failure commit carries them, as part of the run's record.) The backlog
+path (§4.5) is the opposite: `backlog-agent` always commits, pushes, and opens a
+PR for its single appended entry — on a dedicated branch in its own worktree,
+never on `main`.
 
 ## 4. The pipeline
 
 ### 4.1 Routing
 
-Every human prompt takes exactly one of three routes:
+Every human prompt takes exactly one of four routes:
 
 - **Build prompt** — adds, changes, or removes product behavior or structure
   → the full pipeline below: one run, one Evolution entry.
@@ -292,6 +300,11 @@ Every human prompt takes exactly one of three routes:
   rule ledger, harness settings, hooks, the CI validation workflow) →
   `coreflow-agent` (§4.4). No pipeline, no evolution number. This is how
   humans contribute to the harness instead of the product.
+- **Backlog prompt** — an explicit request to park an idea for later ("add to
+  the backlog", "note this down") → `backlog-agent` (§4.5). No pipeline, no
+  evolution number; non-blocking, may run in the background and in parallel
+  with anything else. It always captures the idea in a new worktree, commits,
+  pushes, and opens a PR (§4.5).
 - **Question / status request** → the orchestrator answers directly from the
   files. Nothing is spawned, nothing is written.
 
@@ -414,6 +427,7 @@ discrepant → failure protocol; the discrepancy is recorded, not hidden.
 | review remediation, per run | 1 round (1 attempt + 1 retry), then record failure |
 | spec, review themselves | no retries — a phase that cannot complete is a terminal failure |
 | `coreflow-agent` (harness path) | no retries — a failed harness change is reported, recorded, and left to the human |
+| `backlog-agent` (backlog path) | no retries — a failed capture is reported and left to the human |
 
 ### 4.4 The harness path (coreflow-agent, no pipeline)
 
@@ -440,6 +454,46 @@ checklist to every changed artifact, including the full scored report with
 The harness path never touches git history: `coreflow-agent` commits nothing
 and pushes nothing. Its changes stay in the working tree until the human
 commits them — committing harness changes is always the human's decision.
+
+### 4.5 The backlog path (backlog-agent, no pipeline)
+
+Backlog prompts bypass the pipeline entirely: the orchestrator spawns
+`backlog-agent` with the human's idea verbatim plus the Rule Pack, and relays
+its report. The agent owns a single file — `BACKLOG.md` at the repository root
+— and nothing else: it never touches product or harness artifacts and never
+runs pipeline phases. It is **non-blocking**: it may run in the background and
+in parallel with the pipeline or another agent, never waits on anything, and
+nothing waits on it.
+
+Its job is to capture intent for later, not to build it. Before appending, it
+interrogates the idea for ambiguity — listing the load-bearing terms and what
+each could mean — then resolves each into an assumption it writes down rather
+than asking the human; it never blocks on a question. For a term whose answer
+would change the problem or the solution it states the assumption plainly
+instead of inventing a definitive answer. It appends exactly one entry per
+spawn, with two fields — `user input:` (the idea verbatim) and `assumptions:`
+(one bullet per resolved term) — and never edits or removes prior entries
+(`BACKLOG.md` is append-only).
+
+The backlog path **always** self-publishes — it consumes no evolution number
+but, unlike every other path, never leaves its work in the working tree for the
+human to commit. On every spawn `backlog-agent`:
+
+1. creates a **new git worktree** off the current HEAD on a dedicated branch
+   `backlog/<slug>` (2–5 kebab-case words condensing the idea), so the capture
+   is isolated from any in-flight run sharing the main working tree,
+2. appends its single entry to `BACKLOG.md` in that worktree,
+3. commits it (`backlog: <slug>`),
+4. pushes the branch (`git push -u origin backlog/<slug>`),
+5. opens a PR against `main` (`gh pr create`) whose description contains
+   **only** the exact verbatim user input and the resolved assumptions — no
+   other sections.
+
+It commits and pushes to its own `backlog/<slug>` branch only and opens the PR;
+it never commits, pushes, or merges to `main`, and never force-pushes. Merging
+the backlog PR is the human's decision. If `git` or an authenticated `gh` CLI
+is unavailable, that is a `PHASE-FAILURE` — the backlog path does not fall back
+to an uncommitted write.
 
 ## 5. Failure → Rule protocol
 
