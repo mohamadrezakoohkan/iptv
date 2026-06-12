@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -130,39 +130,51 @@ describe('connect(realUrl) — proxy routing', function () {
   const USR  = 'alice';
   const PSS  = 'secret';
 
-  function makeFetch(body) {
-    return vi.fn().mockResolvedValue({
-      ok:   true,
-      json: vi.fn().mockResolvedValue(body),
-    });
+  const INF_OK = { user_info: { auth: 1, allowed_output_formats: ['ts'] } };
+  const CATS   = [{ category_id: '7', category_name: 'News' }];
+  const STRMS  = [{ num: 1, name: 'World News 24', stream_id: 42, stream_icon: 'http://img.example.com/42.png', category_id: '7' }];
+
+  /** Sequential mock: no-action info, categories, streams. opts: {inf, cats, strms} */
+  function makeFetch(opts) {
+    return vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(opts.inf ?? INF_OK) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(opts.cats ?? CATS) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(opts.strms ?? STRMS) });
   }
 
   it('fetches via /api/xtream?url= (not the portal directly)', async function () {
-    const ftch = makeFetch([]);
+    const ftch = makeFetch({});
     const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     await api.connect(BASE, { user: USR, pass: PSS });
     const firstUrl = ftch.mock.calls[0][0];
     expect(firstUrl.startsWith('/api/xtream?url=')).toBe(true);
   });
 
-  it('first request encodes get_live_categories action', async function () {
-    const ftch = makeFetch([]);
+  it('first request is the no-action player_api.php auth/info call', async function () {
+    const ftch = makeFetch({});
     const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     await api.connect(BASE, { user: USR, pass: PSS });
-    const firstUrl = ftch.mock.calls[0][0];
-    expect(decodeURIComponent(firstUrl)).toContain('action=get_live_categories');
+    const firstUrl = decodeURIComponent(ftch.mock.calls[0][0]);
+    expect(firstUrl).toContain('player_api.php');
+    expect(firstUrl).not.toContain('action=');
   });
 
-  it('second request encodes get_live_streams action', async function () {
-    const ftch = makeFetch([]);
+  it('second request encodes get_live_categories action', async function () {
+    const ftch = makeFetch({});
     const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     await api.connect(BASE, { user: USR, pass: PSS });
-    const secondUrl = ftch.mock.calls[1][0];
-    expect(decodeURIComponent(secondUrl)).toContain('action=get_live_streams');
+    expect(decodeURIComponent(ftch.mock.calls[1][0])).toContain('action=get_live_categories');
+  });
+
+  it('third request encodes get_live_streams action', async function () {
+    const ftch = makeFetch({});
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    await api.connect(BASE, { user: USR, pass: PSS });
+    expect(decodeURIComponent(ftch.mock.calls[2][0])).toContain('action=get_live_streams');
   });
 
   it('encodes username and password in proxy URL', async function () {
-    const ftch = makeFetch([]);
+    const ftch = makeFetch({});
     const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     await api.connect(BASE, { user: USR, pass: PSS });
     const firstUrl = decodeURIComponent(ftch.mock.calls[0][0]);
@@ -170,19 +182,85 @@ describe('connect(realUrl) — proxy routing', function () {
     expect(firstUrl).toContain('password=' + PSS);
   });
 
-  it('resolves with ok:true val containing host, user, categories, channels', async function () {
-    const cats = [{ name: 'News' }];
-    const chs  = [{ id: '1', name: 'World News 24' }];
-    const ftch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(cats) })
-      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(chs) });
+  it('resolves with ok:true val containing host, user, normalized categories and channels', async function () {
+    const ftch = makeFetch({});
     const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     const res = await api.connect(BASE, { user: USR, pass: PSS });
     expect(res.ok).toBe(true);
     expect(res.val.host).toBe(BASE);
     expect(res.val.user).toBe(USR);
-    expect(res.val.categories).toEqual(cats);
-    expect(res.val.channels).toEqual(chs);
+    expect(res.val.categories).toEqual([{ category_id: '7', category_name: 'News' }]);
+    expect(res.val.channels).toHaveLength(1);
+  });
+
+  it('maps a raw stream entry to the Ch schema per the spec §8 table', async function () {
+    const ftch = makeFetch({});
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    const ch = res.val.channels[0];
+    expect(ch).toEqual({
+      id:   '42',
+      name: 'World News 24',
+      grp:  'News',
+      url:  BASE + '/live/' + USR + '/' + PSS + '/42.ts',
+      img:  'http://img.example.com/42.png',
+      cat:  '7',
+      num:  1,
+    });
+  });
+
+  it('returns ok:false with a human-readable message when user_info.auth is falsy', async function () {
+    const ftch = makeFetch({ inf: { user_info: { auth: 0 } } });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: 'wrong' });
+    expect(res.ok).toBe(false);
+    expect(typeof res.err).toBe('string');
+    expect(res.err.toLowerCase()).toContain('login failed');
+    expect(ftch).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses allowed_output_formats[0] as the stream URL extension', async function () {
+    const inf = { user_info: { auth: 1, allowed_output_formats: ['m3u8', 'ts'] } };
+    const ftch = makeFetch({ inf });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    expect(res.val.channels[0].url.endsWith('/42.m3u8')).toBe(true);
+  });
+
+  it('falls back to ".ts" when allowed_output_formats is absent or empty', async function () {
+    const inf = { user_info: { auth: 1, allowed_output_formats: [] } };
+    const ftch = makeFetch({ inf });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    expect(res.val.channels[0].url.endsWith('/42.ts')).toBe(true);
+  });
+
+  it('maps an unknown category_id to grp "Uncategorized"', async function () {
+    const strms = [{ num: 3, name: 'Mystery TV', stream_id: 9, stream_icon: '', category_id: '999' }];
+    const ftch = makeFetch({ strms });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    expect(res.val.channels[0].grp).toBe('Uncategorized');
+    expect(res.val.channels[0].cat).toBe('999');
+  });
+
+  it('a trailing slash on the portal base never produces "//" in the stream URL', async function () {
+    const ftch = makeFetch({});
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE + '/', { user: USR, pass: PSS });
+    const url = res.val.channels[0].url;
+    expect(url).toBe(BASE + '/live/' + USR + '/' + PSS + '/42.ts');
+    expect(url.replace('http://', '')).not.toContain('//');
+  });
+
+  it('normalizes numeric category_id values to matching string keys', async function () {
+    const cats  = [{ category_id: 7, category_name: 'News' }];
+    const strms = [{ num: 1, name: 'World News 24', stream_id: 42, stream_icon: '', category_id: 7 }];
+    const ftch = makeFetch({ cats, strms });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    expect(res.val.categories[0]).toEqual({ category_id: '7', category_name: 'News' });
+    expect(res.val.channels[0].grp).toBe('News');
   });
 });
 
@@ -320,6 +398,14 @@ describe('connect — explicit opts.m3u routing', function () {
     return { fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL };
   }
 
+  /** Sequential Xtream mock: no-action info, empty categories, empty streams. */
+  function mkXtFetch() {
+    return vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue({ user_info: { auth: 1, allowed_output_formats: ['ts'] } }) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue([]) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue([]) });
+  }
+
   it('m3u: true forces the M3U path for a non-playlist URL despite credentials', async function () {
     const ftch = vi.fn().mockResolvedValue({
       ok:   true,
@@ -335,15 +421,12 @@ describe('connect — explicit opts.m3u routing', function () {
   });
 
   it('m3u: false forces the Xtream path even for a .m3u8 URL', async function () {
-    const ftch = vi.fn().mockResolvedValue({
-      ok:   true,
-      json: vi.fn().mockResolvedValue([]),
-    });
+    const ftch = mkXtFetch();
     const api = loadApi(baseGlobals(ftch));
     const res = await api.connect('https://example.com/list.m3u8', { user: '', pass: '', m3u: false });
     expect(res.ok).toBe(true);
     expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
-    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('action=get_live_categories');
+    expect(decodeURIComponent(ftch.mock.calls[1][0])).toContain('action=get_live_categories');
   });
 
   it('connect("demo", { m3u: true }) still resolves the demo playlist', async function () {
@@ -373,22 +456,16 @@ describe('connect — explicit opts.m3u routing', function () {
   });
 
   it('absent m3u flag defaults to Xtream: credential-less plain URL calls player_api.php', async function () {
-    const ftch = vi.fn().mockResolvedValue({
-      ok:   true,
-      json: vi.fn().mockResolvedValue([]),
-    });
+    const ftch = mkXtFetch();
     const api = loadApi(baseGlobals(ftch));
     const res = await api.connect('http://portal.example.com', { user: '', pass: '' });
     expect(res.ok).toBe(true);
     expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('player_api.php');
-    expect(decodeURIComponent(ftch.mock.calls[0][0])).toContain('action=get_live_categories');
+    expect(decodeURIComponent(ftch.mock.calls[1][0])).toContain('action=get_live_categories');
   });
 
   it('absent m3u flag defaults to Xtream: even a .m3u URL routes to player_api.php', async function () {
-    const ftch = vi.fn().mockResolvedValue({
-      ok:   true,
-      json: vi.fn().mockResolvedValue([]),
-    });
+    const ftch = mkXtFetch();
     const api = loadApi(baseGlobals(ftch));
     const res = await api.connect('https://example.com/list.m3u', { user: '', pass: '' });
     expect(res.ok).toBe(true);
@@ -396,10 +473,7 @@ describe('connect — explicit opts.m3u routing', function () {
   });
 
   it('absent m3u flag defaults to Xtream: credentialled plain URL routes to player_api.php', async function () {
-    const ftch = vi.fn().mockResolvedValue({
-      ok:   true,
-      json: vi.fn().mockResolvedValue([]),
-    });
+    const ftch = mkXtFetch();
     const api = loadApi(baseGlobals(ftch));
     const res = await api.connect('http://portal.example.com', { user: 'admin', pass: '1234' });
     expect(res.ok).toBe(true);

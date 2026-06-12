@@ -13,7 +13,9 @@ status: current
 **IPTV Broadcast Console** — a single-page web application that connects to
 an Xtream-compatible IPTV portal **or** a standard M3U playlist URL and lets
 the user browse live channels by category, search by name, mark favourites,
-and stream the selected channel via HLS (hls.js) directly in the browser.
+and stream the selected channel directly in the browser — HLS streams via
+hls.js, raw MPEG-TS streams (the Xtream live format) via mpegts.js, with
+the engine chosen automatically from the stream URL.
 The login mode is an **explicit user choice** in the footer — "Username &
 Password" (Xtream) or "Playlist URL only" (M3U) — never auto-detected from
 the URL shape.
@@ -35,7 +37,7 @@ without real credentials.
 | Runtime | Node.js >= 18 (ESM forbidden — use CommonJS `require`)      |
 | Server  | Express 4                                                   |
 | Client  | Vanilla JS (ES2020, no transpiler, no bundler, no framework)|
-| Player  | hls.js 1.5 (CDN) + native HLS fallback (Safari)            |
+| Player  | hls.js 1.5 (CDN) + native HLS fallback (Safari); mpegts.js 1.7 (CDN) for raw MPEG-TS |
 | CSS     | Plain CSS, custom properties, no preprocessor               |
 | Fonts   | Space Grotesk + IBM Plex Mono (Google Fonts CDN)            |
 | Testing | Vitest (unit + integration) + Playwright (UI/e2e)           |

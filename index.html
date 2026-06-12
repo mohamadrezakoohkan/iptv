@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,6 +31,10 @@
             <span class="on-air-dot"></span>ON AIR
           </div>
           <span class="now-title" id="now-info"></span>
+          <div class="fmt-chips" id="fmt-chips">
+            <span class="fmt-chip" id="chip-hls">HLS</span>
+            <span class="fmt-chip" id="chip-ts">TS</span>
+          </div>
         </div>
         <div class="player-wrap" id="player-wrap">
           <div id="player-card" class="player-card player-idle">
@@ -102,6 +106,7 @@
     </footer>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
   <script src="/cfg.js"></script>
   <script src="/api.js"></script>
   <script src="/st.js"></script>

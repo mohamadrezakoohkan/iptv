@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -30,6 +30,8 @@ const EL = {
   mode: null,   // #login-mode (radiogroup container)
   mxt:  null,   // #mode-xtream radio
   mm3u: null,   // #mode-m3u radio
+  chls: null,   // #chip-hls format chip (ADR-0010)
+  cts:  null,   // #chip-ts format chip (ADR-0010)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -93,6 +95,22 @@ function mkCard(ch) {
     + '</div>'
     + '<span class="ch-name">' + ch.name + '</span>'
     + '</div>';
+}
+
+/**
+ * Category id — normalized Xtream/M3U shape first (ADR-0009), demo fallback.
+ * @param {Object} cat
+ */
+function getCatId(cat) {
+  return cat.category_id ?? cat.id;
+}
+
+/**
+ * Category label — normalized Xtream/M3U shape first (ADR-0009), demo fallback.
+ * @param {Object} cat
+ */
+function getCatName(cat) {
+  return cat.category_name ?? cat.name;
 }
 
 /**
@@ -206,6 +224,8 @@ function mkEL() {
   EL.mode  = document.getElementById('login-mode');
   EL.mxt   = document.getElementById('mode-xtream');
   EL.mm3u  = document.getElementById('mode-m3u');
+  EL.chls  = document.getElementById('chip-hls');
+  EL.cts   = document.getElementById('chip-ts');
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -252,9 +272,9 @@ function rndSide(cats, chs, favs) {
       + '</button>';
   }
   for (let i = 0; i < cats.length; i += 1) {
-    const cat = cats[i];
-    const cnt = chs.filter(function byCat(ch) { return ch.cat === cat.id; }).length;
-    html += mkCatBtn({ id: cat.id, label: cat.name, cnt, flt });
+    const id  = getCatId(cats[i]);
+    const cnt = chs.filter(function byCat(ch) { return ch.cat === id; }).length;
+    html += mkCatBtn({ id, label: getCatName(cats[i]), cnt, flt });
   }
   EL.nav.innerHTML = html;
 }
@@ -408,6 +428,15 @@ function onDisc() {
 }
 
 // ---------------------------------------------------------------------------
+// rndChip — highlight the format chip of the engine in use (ADR-0010)
+// ---------------------------------------------------------------------------
+function rndChip(eng) {
+  if (!EL.chls || !EL.cts) return;
+  EL.chls.classList.toggle('active', eng === 'hls');
+  EL.cts.classList.toggle('active', eng === 'ts');
+}
+
+// ---------------------------------------------------------------------------
 // rndPlayer — update player-card visibility based on current phase
 // ---------------------------------------------------------------------------
 function rndPlayer() {
@@ -442,4 +471,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, getMode };
+window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode };

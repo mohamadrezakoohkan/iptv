@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -72,10 +72,22 @@
     return new Promise(function onWait(res) { setTimeout(res, ms); });
   }
 
+  /** Strip trailing slashes from a portal base URL. */
+  function getBase(src) {
+    return String(src).replace(/\/+$/, '');
+  }
+
   /** Build the proxy-wrapped Xtream API URL. opts: {user, pass, actn} */
   function mkPxUrl(src, opts) {
-    const tmp = src + '/player_api.php?username=' + opts.user
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
       + '&password=' + opts.pass + '&action=' + opts.actn;
+    return '/api/xtream?url=' + encodeURIComponent(tmp);
+  }
+
+  /** Build the proxy-wrapped no-action player_api.php auth/info URL. opts: {user, pass} */
+  function mkInfUrl(src, opts) {
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
+      + '&password=' + opts.pass;
     return '/api/xtream?url=' + encodeURIComponent(tmp);
   }
 
@@ -128,14 +140,75 @@
     return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels } };
   }
 
-  /** Load Xtream portal data — categories then channels. */
+  /** Predicate: no-action player_api.php payload carries a truthy user_info.auth. */
+  function hasAuth(inf) {
+    return Boolean(inf && inf.user_info && inf.user_info.auth);
+  }
+
+  /** Read the stream URL extension from the no-action info payload. Fallback "ts". */
+  function getExt(inf) {
+    const fmts = inf && inf.user_info && inf.user_info.allowed_output_formats;
+    if (Array.isArray(fmts) && typeof fmts[0] === 'string' && fmts[0].length > 0) return fmts[0];
+    return 'ts';
+  }
+
+  /** Normalize get_live_categories payload to M3U-shaped category objects. */
+  function getXtCats(val) {
+    const list = Array.isArray(val) ? val : [];
+    return list.map(function mkXtCat(d) {
+      return { category_id: String(d.category_id), category_name: String(d.category_name) };
+    });
+  }
+
+  /** Build category_id → category_name Map from normalized category objects. */
+  function mkCatMap(cats) {
+    const m = new Map();
+    for (let i = 0; i < cats.length; i += 1) {
+      m.set(cats[i].category_id, cats[i].category_name);
+    }
+    return m;
+  }
+
+  /** Build a Ch object from one raw get_live_streams entry. opts: {raw, cmap, base, user, pass, ext} */
+  function mkXtCh(opts) {
+    const d = opts.raw;
+    const cid = String(d.category_id ?? '');
+    return {
+      id:   String(d.stream_id),
+      name: String(d.name ?? ''),
+      grp:  opts.cmap.has(cid) ? opts.cmap.get(cid) : 'Uncategorized',
+      url:  opts.base + '/live/' + opts.user + '/' + opts.pass + '/' + d.stream_id + '.' + opts.ext,
+      img:  typeof d.stream_icon === 'string' ? d.stream_icon : '',
+      cat:  cid,
+      num:  typeof d.num === 'number' ? d.num : 0,
+    };
+  }
+
+  /** Map raw get_live_streams payload to Ch[]. opts: {raw, cats, src, user, pass, ext} */
+  function getXtChs(opts) {
+    const list = Array.isArray(opts.raw) ? opts.raw : [];
+    const cmap = mkCatMap(opts.cats);
+    const base = getBase(opts.src);
+    const chs = [];
+    for (let i = 0; i < list.length; i += 1) {
+      chs.push(mkXtCh({ raw: list[i], cmap, base, user: opts.user, pass: opts.pass, ext: opts.ext }));
+    }
+    return chs;
+  }
+
+  /** Load Xtream portal data — auth/info, categories, streams — normalized to Ch (ADR-0009). */
   async function loadXtream(src, opts) {
-    let res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_categories' }));
+    let res = await loadJson(mkInfUrl(src, opts));
     if (!res.ok) return res;
-    const val = res.val;
+    if (!hasAuth(res.val)) return { ok: false, err: 'Login failed – the portal rejected the username or password' };
+    const ext = getExt(res.val);
+    res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_categories' }));
+    if (!res.ok) return res;
+    const cats = getXtCats(res.val);
     res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_streams' }));
     if (!res.ok) return res;
-    return { ok: true, val: { host: src, user: opts.user, categories: val, channels: res.val } };
+    const chs = getXtChs({ raw: res.val, cats, src, user: opts.user, pass: opts.pass, ext });
+    return { ok: true, val: { server: getBase(src), host: src, user: opts.user, categories: cats, channels: chs } };
   }
 
   /** Return demo Result after simulated delay. */

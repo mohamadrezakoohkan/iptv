@@ -3,7 +3,9 @@
 A dark-themed, single-page web application that connects to any
 Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
 lets you browse live channels by category, search by name, mark favourites,
-and stream the selected channel via HLS directly in the browser.
+and stream the selected channel directly in the browser — HLS (`.m3u8`)
+streams play via hls.js, raw MPEG-TS streams (the common Xtream live output)
+via mpegts.js.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -15,7 +17,7 @@ playlist of publicly accessible HLS test streams — no real credentials require
 | Runtime | Node.js >= 18                                               |
 | Server  | Express 4 (static file serving + Xtream CORS proxy)         |
 | Client  | Vanilla JS ES2020 — no framework, no bundler, no transpiler |
-| Player  | hls.js 1.5 (CDN) + native HLS fallback (Safari)            |
+| Player  | hls.js 1.5 (CDN, + native HLS fallback) for `.m3u8` · mpegts.js 1.7 (CDN) for raw MPEG-TS |
 | CSS     | Plain CSS with custom properties                            |
 | Fonts   | Space Grotesk + IBM Plex Mono (Google Fonts CDN)            |
 
@@ -47,28 +49,41 @@ npx playwright test
 npx vitest run --config vitest.int.config.js   # alias: npm run test:int
 ```
 
-The integration suite validates real connectivity to the public iptv-org
-playlist (`https://iptv-org.github.io/iptv/index.m3u`): proxy fetch, engine
-connect + parse at real scale, and sampled stream reachability. It fails by
-design when the network is down and is excluded from the unit command.
+The integration suite validates real connectivity over the live network:
+the public iptv-org playlist (`https://iptv-org.github.io/iptv/index.m3u`)
+for the M3U path, and a real Xtream portal end-to-end (connect, list
+categories/channels, fetch playable MPEG-TS bytes through the proxy). It
+fails by design when the network is down and is excluded from the unit
+command.
 
 ## Features
 
-- **M3U playlist support** — paste any `.m3u` or `.m3u8` URL to connect;
-  detection is automatic, credentials are hidden, and channels arrive in the
-  same browse/play UX as Xtream portals.
+- **Xtream portal playback** — connect with portal URL + username/password;
+  channels are normalized into one canonical schema, and live MPEG-TS
+  streams (including 302-redirected, tokenized stream URLs) play through
+  the local proxy via mpegts.js.
+- **M3U playlist support** — pick the "Playlist URL only" login mode and
+  paste any `.m3u` or `.m3u8` URL; credentials are hidden and channels
+  arrive in the same browse/play UX as Xtream portals.
+- **Explicit login mode** — a footer selector chooses between
+  Xtream (username & password) and M3U (playlist URL only); the choice
+  persists across refreshes.
 - **Category sidebar** — browse channels by category; "All Channels" shows
   everything.
 - **Channel grid** — card per channel showing logo, number, and name; star to
   favourite.
 - **Search** — live-filter channels by name from the sidebar search input.
-- **HLS player** — idle, playing, and error states; autoplay on channel select.
-- **Footer** — login form + connected status bar showing host and channel count;
-  username/password fields are hidden automatically when an M3U URL is entered.
-- **Persistence** — credentials, last-selected channel, and favourites survive
-  page refreshes via `localStorage`.
-- **CORS proxy** — server proxies all external URL fetches (Xtream API calls
-  and M3U files) so remote hosts without CORS headers work from the browser.
+- **Dual-engine player** — idle, playing, and error states; autoplay on
+  channel select; engine chosen from the stream URL (`.m3u8` → hls.js,
+  otherwise mpegts.js), with HLS/TS chips indicating the engine in use.
+- **Footer** — login-mode selector + login form + connected status bar
+  showing host and channel count.
+- **Persistence** — credentials, login mode, last-selected channel, and
+  favourites survive page refreshes via `localStorage`.
+- **CORS proxy** — server proxies all external URL fetches (Xtream API calls,
+  M3U files, and live streams) so remote hosts without CORS headers work from
+  the browser; it follows validated redirects (up to 5 hops, SSRF-checked)
+  and pipes unbounded live streams, aborting upstream on disconnect.
 
 ## Architecture
 
