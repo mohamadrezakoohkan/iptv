@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0017, ADR-0018
+// ADR: ADR-0001, ADR-0017
 /* global window */
 
 'use strict';
@@ -75,39 +75,4 @@ function getChs(chs, q, flt, favs, sort) {
   return sortChs(res, sort, favs);
 }
 
-// ---------------------------------------------------------------------------
-// catName — pure: category display name, normalized shape first (ADR-0018).
-// Reads category_name, falls back to name; missing → '' (never throws).
-// ---------------------------------------------------------------------------
-function catName(cat) {
-  return String(cat.category_name ?? cat.name ?? '');
-}
-
-// ---------------------------------------------------------------------------
-// cmpCat — pure: case-insensitive locale compare on category name (ascending).
-// ---------------------------------------------------------------------------
-function cmpCat(a, b) {
-  return catName(a).toLowerCase().localeCompare(catName(b).toLowerCase());
-}
-
-/**
- * getCats — pure: filter a category list by case-insensitive substring on the
- * category name (category_name, fallback name), ordered name-ascending (locale,
- * case-insensitive). Empty/whitespace q returns all. Does not mutate the input
- * and reads no ST/window/DOM (ADR-0018).
- * @param {Array} cats - category list ({ category_name | name, ... })
- * @param {string} q   - filter query string
- * @returns {Array} filtered, name-ascending category[]
- */
-function getCats(cats, q) {
-  const lq = (q || '').trim().toLowerCase();
-  let res = cats;
-  if (lq.length > 0) {
-    res = cats.filter(function matchCat(cat) {
-      return catName(cat).toLowerCase().indexOf(lq) !== -1;
-    });
-  }
-  return res.slice().sort(cmpCat);
-}
-
-window.IptvSrch = { getChs, getCats, SORTS };
+window.IptvSrch = { getChs, SORTS };

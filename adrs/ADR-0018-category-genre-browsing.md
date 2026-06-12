@@ -3,17 +3,27 @@ id: ADR-0018
 title: Uniform category/genre browsing — derived genres for all engines, filterable sidebar
 date: 2026-06-12
 evolution: 9
-status: accepted
-governs:
-  - client/srch.js
-  - client/ui.js
-  - client/cfg.js
-  - client/main.js
-  - index.html
-  - client/app.css
+status: deleted (governed code removed, E11)
+governs: []
 ---
 
 # ADR-0018 — Uniform category/genre browsing — derived genres for all engines, filterable sidebar
+
+> **DELETED at E11.** The E11 prompt removed this feature: the derived/uniform
+> categorization did not work reliably across all streaming networks/portals.
+> The genre-filter input, the alphabetical `getCats`/`catName`/`cmpCat`
+> reordering, and the active-genre chip were removed; the sidebar reverted to
+> the pre-E9 plain per-engine category list governed by **ADR-0009 / ADR-0001**
+> (which remain `accepted`). The sibling **ADR-0017** (channel sorting) shipped
+> in the same PR (#11, E9) and is explicitly **preserved**. The demo channel
+> cat-id casing fix from TASK-0036 (`ch.cat === cat.id`) is **retained and
+> re-attributed to ADR-0009** — it is an ADR-0009 normalization-consistency
+> correctness fix, not an ADR-0018 feature, and the surviving plain category
+> browsing in demo depends on it. After E11 no file carries an `ADR: ADR-0018`
+> comment and no file lists ADR-0018 in `governs:`. This record is retained as
+> history (CORE_FLOW §3 — ADR files are never removed).
+> Removal tasks: TASK-0039 (logic + helpers), TASK-0040 (UI markup/styles/chip),
+> TASK-0041 (test cleanup + spec sync verification).
 
 ## Context
 

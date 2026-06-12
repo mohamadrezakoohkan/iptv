@@ -342,7 +342,7 @@ function mkUiWin(opts) {
   elMap['mode-xtream'].checked = !m3u;
   const win = {
     localStorage: ls,
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
+    IptvSrch: { getChs: function getChs() { return []; } },
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {
@@ -555,7 +555,7 @@ function runMain(acct) {
     IptvUi:   { mkEL: vi.fn(), onPhase: vi.fn(), rndPhase: vi.fn(), rndFoot: vi.fn(), rndSide: vi.fn(), rndGrid: vi.fn(), rndAcct: vi.fn(), rndSort: vi.fn(), rndTheme: vi.fn() },
     IptvPlay: { mkPlay: vi.fn() },
     IptvApi:  { connect },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
+    IptvSrch: { getChs: function getChs() { return []; } },
   };
   const src = readFileSync(MAIN_SRC, 'utf8');
   // eslint-disable-next-line no-new-func

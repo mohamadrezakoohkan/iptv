@@ -3,7 +3,7 @@
 A single-page web application — with a switchable **light/dark theme** (a
 sun/moon toggle in the top-right; dark by default) — that connects to any
 Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
-lets you browse live channels by category/genre, filter and sort the channel
+lets you browse live channels by category, sort the channel
 list, search by name, mark favourites, and stream the selected channel directly
 in the browser — HLS (`.m3u8`)
 streams play via hls.js, raw MPEG-TS streams (the common Xtream live output)
@@ -81,12 +81,11 @@ command.
 - **Explicit login mode** — a footer selector chooses between
   Xtream (username & password) and M3U (playlist URL only); the choice
   persists across refreshes.
-- **Category / genre sidebar** — browse channels by category; "All Channels"
-  shows everything, "Favourites" is pinned. Categories are listed
-  alphabetically, and for large playlists (more than 12 categories) a
-  "Filter genres…" input narrows the list by name as you type, keeping
-  "All Channels" and "Favourites" pinned. The content-head bar shows an
-  active-genre chip with the playing channel's genre.
+- **Category sidebar** — browse channels by category; "All Channels"
+  shows everything, "Favourites" is pinned. Categories come from the
+  connected source's own grouping, in the source's own delivery order
+  (Xtream from `get_live_categories`, M3U / community presets from each
+  entry's `group-title`); clicking one filters the channel grid.
 - **Channel grid** — card per channel showing logo, number, and name; star to
   favourite.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the

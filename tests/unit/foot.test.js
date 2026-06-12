@@ -78,8 +78,8 @@ function loadUi(opts) {
       saveAct:   function saveAct(id) { acctStore.actId = id; },
       clearAct:  function clearAct() { acctStore.actId = null; },
     },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
-    S: { catFltMin: 12 },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {

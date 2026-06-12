@@ -62,7 +62,7 @@ function mkEl(id, attrs) {
 function loadUi() {
   const elMap = {};
   const ids = [
-    'ch-list', 'ch-sort', 'player-video', 'search', 'now-info', 'genre-chip',
+    'ch-list', 'ch-sort', 'player-video', 'search', 'now-info',
     'player-err', 'grp-nav', 'footer', 'player-card', 'player-idle',
     'player-wrap', 'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
@@ -81,8 +81,8 @@ function loadUi() {
   const saveTheme = vi.fn();
   const win = {
     IptvSt:   { ST: { phase: 'INIT' }, saveTheme },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
-    S: { catFltMin: 12 },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {
