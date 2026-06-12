@@ -2,8 +2,8 @@
 id: TASK-0033
 adr: ADR-0017
 evolution: 9
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -59,5 +59,37 @@ runtime is never half-migrated (E7 staged-migration lesson).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `client/srch.js` — added `SORTS` (`{id,label}[]`, four tokens in order),
+  pure comparators (`cmpNum`, `cmpName`, `cmpFav`) + `sortChs` dispatcher, and
+  the new `sort` parameter on `getChs(chs, q, flt, favs, sort)` applied as the
+  final ordering step. Unknown/omitted token → `num-asc`. Exported `SORTS`.
+- `client/st.js` — `ST.sort` default `'num-asc'`; `setSort` (sole writer,
+  exported); `loadSt` reads `iptv_sort` and accepts only one of the four known
+  tokens; `saveSt('sort')` writes `ST.sort`. Local guard list named **`SRTS`**
+  (not `SORTS`) — see the cross-file note below.
+- `client/cfg.js` — `S.sortKey = 'iptv_sort'`.
+- `client/ui.js` — migrated all four `getChs` call sites (`fireSrch`,
+  `onCatClick`, `onOk`, `onSwOk`) to pass `st.sort`.
+- `client/main.js` — migrated the restore-path `getChs` call to pass `ST.sort`.
+
+Non-obvious for reviewers:
+
+- **Shared global scope collision (caught by the UI suite).** Client scripts
+  are plain `<script>`s sharing one window scope, so a top-level
+  `const SORTS` in both `srch.js` and `st.js` throws
+  `Identifier 'SORTS' has already been declared` at load — which broke every
+  connect-path UI test, not just sort tests. The st.js guard list is therefore
+  named `SRTS`; `srch.js` keeps `SORTS` as the exported UI source of truth.
+  Unit tests did not catch this (each module loads in an isolated `new Function`
+  window); only the full UI suite did.
+- `getChs` keeps its pre-existing 4→5 positional params (the ADR mandates the
+  `sort` arg); this predates and matches the existing signature style.
+- `main.js` was added to ADR-0017 `governs:` (it now carries sort-token logic)
+  and given the `ADR: ADR-0017` comment; `ui.js` already governed, comment
+  updated.
+- No integration tests: this task is pure logic + `localStorage`, no external
+  connectivity. The sort CONTROL UI is TASK-0035 (out of scope here).
+
+Verified: `npx vitest run` → 403 passed; `npx playwright test` → 112 passed.

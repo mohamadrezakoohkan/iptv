@@ -188,6 +188,78 @@ describe("saveSt('sel') — writes id when ST.cur is set", function () {
 });
 
 // ---------------------------------------------------------------------------
+// setSort + ST.sort — default + sole writer (ADR-0017)
+// ---------------------------------------------------------------------------
+describe('setSort() — sort state field', function () {
+  let win;
+  beforeEach(function () { win = mkWin().win; });
+
+  it('ST.sort defaults to num-asc', function () {
+    expect(win.IptvSt.ST.sort).toBe('num-asc');
+  });
+
+  it('setSort mutates only ST.sort', function () {
+    const before = JSON.stringify(win.IptvSt.ST);
+    win.IptvSt.setSort('name-desc');
+    expect(win.IptvSt.ST.sort).toBe('name-desc');
+    const after = Object.assign({}, win.IptvSt.ST, { sort: 'num-asc' });
+    expect(JSON.stringify(after)).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// saveSt('sort') / loadSt — iptv_sort round-trip + unknown-token rejection
+// (ADR-0017)
+// ---------------------------------------------------------------------------
+describe("saveSt('sort') / loadSt — iptv_sort persistence", function () {
+  let win, store;
+  beforeEach(function () {
+    const w = mkWin();
+    win   = w.win;
+    store = w.store;
+  });
+
+  it('S.sortKey is iptv_sort', function () {
+    expect(win.S.sortKey).toBe('iptv_sort');
+  });
+
+  it("saveSt('sort') writes ST.sort to iptv_sort", function () {
+    win.IptvSt.setSort('fav-first');
+    win.IptvSt.saveSt('sort');
+    expect(store['iptv_sort']).toBe('fav-first');
+  });
+
+  it('loadSt restores a known stored token into ST.sort', function () {
+    store['iptv_sort'] = 'name-asc';
+    win.IptvSt.loadSt();
+    expect(win.IptvSt.ST.sort).toBe('name-asc');
+  });
+
+  it('loadSt round-trips every known token', function () {
+    ['num-asc', 'name-asc', 'name-desc', 'fav-first'].forEach(function chk(tok) {
+      const w = mkWin();
+      w.win.IptvSt.setSort(tok);
+      w.win.IptvSt.saveSt('sort');
+      const w2 = mkWin();
+      w2.store['iptv_sort'] = w.store['iptv_sort'];
+      w2.win.IptvSt.loadSt();
+      expect(w2.win.IptvSt.ST.sort).toBe(tok);
+    });
+  });
+
+  it('loadSt rejects an unknown stored token, leaving the default', function () {
+    store['iptv_sort'] = 'totally-bogus';
+    win.IptvSt.loadSt();
+    expect(win.IptvSt.ST.sort).toBe('num-asc');
+  });
+
+  it('loadSt leaves the default when iptv_sort is absent', function () {
+    win.IptvSt.loadSt();
+    expect(win.IptvSt.ST.sort).toBe('num-asc');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getM3u — legacy iptv_creds migration rule (TASK-0019, ADR-0008)
 // ---------------------------------------------------------------------------
 describe('getM3u() — legacy migration rule', function () {

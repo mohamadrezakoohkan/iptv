@@ -9,6 +9,7 @@ governs:
   - client/st.js
   - client/cfg.js
   - client/ui.js
+  - client/main.js
   - index.html
   - client/app.css
 ---

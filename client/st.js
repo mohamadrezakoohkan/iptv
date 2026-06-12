@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015, ADR-0017
 /* global window */
 
 'use strict';
@@ -13,6 +13,7 @@ const ST = {
   cur:    null,
   srch:   '',
   flt:    'all',
+  sort:   'num-asc',
   vol:    1.0,
   muted:  false,
   err:    null,
@@ -24,6 +25,15 @@ const ST = {
 // ---------------------------------------------------------------------------
 // Phase transition map — SCREAMING_SNAKE, never mutated
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Known sort tokens (ADR-0017) — the persistence guard. Mirrors IptvSrch.SORTS
+// ids; kept here so loadSt validates without depending on a higher module
+// (§12: srch.js loads after st.js). SORTS in srch.js stays the UI source.
+// Named SRTS (not SORTS) to avoid colliding with srch.js's SORTS in the shared
+// browser global scope — non-module client scripts share one scope.
+// ---------------------------------------------------------------------------
+const SRTS = ['num-asc', 'name-asc', 'name-desc', 'fav-first'];
+
 const PHASES = {
   INIT:  ['LOAD'],
   LOAD:  ['READY', 'ERR'],
@@ -84,6 +94,15 @@ function setFlt(cat) {
   ST.flt = cat;
 }
 
+// ---------------------------------------------------------------------------
+// setSort — the only writer of ST.sort (ADR-0017). Stores the token verbatim;
+// getChs (srch.js) treats an unknown token as the num-asc default.
+// ADR: ADR-0017
+// ---------------------------------------------------------------------------
+function setSort(tok) {
+  ST.sort = tok;
+}
+
 function setVol(v) {
   ST.vol = v;
 }
@@ -126,13 +145,17 @@ function loadSt() {
     const f = JSON.parse(ls.getItem(S.favsKey));
     if (Array.isArray(f)) ST.favs = f;
   } catch (e) {}
+  try {
+    const srt = ls.getItem(S.sortKey);
+    if (SRTS.indexOf(srt) !== -1) ST.sort = srt;
+  } catch (e) {}
   return { sel: sel || null };
 }
 
 // ---------------------------------------------------------------------------
 // saveSt — writes one localStorage key after a state mutation.
-// field: 'favs' | 'sel'
-// ADR: ADR-0003
+// field: 'favs' | 'sel' | 'sort'
+// ADR: ADR-0003, ADR-0017
 // ---------------------------------------------------------------------------
 function saveSt(fld) {
   const S  = window.S;
@@ -143,6 +166,9 @@ function saveSt(fld) {
   if (fld === 'sel') {
     if (!ST.cur) return;
     try { ls.setItem(S.selKey, String(ST.cur.id)); } catch (e) {}
+  }
+  if (fld === 'sort') {
+    try { ls.setItem(S.sortKey, String(ST.sort)); } catch (e) {}
   }
 }
 
@@ -324,6 +350,7 @@ window.IptvSt = {
   setCur,
   setSrch,
   setFlt,
+  setSort,
   setVol,
   setMuted,
   setFavs,

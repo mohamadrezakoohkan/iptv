@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017
 /* global window, document */
 
 'use strict';
@@ -27,7 +27,7 @@ function onConnRes(res) {
   }
   rndFoot();
   rndSide(ST.cats, ST.chs, ST.favs);
-  rndGrid(window.IptvSrch.getChs(ST.chs, ST.srch, ST.flt, ST.favs));
+  rndGrid(window.IptvSrch.getChs(ST.chs, ST.srch, ST.flt, ST.favs, ST.sort));
 }
 
 // ---------------------------------------------------------------------------

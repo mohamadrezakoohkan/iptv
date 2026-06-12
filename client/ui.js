@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -139,7 +139,7 @@ function mkCatBtn(opts) {
 function fireSrch() {
   const st = window.IptvSt.ST;
   window.IptvSt.setSrch(srch);
-  rndGrid(window.IptvSrch.getChs(st.chs, srch, st.flt, st.favs));
+  rndGrid(window.IptvSrch.getChs(st.chs, srch, st.flt, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ function onCatClick(evt) {
   const st  = window.IptvSt.ST;
   window.IptvSt.setFlt(cat);
   rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, cat, st.favs));
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, cat, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -627,7 +627,7 @@ function onOk(val) {
   saveActive({ url: src, host: val.host, user, pass, m3u });
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
   rndAcct();
   if (EL.bcon) { EL.bcon.textContent = 'Connect'; EL.bcon.disabled = false; }
@@ -684,7 +684,7 @@ function onSwOk(acct, val) {
   window.IptvSt.saveAct(acct.id);
   const st = window.IptvSt.ST;
   rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs));
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
   rndAcct();
 }
