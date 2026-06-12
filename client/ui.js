@@ -98,6 +98,22 @@ function mkCard(ch) {
 }
 
 /**
+ * Category id — normalized Xtream/M3U shape first (ADR-0009), demo fallback.
+ * @param {Object} cat
+ */
+function getCatId(cat) {
+  return cat.category_id ?? cat.id;
+}
+
+/**
+ * Category label — normalized Xtream/M3U shape first (ADR-0009), demo fallback.
+ * @param {Object} cat
+ */
+function getCatName(cat) {
+  return cat.category_name ?? cat.name;
+}
+
+/**
  * Build a single category button HTML string.
  * opts: { id, label, cnt, flt }
  */
@@ -256,9 +272,9 @@ function rndSide(cats, chs, favs) {
       + '</button>';
   }
   for (let i = 0; i < cats.length; i += 1) {
-    const cat = cats[i];
-    const cnt = chs.filter(function byCat(ch) { return ch.cat === cat.id; }).length;
-    html += mkCatBtn({ id: cat.id, label: cat.name, cnt, flt });
+    const id  = getCatId(cats[i]);
+    const cnt = chs.filter(function byCat(ch) { return ch.cat === id; }).length;
+    html += mkCatBtn({ id, label: getCatName(cats[i]), cnt, flt });
   }
   EL.nav.innerHTML = html;
 }
