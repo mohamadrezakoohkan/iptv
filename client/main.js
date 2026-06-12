@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0018
 /* global window, document */
 
 'use strict';
@@ -27,7 +27,8 @@ function onConnRes(res) {
   }
   rndFoot();
   rndSide(ST.cats, ST.chs, ST.favs);
-  rndGrid(window.IptvSrch.getChs(ST.chs, ST.srch, ST.flt, ST.favs));
+  rndGrid(window.IptvSrch.getChs(ST.chs, ST.srch, ST.flt, ST.favs, ST.sort));
+  window.IptvUi.rndHead();
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ function onReady() {
   window.IptvUi.rndAcct();
   const loadStFn = window.IptvSt.loadSt;
   _stored = loadStFn ? loadStFn() : null;
+  window.IptvUi.rndSort();
   const { loadAccts, getAct } = window.IptvSt;
   const store = loadAccts ? loadAccts() : { accts: [], actId: null };
   const acct  = getAct ? getAct(store.accts, store.actId) : null;

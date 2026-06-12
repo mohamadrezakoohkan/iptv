@@ -78,7 +78,8 @@ function loadUi() {
   const docListeners = {};
   const win = {
     IptvSt:   { ST: { phase: 'INIT' } },
-    IptvSrch: { getChs: function getChs() { return []; } },
+    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
+    S: { catFltMin: 12 },
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {
@@ -257,9 +258,11 @@ function loadUiStore(store) {
       saveAct:   function saveAct(id)  { calls.saveAct.push(id); cur.actId = id; },
       clearAct:  function clearAct()   { calls.clearAct += 1; cur.actId = null; },
       setChs:    function setChs() {},
+      setCur:    function setCur() {},
       go: function go() {},
     },
-    IptvSrch: { getChs: function getChs() { return []; } },
+    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
+    S: { catFltMin: 12 },
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
     document: {
@@ -437,7 +440,7 @@ function loadUiPst(store) {
   }
 
   const win = {
-    S: { psts: PSTS },
+    S: { psts: PSTS, catFltMin: 12 },
     IptvSt: {
       ST: { phase: 'INIT', cats: [], chs: [], favs: [], srch: '', flt: 'all' },
       loadAccts: function loadAccts() { return { accts: cur.accts.slice(), actId: cur.actId }; },
@@ -449,9 +452,10 @@ function loadUiPst(store) {
       saveAct:   function saveAct(id)  { calls.saveAct.push(id); cur.actId = id; },
       clearAct:  function clearAct()   { cur.actId = null; },
       setChs:    function setChs() {},
+      setCur:    function setCur() {},
       go: function go() {},
     },
-    IptvSrch: { getChs: function getChs() { return []; } },
+    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
     document: {

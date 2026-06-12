@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015
+// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015, ADR-0017, ADR-0018
 /* global window */
 
 'use strict';
@@ -26,10 +26,12 @@ const S = {
   skpSec:   10,
   debMs:    200,
   retries:  3,
+  catFltMin: 12,      // sidebar genre-filter input appears above this cat count (ADR-0018)
   acctsKey: 'iptv_accts',
   actKey:   'iptv_act',
   selKey:   'iptv_sel',
   favsKey:  'iptv_favs',
+  sortKey:  'iptv_sort',
   psts:     PSTS,
 };
 Object.freeze(S);
