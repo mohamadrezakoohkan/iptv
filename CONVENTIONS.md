@@ -47,6 +47,9 @@ Implement agents MUST NOT invent abbreviations. If a concept is absent, request 
 | position               | pos    | 3         | var, prop          |
 | volume                 | vol    | 3         | var, prop          |
 | category               | cat    | 3         | var, prop          |
+| account                | acct   | 4         | var, prop, module  |
+| accounts               | accts  | 5         | var, prop          |
+| panel                  | pnl    | 3         | var, prop          |
 | metadata               | meta   | 4         | var, prop          |
 | image                  | img    | 3         | var, prop          |
 | icon                   | ico    | 3         | var, prop          |

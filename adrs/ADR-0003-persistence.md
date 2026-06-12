@@ -3,7 +3,7 @@ id: ADR-0003
 title: Persistence strategy — localStorage keys for credentials, selection, favourites
 date: 2026-06-11
 evolution: 1
-status: accepted
+status: accepted   # credential-persistence decision superseded (by ADR-0013, E7); iptv_sel + iptv_favs decisions remain in force
 governs:
   - client/st.js
   - client/cfg.js
@@ -33,6 +33,12 @@ The design prototype uses three constants (`STORE_KEY`, `SELECT_KEY`,
 constants to live in the config object `S` in `client/cfg.js`.
 
 ## Decision
+
+> **E7 update:** the `iptv_creds` row below — the single-credential record and
+> its load-time reconnect — is **superseded by ADR-0013**, which replaces it
+> with a saved-accounts list (`iptv_accts`) plus an active pointer (`iptv_act`).
+> The `iptv_sel` and `iptv_favs` rows, and the `loadSt`/`saveSt` helpers that
+> own them, remain in force under this ADR.
 
 Three localStorage keys, declared in `S` (client `cfg.js`):
 
