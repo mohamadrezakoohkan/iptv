@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0017, ADR-0018
+// ADR: ADR-0001, ADR-0017
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -270,101 +270,6 @@ describe('getChs — purity', function () {
     // loadSrch builds a bare window {}; a non-pure read would throw here.
     let err = null;
     try { srch.getChs(SCHS, '', 'all', [], 'fav-first'); } catch (e) { err = e; }
-    expect(err).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getCats — pure genre/category filter + alphabetical ordering (ADR-0018)
-// Fixture mixes normalized (category_name) and demo (name) shapes, and an
-// out-of-order set so ordering is observable.
-// ---------------------------------------------------------------------------
-const CATS = [
-  { category_id: 'sports', category_name: 'Sports' },
-  { category_id: 'news',   category_name: 'News' },
-  { category_id: 'movies', category_name: 'Movies' },
-  { id: 'kids',            name: 'Kids' },
-  { category_id: 'docs',   category_name: 'Documentary' },
-];
-
-describe('getCats — filter + ordering', function () {
-  let srch;
-  beforeEach(function () { srch = loadSrch(); });
-
-  it('empty query returns all categories', function () {
-    const out = srch.getCats(CATS, '');
-    expect(out.length).toBe(CATS.length);
-  });
-
-  it('whitespace-only query returns all categories', function () {
-    const out = srch.getCats(CATS, '   ');
-    expect(out.length).toBe(CATS.length);
-  });
-
-  it('orders results name-ascending (case-insensitive locale)', function () {
-    const names = srch.getCats(CATS, '').map(function n(c) { return c.category_name ?? c.name; });
-    expect(names).toEqual(['Documentary', 'Kids', 'Movies', 'News', 'Sports']);
-  });
-
-  it('filters by case-insensitive substring on the category name', function () {
-    const out = srch.getCats(CATS, 'ov');
-    const names = out.map(function n(c) { return c.category_name ?? c.name; });
-    // only 'Movies' contains 'ov'
-    expect(names).toEqual(['Movies']);
-  });
-
-  it('substring filter keeps every match, ordered ascending', function () {
-    const out = srch.getCats(CATS, 's');
-    const names = out.map(function n(c) { return c.category_name ?? c.name; });
-    // 'Kids', 'Movies', 'News', 'Sports' all contain 's'; ordered ascending
-    expect(names).toEqual(['Kids', 'Movies', 'News', 'Sports']);
-  });
-
-  it('substring match is case-insensitive on both sides', function () {
-    const out = srch.getCats(CATS, 'NEWS');
-    expect(out.length).toBe(1);
-    expect(out[0].category_name).toBe('News');
-  });
-
-  it('matches the demo-shape name field (fallback to name)', function () {
-    const out = srch.getCats(CATS, 'kid');
-    expect(out.length).toBe(1);
-    expect(out[0].name).toBe('Kids');
-  });
-
-  it('returns empty array when nothing matches', function () {
-    expect(srch.getCats(CATS, 'zzznope').length).toBe(0);
-  });
-
-  it('tolerates a category whose name field is missing (treated as empty)', function () {
-    const cats = [{ category_id: 'x' }, { category_name: 'Alpha' }];
-    let err = null;
-    let out = [];
-    try { out = srch.getCats(cats, ''); } catch (e) { err = e; }
-    expect(err).toBeNull();
-    expect(out.length).toBe(2);
-    // missing name → '' sorts before 'Alpha'
-    expect(out[0].category_name ?? out[0].name).toBeUndefined();
-    expect(out[1].category_name).toBe('Alpha');
-  });
-
-  it('a missing-name category is excluded by a non-matching query without throwing', function () {
-    const cats = [{ category_id: 'x' }, { category_name: 'Alpha' }];
-    const out = srch.getCats(cats, 'alp');
-    expect(out.length).toBe(1);
-    expect(out[0].category_name).toBe('Alpha');
-  });
-
-  it('does not mutate the input array or its order', function () {
-    const input = CATS.slice();
-    const snapshot = input.map(function n(c) { return c.category_id ?? c.id; });
-    srch.getCats(input, '');
-    expect(input.map(function n(c) { return c.category_id ?? c.id; })).toEqual(snapshot);
-  });
-
-  it('runs with no global ST / document present (loadSrch window has neither)', function () {
-    let err = null;
-    try { srch.getCats(CATS, 'o'); } catch (e) { err = e; }
     expect(err).toBeNull();
   });
 });

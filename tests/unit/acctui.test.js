@@ -78,8 +78,8 @@ function loadUi() {
   const docListeners = {};
   const win = {
     IptvSt:   { ST: { phase: 'INIT' } },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
-    S: { catFltMin: 12 },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {
@@ -261,8 +261,8 @@ function loadUiStore(store) {
       setCur:    function setCur() {},
       go: function go() {},
     },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
-    S: { catFltMin: 12 },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    S: {},
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
     document: {
@@ -440,7 +440,7 @@ function loadUiPst(store) {
   }
 
   const win = {
-    S: { psts: PSTS, catFltMin: 12 },
+    S: { psts: PSTS },
     IptvSt: {
       ST: { phase: 'INIT', cats: [], chs: [], favs: [], srch: '', flt: 'all' },
       loadAccts: function loadAccts() { return { accts: cur.accts.slice(), actId: cur.actId }; },
@@ -455,7 +455,7 @@ function loadUiPst(store) {
       setCur:    function setCur() {},
       go: function go() {},
     },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
+    IptvSrch: { getChs: function getChs() { return []; } },
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
     document: {

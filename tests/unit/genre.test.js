@@ -81,25 +81,6 @@ function mkCats(n) {
 }
 
 // ---------------------------------------------------------------------------
-// Genre-filter input presence around the S.catFltMin threshold
-// ---------------------------------------------------------------------------
-describe('rndSide — genre-filter input around S.catFltMin', function () {
-  it('omits #cat-filter when the category count is at or below S.catFltMin', function () {
-    const { ui, els } = loadUi();
-    ui.rndSide(mkCats(12), [], []);   // default catFltMin is 12 → not exceeded
-    expect(els['grp-nav'].innerHTML).not.toContain('id="cat-filter"');
-  });
-
-  it('renders #cat-filter with the "Filter genres…" placeholder when the count exceeds S.catFltMin', function () {
-    const { ui, els } = loadUi();
-    ui.rndSide(mkCats(13), [], []);
-    const html = els['grp-nav'].innerHTML;
-    expect(html).toContain('id="cat-filter"');
-    expect(html).toContain('placeholder="Filter genres…"');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Pinned All Channels / Favourites entries (never filtered or reordered)
 // ---------------------------------------------------------------------------
 describe('rndSide — pinned All Channels / Favourites', function () {
@@ -122,7 +103,7 @@ describe('rndSide — pinned All Channels / Favourites', function () {
 
   it('keeps "All Channels"/"Favourites" pinned in the cat-list alongside the genre buttons (large catalog)', function () {
     const { ui, els } = loadUi();
-    const cats = mkCats(13);                 // exceeds catFltMin → filter input present
+    const cats = mkCats(13);
     ui.rndSide(cats, [], ['1']);
     const html = els['grp-nav'].innerHTML;
     // the pinned buttons live inside the re-renderable #cat-list wrapper,
@@ -136,22 +117,22 @@ describe('rndSide — pinned All Channels / Favourites', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Genre buttons render name-ascending via IptvSrch.getCats
+// Genre buttons render in the source's own delivery order (pre-E9 behaviour)
 // ---------------------------------------------------------------------------
-describe('rndSide — genre buttons ordered name-ascending', function () {
-  it('renders the genre buttons in name-ascending order (getCats ordering)', function () {
+describe('rndSide — genre buttons in source order', function () {
+  it('renders the genre buttons in the source category order (no reordering)', function () {
     const { ui, els } = loadUi();
     const cats = [
       { id: 'z', name: 'Zeta' }, { id: 'a', name: 'Alpha' }, { id: 'm', name: 'Movies' },
     ];
     ui.rndSide(cats, [], []);
     const html = els['grp-nav'].innerHTML;
+    const pz = html.indexOf('data-cat="z"');
     const pa = html.indexOf('data-cat="a"');
     const pm = html.indexOf('data-cat="m"');
-    const pz = html.indexOf('data-cat="z"');
-    expect(pa).toBeGreaterThan(-1);
+    expect(pz).toBeGreaterThan(-1);
+    expect(pz).toBeLessThan(pa);
     expect(pa).toBeLessThan(pm);
-    expect(pm).toBeLessThan(pz);
   });
 });
 

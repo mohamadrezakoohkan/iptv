@@ -81,8 +81,8 @@ function loadUi() {
   const saveTheme = vi.fn();
   const win = {
     IptvSt:   { ST: { phase: 'INIT' }, saveTheme },
-    IptvSrch: { getChs: function getChs() { return []; }, getCats: function getCats(cats) { return cats.slice(); } },
-    S: { catFltMin: 12 },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {

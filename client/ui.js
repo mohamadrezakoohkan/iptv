@@ -623,13 +623,13 @@ function mkPin(opts) {
 }
 
 // ---------------------------------------------------------------------------
-// mkCats — build the category-button list HTML: pinned All/Favs first, then
-// the genre buttons filtered by the view-local query and name-ascending via
-// IptvSrch.getCats (ADR-0018). opts: { cats, chs, favs }.
+// mkCats — build the category-button list HTML: pinned All/Favs first, then a
+// category button per source category in the source's own delivery order.
+// opts: { cats, chs, favs }.
 // ---------------------------------------------------------------------------
 function mkCats(opts) {
   const sel  = window.IptvSt.ST.flt;
-  const list = window.IptvSrch.getCats(opts.cats, flt);
+  const list = opts.cats;
   let html   = mkPin({ chs: opts.chs, favs: opts.favs, sel });
   for (let i = 0; i < list.length; i += 1) {
     const id  = getCatId(list[i]);
