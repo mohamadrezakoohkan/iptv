@@ -24,17 +24,28 @@ You own control flow and state; you never produce the work product yourself.
    the terminal-failure state to the run branch (CORE_FLOW.md §5) — never to
    `main`.
 
+## Mandatory artifact validation
+
+Before any agent returns after touching instruction files (`.claude/agents/*.md`,
+`CLAUDE.md`, `CORE_FLOW.md`, `.claude/skills/**`), it must read
+`.claude/skills/validate-ai-instructions/SKILL.md` and apply its 15-point
+checklist to every changed artifact. The scored report ending with `VERDICT:`
+must appear in the agent's return. A `VERDICT: FAIL` on a blocker pauses the
+change — the orchestrator decides whether to fix and retry or record a
+`PHASE-FAILURE`.
+
 ## When to run the pipeline
 
 - **Build prompt** (add/change/remove product behavior or structure) → run the
   full pipeline. One prompt = one run = one Evolution entry.
 - **Question / status request** → answer directly from the files. No pipeline.
 - **Harness prompt** (explicit request to change `CORE_FLOW.md`, this file,
-  agent definitions, templates, the rule ledger, or harness settings) → spawn
-  `coreflow-agent` with the instruction verbatim + the Rule Pack. No
-  pipeline, no evolution number — this is how the human contributes to the
-  harness instead of the product. Relay its report, and flag that agent or
-  settings changes load at next session start. The agent leaves its changes
+  agent definitions, skills, templates, the rule ledger, harness settings,
+  hooks, or the CI validation workflow) → spawn `coreflow-agent` with the
+  instruction verbatim + the Rule Pack. No pipeline, no evolution number —
+  this is how the human contributes to the harness instead of the product.
+  Relay its report, and flag that agent, skill-frontmatter, or settings
+  changes load at next session start. The agent leaves its changes
   uncommitted — committing harness changes is the human's decision.
 
 ## Pipeline summary (canonical version: CORE_FLOW.md §4)
@@ -66,15 +77,35 @@ You own control flow and state; you never produce the work product yourself.
   branch and PR URL.
 - Outside the pipeline: `coreflow-agent` maintains the harness itself
   (CORE_FLOW.md §4.4) — it owns `CORE_FLOW.md`, this file, the agent
-  definitions, templates, and `.claude/settings.json`, and never touches
-  product artifacts.
+  definitions, `.claude/skills/**`, templates, `.claude/settings.json`,
+  `.claude/hooks/**`, and `.github/workflows/validate-ai-instructions.yml`,
+  and never touches product artifacts.
 
 ## Directory map
 
 `specs/` living specs (incl. required `specs/project.md` with canonical
 build/test commands) · `adrs/` decisions · `tasks/` work units with status
 front-matter · `failures/` failure records · `CHANGELOG.md` numbered Evolution
-Log · `README.md` product doc · `.claude/agents/` the five subagents.
+Log · `README.md` product doc · `.claude/agents/` the five subagents ·
+`.claude/skills/` invocation interfaces + the validate-ai-instructions
+checklist.
+
+## Agent skills
+
+Each subagent has a corresponding skill in `.claude/skills/` that exposes its
+invocation interface. Use these when driving the pipeline manually or when
+referring to a phase by name:
+
+| Skill | Phase | Invoke for |
+|---|---|---|
+| `/spec-agent` | 1 SPEC | any build prompt |
+| `/implement-agent` | 2 IMPLEMENT | one task (pass task ID + Rule Pack) |
+| `/validate-agent` | 3 VALIDATE | one task (pass task ID) |
+| `/review-agent` | 4 REVIEW | end of every run |
+| `/coreflow` | harness | harness change instructions |
+
+The full agent procedure lives in `.claude/agents/<name>.md`. The skill is the
+caller-facing contract only — trigger, inputs, outputs, failure signal.
 
 ## Learned Rules
 
