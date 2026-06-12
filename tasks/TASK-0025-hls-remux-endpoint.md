@@ -2,7 +2,7 @@
 id: TASK-0025
 adr: ADR-0012
 evolution: 6
-status: pending
+status: done
 attempts: 0
 depends_on: []
 ---
@@ -57,4 +57,27 @@ reaped after idle and temp directories cleaned up.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+- `server/hls.js` (new): session registry (`SESS` by sid, `KEYS` by source
+  URL), ffmpeg spawn via `ffmpeg-static` with `-c copy -f hls -hls_time 2
+  -hls_list_size 6 -hls_flags delete_segments` into a `mkdtemp` per-session
+  dir; playlist polled (250 ms, 15 s bound) and segment URIs rewritten to
+  `/api/hls/<sid>/segNNNNN.ts`; 502 + session teardown on ffmpeg exit/error
+  or startup timeout; `runReap` interval (unref'd) kills + removes sessions
+  idle past 60 s or dead. Segment route validates names against
+  `^seg\d+\.ts$` (blocks traversal) and unknown sid/seg → 404.
+- `server/rtr.js`: mounts `GET /api/hls` behind the existing `isValidUrl`
+  SSRF gate (same 400 as `/api/xtream`) and `GET /api/hls/:sid/:seg`;
+  exports `_runHls` for unit tests.
+- `package.json` / `package-lock.json`: added `ffmpeg-static` dependency
+  (binary verified runnable; npm install is the only setup step).
+- Tests: `tests/unit/hls.test.js` (18 tests — validation, args, reuse, 502
+  paths, segment 404/traversal, reaping with fake-timer system time; spawn
+  mocked by patching `child_process.spawn`, which works because hls.js calls
+  `cp.spawn(...)` through the module object). `tests/int/remux.test.js`
+  (live portal: connect, SSRF 400, sampled-channel remux → `#EXTM3U`
+  playlist + segment with sync byte 0x47, bounded 64 KB read, full session
+  teardown). Verified locally: unit 287/287, UI 83/83, remux int 4/4
+  (live channel "IR: Iran international SD" remuxed OK).
+- Non-obvious: the idle-reap unit tests drive `Date.now` with Vitest fake
+  timers and invoke `_runReap` directly rather than waiting on the module's
+  real 15 s sweep interval (registered at require time).

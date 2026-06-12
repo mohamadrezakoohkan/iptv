@@ -1,9 +1,10 @@
-// ADR: ADR-0002, ADR-0011
+// ADR: ADR-0002, ADR-0011, ADR-0012
 'use strict';
 
 const http    = require('http');
 const https   = require('https');
 const express = require('express');
+const hls     = require('./hls');
 
 const rtr = express.Router();
 
@@ -85,10 +86,21 @@ function runPipe(res, opts) {
   opts.upstream.on('error', function onUpErr() { if (!res.headersSent) res.destroy(); });
 }
 
+function runHls(req, res) {
+  if (!isValidUrl(req.query.url)) {
+    res.status(400).json({ err: 'invalid url' });
+    return;
+  }
+  hls.runPl(req, res);
+}
+
 rtr.get('/api/xtream', runProxy);
+rtr.get('/api/hls', runHls);
+rtr.get('/api/hls/:sid/:seg', hls.runSeg);
 
 rtr._isValidUrl  = isValidUrl;
 rtr._runProxy    = runProxy;
+rtr._runHls      = runHls;
 rtr._blocked     = BLOCKED_HOSTS;
 
 module.exports = rtr;
