@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 const EL = {
   list: null,   // #ch-list (.ch-grid)
+  srt:  null,   // #ch-sort sort select (ADR-0017)
   play: null,   // #player-video
   srch: null,   // #search
   info: null,   // #now-info
@@ -131,6 +132,21 @@ function mkCatBtn(opts) {
     + '<span class="cat-label">' + opts.label + '</span>'
     + '<span class="cat-count">' + opts.cnt + '</span>'
     + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// mkSort — pure: build the sort <option> HTML from IptvSrch.SORTS (ADR-0017),
+// marking the option whose id equals the active token `cur` as selected.
+// opts: { sorts, cur }
+// ---------------------------------------------------------------------------
+function mkSort(opts) {
+  let html = '';
+  for (let i = 0; i < opts.sorts.length; i += 1) {
+    const o   = opts.sorts[i];
+    const sel = o.id === opts.cur ? ' selected' : '';
+    html += '<option value="' + o.id + '"' + sel + '>' + o.label + '</option>';
+  }
+  return html;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +456,7 @@ function onAcctAdd() {
 // ---------------------------------------------------------------------------
 function mkEL() {
   EL.list  = document.getElementById('ch-list');
+  EL.srt   = document.getElementById('ch-sort');
   EL.play  = document.getElementById('player-video');
   EL.srch  = document.getElementById('search');
   EL.info  = document.getElementById('now-info');
@@ -476,6 +493,7 @@ function mkEL() {
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
   if (EL.list) EL.list.addEventListener('keydown', onGridKey);
+  if (EL.srt)  EL.srt.addEventListener('change', onSort);
   const frm = document.getElementById('login-form');
   if (frm)    frm.addEventListener('submit', onConn);
   if (EL.url) EL.url.addEventListener('input', onUrlInput);
@@ -504,6 +522,30 @@ function rndGrid(chs) {
     html += mkCard(chs[i]);
   }
   EL.list.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// rndSort — populate the sort select (#ch-sort) from IptvSrch.SORTS with the
+// current ST.sort token selected (ADR-0017). Idempotent; called on init and
+// after every connect/switch so the control always reflects ST.sort.
+// ---------------------------------------------------------------------------
+function rndSort() {
+  if (!EL.srt) return;
+  const st = window.IptvSt.ST;
+  EL.srt.innerHTML = mkSort({ sorts: window.IptvSrch.SORTS, cur: st.sort });
+}
+
+// ---------------------------------------------------------------------------
+// onSort — sort-select change handler (ADR-0017): record the chosen token via
+// setSort, persist it (saveSt('sort')), and re-render the grid through getChs
+// with the new token so the visible card order updates.
+// ---------------------------------------------------------------------------
+function onSort(evt) {
+  const st = window.IptvSt;
+  st.setSort(evt.target.value);
+  if (st.saveSt) st.saveSt('sort');
+  const s = st.ST;
+  rndGrid(window.IptvSrch.getChs(s.chs, s.srch, s.flt, s.favs, s.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -809,4 +851,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, toggleFav, rndSide, rndGrid, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList };

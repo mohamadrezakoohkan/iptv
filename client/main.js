@@ -61,6 +61,7 @@ function onReady() {
   window.IptvUi.rndAcct();
   const loadStFn = window.IptvSt.loadSt;
   _stored = loadStFn ? loadStFn() : null;
+  window.IptvUi.rndSort();
   const { loadAccts, getAct } = window.IptvSt;
   const store = loadAccts ? loadAccts() : { accts: [], actId: null };
   const acct  = getAct ? getAct(store.accts, store.actId) : null;

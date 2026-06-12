@@ -2,8 +2,8 @@
 id: TASK-0035
 adr: ADR-0017
 evolution: 9
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0033]
 ---
 
@@ -44,5 +44,51 @@ the choice, which is restored on the next reload. Builds on the comparator,
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `index.html` — added `<div class="ch-bar-sort">` inside `.ch-bar` next to
+  `#ch-count`, holding a `<label for="ch-sort">Sort</label>` and an empty
+  labelled native `<select id="ch-sort" aria-label="Sort channels">` (options
+  rendered at runtime, not baked into the markup). Added ADR-0017 to the top
+  HTML comment.
+- `client/ui.js` — new `EL.srt` registry slot (`#ch-sort`), wired in `mkEL`
+  with a `change` listener to `onSort`. New pure `mkSort({ sorts, cur })` that
+  builds the `<option>` HTML from a SORTS list, emitting `value="<id>"` on every
+  option and ` selected` on exactly the one whose id equals `cur` (none when
+  `cur` is unknown — R-0001: only the attributes the helper actually writes are
+  asserted). New `rndSort()` populates `#ch-sort` from `IptvSrch.SORTS` with the
+  current `ST.sort` selected. New `onSort(evt)` calls `setSort`, persists via
+  `saveSt('sort')`, and re-renders the grid through `getChs` with the new token.
+  `mkSort`, `rndSort`, `onSort` added to the `IptvUi` export.
+- `client/main.js` — `onReady` now calls `window.IptvUi.rndSort()` right after
+  `loadSt()` so the select is populated and reflects the persisted `ST.sort` on
+  page load (before any connect). The select options are static across
+  connects, so this single call is sufficient.
+- `client/app.css` — `.ch-bar-sort`, `.ch-sort-label`, `.ch-sort` (+ hover /
+  focus-visible) styled with the existing toolbar tokens (`--sur2`, `--ln`,
+  `--tx`, `--dim`, `--acc`, `--font-ui`/`--font-mono`); native select with a
+  custom inline-SVG caret. Added ADR-0017 to the top CSS comment.
+
+Tests:
+
+- `tests/unit/sort.test.js` (new, 7 tests) — `mkSort` option set, value/label
+  text, SORTS order, current-selection marking (exactly one selected; unknown
+  token marks none).
+- `tests/ui/sortctl.test.js` (new, 4 tests) — control present/labelled/populated
+  with default num-asc (captures `test-results/sort-toolbar.png` for the PR
+  block); name-asc reorders to "Action Movies HD" first and persists
+  `iptv_sort`; choice restored across reload (select value + grid order);
+  name-desc reorders to "World News 24" first.
+- `tests/unit/persist.test.js` — added `rndSort: vi.fn()` to the `runMain`
+  `IptvUi` stub to match the new `main.js` call site (test harness update, no
+  assertion weakened).
+
+Non-obvious:
+
+- `#ch-count` already existed in `.ch-bar` but is populated by no code (pre-this
+  task); left untouched per scope.
+- ADR-0017 `governs:` was already complete (all listed files exist); no
+  traceability changes beyond the per-file `ADR:` comment trues-up already
+  present from TASK-0033.
+
+Verification: `npx vitest run` → 422 passed; `npx playwright test` → 116 passed.
