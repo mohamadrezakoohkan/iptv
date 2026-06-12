@@ -51,9 +51,9 @@ On success the agent returns ONLY this JSON:
 ## Failure signal
 
 `PHASE-FAILURE: <reason>` — the capture could not complete: `BACKLOG.md` not
-writable, or `git` / an authenticated `gh` CLI unavailable so the worktree,
-commit, push, or PR could not be created. No entry is published. Report to the
-human.
+writable, `git fetch origin main` failed, or `git` / an authenticated `gh` CLI
+unavailable so the worktree, commit, push, or PR could not be created. No entry
+is published. Report to the human.
 
 ## Post-condition
 
