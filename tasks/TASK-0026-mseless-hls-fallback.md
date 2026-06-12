@@ -2,7 +2,7 @@
 id: TASK-0026
 adr: ADR-0012
 evolution: 6
-status: pending
+status: done
 attempts: 0
 depends_on: [TASK-0025]
 ---
@@ -55,4 +55,35 @@ playback and the M3U/demo HLS paths behave exactly as before.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+- `client/play.js`: added `RMX = '/api/hls?url='`, pure `getRmx(url)`
+  (exported on `window.IptvPlay`), and `updChip(eng)` (calls
+  `IptvUi.rndChip`). `runTs` now takes the **raw** stream URL: MSE present →
+  `updChip('ts')` + `loadTs(getPrx(url))` (byte-identical E5 behavior); MSE
+  absent → `updChip('hls')` + `runHls(getRmx(url), 'MPEG-TS not supported')`.
+  `runHls` gained an optional `msg` second param overriding the failure
+  message, so the "MPEG-TS not supported" overlay appears only on double
+  failure (no hls.js, no native HLS); plain `.m3u8` failures keep
+  "HLS not supported". `loadPlay` renders the chip for the engine actually
+  in use. Teardown unchanged: `stopPlay()` runs before every load.
+- `tests/unit/play.test.js`: replaced the obsolete "mpegts unsupported →
+  error" describe (behavior changed by this task) with fallback coverage:
+  `getRmx` construction, hls.js/native fallback with the remux URL (not the
+  `/api/xtream` wrapper), no ERR on fallback, double-failure overlay message,
+  `.m3u8` message preserved, fallback teardown both directions, chip hook.
+- `tests/ui/fallback.test.js` (new): MSE-less stubbed `window.mpegts` — no
+  overlay, `/api/hls` URL handed to the HLS engine, HLS chip active;
+  MSE-capable run keeps the TS chip; double-failure overlay; demo-mode HLS
+  unchanged.
+- `tests/ui/chips.test.js`: the old "unsupported mpegts shows the error
+  overlay" test now stubs `window.Hls.isSupported() === false` **and**
+  `video.canPlayType → ''` (Chromium answers `'maybe'` for native HLS, which
+  would otherwise engage `loadNative`) to exercise the double-failure case.
+- `tests/int/e2e.test.js`: new test executes real `client/play.js` with no
+  `mpegts` and a recording Hls stub, captures the exact fallback URL it
+  builds for sampled live channels, and fetches it against the in-process
+  server — expects 200 + `#EXTM3U` (>= 1 of 5, flake policy per
+  specs/integration-testing.md); afterAll reaps remux sessions via
+  `hls._rmSess`.
+- ADR-0012 `governs:` trued up with `tests/unit/play.test.js`,
+  `tests/ui/chips.test.js`, `tests/int/e2e.test.js`.
+- Suites run locally: unit 297 passed, UI 89 passed, integration 25 passed.

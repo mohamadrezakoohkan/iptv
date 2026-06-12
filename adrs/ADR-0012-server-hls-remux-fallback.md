@@ -10,8 +10,11 @@ governs:
   - client/play.js
   - package.json
   - tests/unit/hls.test.js
+  - tests/unit/play.test.js
   - tests/ui/fallback.test.js
+  - tests/ui/chips.test.js
   - tests/int/remux.test.js
+  - tests/int/e2e.test.js
 ---
 
 # ADR-0012 — Server-side TS→HLS remux fallback (ffmpeg-static) for MSE-less clients
