@@ -2,8 +2,9 @@
 
 A dark-themed, single-page web application that connects to any
 Xtream-compatible IPTV portal **or any standard M3U/M3U8 playlist URL** and
-lets you browse live channels by category, search by name, mark favourites,
-and stream the selected channel directly in the browser — HLS (`.m3u8`)
+lets you browse live channels by category/genre, filter and sort the channel
+list, search by name, mark favourites, and stream the selected channel directly
+in the browser — HLS (`.m3u8`)
 streams play via hls.js, raw MPEG-TS streams (the common Xtream live output)
 via mpegts.js. On browsers without Media Source Extensions (e.g. iOS Safari),
 the server remuxes live TS to HLS on the fly so streams still play.
@@ -79,10 +80,17 @@ command.
 - **Explicit login mode** — a footer selector chooses between
   Xtream (username & password) and M3U (playlist URL only); the choice
   persists across refreshes.
-- **Category sidebar** — browse channels by category; "All Channels" shows
-  everything.
+- **Category / genre sidebar** — browse channels by category; "All Channels"
+  shows everything, "Favourites" is pinned. Categories are listed
+  alphabetically, and for large playlists (more than 12 categories) a
+  "Filter genres…" input narrows the list by name as you type, keeping
+  "All Channels" and "Favourites" pinned. The content-head bar shows an
+  active-genre chip with the playing channel's genre.
 - **Channel grid** — card per channel showing logo, number, and name; star to
   favourite.
+- **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
+  visible channels by number, name (A→Z or Z→A), or favourites-first; the
+  choice persists across reloads (global, not per-account).
 - **Search** — live-filter channels by name from the sidebar search input.
 - **Dual-engine player** — idle, playing, and error states; autoplay on
   channel select; engine chosen from the stream URL (`.m3u8` → hls.js,
@@ -107,8 +115,8 @@ command.
 - **Footer** — login-mode selector + login form + connected status bar
   showing host and channel count.
 - **Persistence** — saved accounts and the active account, login mode (per
-  account), last-selected channel, and favourites survive page refreshes via
-  `localStorage`.
+  account), last-selected channel, the channel sort preference, and favourites
+  survive page refreshes via `localStorage`.
 - **CORS proxy** — server proxies all external URL fetches (Xtream API calls,
   M3U files, and live streams) so remote hosts without CORS headers work from
   the browser; it follows validated redirects (up to 5 hops, SSRF-checked)
