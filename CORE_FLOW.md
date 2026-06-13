@@ -41,8 +41,8 @@ outside the pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
-| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3) | write specs, ADRs, code, tests, or product docs itself |
-| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run's dedicated worktree on the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
+| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
+| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
@@ -165,20 +165,22 @@ protection.
 
 One build run = one branch = one pull request:
 
-1. **Branch in a dedicated worktree.** At the start of Phase 1, `spec-agent`
-   creates the run branch from the current HEAD: `ai/e<E>-<slug>` (the
-   evolution number plus 2–5 kebab-case words condensing the prompt) in a
-   **new git worktree** (`git worktree add -b ai/e<E>-<slug> <path> HEAD`),
-   mirroring `backlog-agent`'s isolation (§4.5), so the entire run is isolated
-   from the primary working tree. spec-agent does all of its Phase 1 work
-   inside that worktree. The orchestrator records the run's absolute worktree
-   path and is responsible for running every later phase of the run inside it
-   (§4.2) — spec-agent reads this contract in full at the start of Phase 1, and
-   the orchestrator sequences the remaining phases there, so no agent needs a
-   bespoke worktree instruction. No build work ever happens on `main` or in the
-   primary working tree. If `git` or an authenticated `gh` CLI is unavailable,
-   that is a `PHASE-FAILURE` — the harness does not build outside a run
-   worktree.
+1. **A Claude Code worktree, branched from `main`.** Before Phase 1, the
+   orchestrator puts the run inside a **Claude Code worktree** — the native
+   feature (https://code.claude.com/docs/en/worktrees), entered with the
+   `EnterWorktree` tool, or by the human having started the session with
+   `claude --worktree`. It is **not** a manual `git worktree add`. The worktree
+   always branches from the repository's default branch (`origin/HEAD` =
+   `main`), starting from a clean tree matching the remote — the
+   `worktree.baseRef: "fresh"` setting in `.claude/settings.json` makes this
+   "always from main" guarantee durable (the alternative `"head"`, which would
+   branch from local HEAD and carry unpushed state, is never used). All four
+   phases then run inside that single worktree — they share one working tree.
+   Inside it, `spec-agent` creates and checks out the run branch `ai/e<E>-<slug>`
+   (the evolution number plus 2–5 kebab-case words condensing the prompt). No
+   build work ever happens on `main` or in the primary working tree. If `git`
+   or an authenticated `gh` CLI is unavailable, that is a `PHASE-FAILURE` — the
+   harness does not build outside a run worktree.
 2. **First commit, then PR.** `spec-agent` commits the Phase 1 artifacts as
    the run's first commit (`E<N> spec: <prompt, condensed>`), pushes the
    branch (`git push -u origin <run-branch>`), and immediately opens the run
@@ -325,9 +327,10 @@ intent is ambiguous, ask the human rather than guess.
 ```
         ┌──────────────────────────── run start ────────────────────────────┐
         │ E = next evolution number;  Rule Pack = Learned Rules from CLAUDE.md │
+        │ orchestrator enters a Claude Code worktree (from main, baseRef fresh)│
         └────────────────────────────────────────────────────────────────────┘
                                         │
-Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch in a new worktree
+Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch in the run worktree
                                   → specs + ADRs + tasks
                                   → first commit + push → open PR (manifest)
                                         │
@@ -353,16 +356,19 @@ Phase 4  REVIEW      review-agent: coherence check → CHANGELOG #E → README s
 
 **Run start (orchestrator).** Read this file in full. Compute `E`. Extract the
 Learned Rules section of `CLAUDE.md` verbatim — this is the **Rule Pack**, and
-it MUST be included in the prompt of every agent spawned during the run.
+it MUST be included in the prompt of every agent spawned during the run. Then
+put the run inside a **Claude Code worktree** (§3 Git contract): enter it with
+the `EnterWorktree` tool unless the human already started the session with
+`claude --worktree`. The worktree branches from `main` (`worktree.baseRef:
+"fresh"`), and all four phases run inside it.
 
 **Phase 1 — SPEC.** Spawn `spec-agent` with: the user prompt verbatim, `E`, and
 the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `specs/`, and
 everything in `adrs/` to understand the project, then:
-1. creates the run branch `ai/e<E>-<slug>` from the current HEAD in a new git
-   worktree (§3 Git contract) and does all of its Phase 1 work inside it —
-   build work never happens on `main` or in the primary working tree; the
-   orchestrator notes the worktree's path from the branch-creation output and
-   reuses it for every later phase,
+1. creates and checks out the run branch `ai/e<E>-<slug>` inside the Claude
+   Code worktree the orchestrator entered at run start (§3 Git contract) and
+   does all of its Phase 1 work there — build work never happens on `main` or
+   in the primary working tree,
 2. aligns the prompt with the existing project (or defines the project, on the
    first run),
 3. creates or updates spec files in `specs/`,
@@ -375,8 +381,8 @@ everything in `adrs/` to understand the project, then:
 6. commits the Phase 1 artifacts as the run's first commit, pushes the
    branch, and opens the run PR against `main` (§3 Git contract),
 7. returns a JSON manifest of ADRs and tasks, plus the run branch name and the
-   PR URL. (The orchestrator already holds the worktree path from the
-   branch-creation step and does not need it echoed in the manifest.)
+   PR URL. (The run worktree is the session's own Claude Code worktree, so the
+   orchestrator does not need a path echoed in the manifest.)
 
 The orchestrator verifies every file in the manifest exists before proceeding.
 If `spec-agent` reports `PHASE-FAILURE` (e.g. the prompt contradicts accepted
@@ -385,9 +391,8 @@ failure protocol, then ask the human.
 
 **Phases 2+3 — IMPLEMENT + VALIDATE, per task.** Tasks execute sequentially in
 manifest order (no parallel implementation — agents share the run's one
-worktree). The run executes inside the worktree `spec-agent` created in Phase
-1; the orchestrator runs each Phase 2/3/4 agent there (passing the worktree
-path it recorded in Phase 1), so every phase operates in the run worktree,
+worktree). The whole run executes inside the Claude Code worktree the
+orchestrator entered at run start, so every phase operates in the run worktree,
 never in the primary working tree. For each task:
 
 1. Spawn `implement-agent` with the task ID, the Rule Pack, and — on retries —
