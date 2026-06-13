@@ -78,6 +78,6 @@ failed task's Test Results block gets written (from this report), not here.
 ## Failure signal
 
 `PHASE-FAILURE: <reason>` — validation could not run at all (canonical
-unit-test or UI-test command missing from `specs/project.md`, broken
+unit-test or UI-test command missing from `docs/specs/project.md`, broken
 environment). Per CORE_FLOW.md §5 this is a terminal failure, not a retry:
 apply the failure protocol — retries are only for `FAIL` verdicts.

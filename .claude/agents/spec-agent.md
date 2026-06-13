@@ -11,8 +11,8 @@ are binding constraints on everything you produce).
 
 ## Procedure
 
-1. **Read, in this order:** `CORE_FLOW.md`, then every file in `specs/`, then
-   every file in `adrs/`. This is how you understand what the project is. Do
+1. **Read, in this order:** `CORE_FLOW.md`, then every file in `docs/specs/`, then
+   every file in `docs/adrs/`. This is how you understand what the project is. Do
    not skip files; on a young project this is cheap, and stale context is how
    contradictory ADRs get written.
 2. **Create the run branch** (CORE_FLOW.md §3, Git & pull-request contract):
@@ -24,13 +24,13 @@ are binding constraints on everything you produce).
    intent against the current state. On the first evolution there is no
    product yet — your job then includes defining it (and forcing the stack +
    canonical build/unit-test/UI-test commands as your first decisions).
-4. **Update `specs/`.** Create or update `specs/<feature-slug>.md` files and
-   keep `specs/project.md` truthful (product overview, stack, canonical
+4. **Update `docs/specs/`.** Create or update `docs/specs/<feature-slug>.md` files and
+   keep `docs/specs/project.md` truthful (product overview, stack, canonical
    commands). Front-matter `status: draft | current | superseded`. Specs
    describe behavior, not implementation.
 5. **Write ADRs** — one per significant decision the prompt forces (stack
    choices, data model, integration approach, UX direction). Use
-   `adrs/TEMPLATE.md`, next global ID, file name `adrs/ADR-NNNN-<slug>.md`.
+   `docs/adrs/TEMPLATE.md`, next global ID, file name `docs/adrs/ADR-NNNN-<slug>.md`.
    Seed `governs:` with the code paths the ADR's tasks will create or shape —
    implement-agent trues it up at build time. Decisions must not contradict
    accepted ADRs; replacing one requires `status: superseded` on the old ADR
@@ -75,8 +75,8 @@ Otherwise return ONLY this JSON:
   "evolution": E,
   "branch": "ai/e<E>-<slug>",
   "pr_url": "https://github.com/...",
-  "specs_touched": ["specs/..."],
-  "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "adrs/..."}],
+  "specs_touched": ["docs/specs/..."],
+  "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "docs/adrs/..."}],
   "tasks": [{"id": "TASK-NNNN", "adr": "ADR-NNNN", "title": "...",
              "path": "tasks/...", "order": 1, "depends_on": []}],
   "notes": "anything the orchestrator must know, else empty string"

@@ -7,7 +7,7 @@ harness that drives this repository. It defines **how work happens**, never
 directory, the harness would work unchanged for any product.
 
 **Hard rule: no product specifics in this file.** Product knowledge lives in
-`specs/`, `adrs/`, `README.md`, and the source tree. This file changes only
+`docs/specs/`, `docs/adrs/`, `README.md`, and the source tree. This file changes only
 when the harness itself changes, and only on an explicit human instruction
 executed by `coreflow-agent` (§4.4) — never as a side effect of a build run.
 
@@ -42,11 +42,11 @@ outside the pipeline.
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
 | **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
-| **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
+| **spec-agent** | 1 — SPEC | `docs/specs/`, `docs/adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block, and (for the task that exercises user-interactable behavior) the committed demo recording + the PR `### Demo` reference (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
-| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
+| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `docs/specs/`, `docs/adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
 | **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only — in its own dedicated worktree, where it commits, pushes, and opens the backlog PR (§4.5) | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, commit/push/merge to `main`, or force-push |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
@@ -77,14 +77,15 @@ agents and never talk to the human.
 ├── README.md            Product-facing doc (review-agent maintains)
 ├── CHANGELOG.md         Numbered Evolution Log (review-agent maintains)
 ├── BACKLOG.md           Parked ideas, append-only (backlog-agent maintains; optional, created on first use)
-├── specs/               Living specifications (spec-agent maintains)
+├── docs/specs/          Living specifications (spec-agent maintains)
 │   └── project.md       REQUIRED: product overview, stack, canonical build/test commands
-├── adrs/                Architecture Decision Records (spec-agent creates)
+├── docs/adrs/           Architecture Decision Records (spec-agent creates)
 │   └── TEMPLATE.md
 ├── tasks/               Work units derived from ADRs (spec-agent creates; later phases update status)
 │   └── TEMPLATE.md
 ├── failures/            Terminal-failure records that earn rules (orchestrator writes)
 │   └── TEMPLATE.md
+├── src/                 Product source and tests (implement-agent writes)
 ├── .claude/agents/      The six subagent definitions
 └── .claude/skills/      Invocation interfaces (one per subagent) + the
                          validate-ai-instructions checklist
@@ -95,14 +96,14 @@ agents and never talk to the human.
 | Artifact | Format | Sequence |
 |---|---|---|
 | Evolution (CHANGELOG entry) | `#N` | last entry in `CHANGELOG.md` + 1 (`#0` = bootstrap) |
-| ADR | `ADR-NNNN` | global, max existing in `adrs/` + 1 |
+| ADR | `ADR-NNNN` | global, max existing in `docs/adrs/` + 1 |
 | Task | `TASK-NNNN` | global, max existing in `tasks/` + 1 (linked to its ADR via front-matter) |
 | Failure | `FAIL-NNNN` | global, max existing in `failures/` + 1 |
 | Rule | `R-NNNN` | mirrors the `FAIL-NNNN` that earned it |
 
-File names embed the ID: `adrs/ADR-0001-<slug>.md`, `tasks/TASK-0001-<slug>.md`,
-`failures/FAIL-0001-<slug>.md`. Specs are not numbered: `specs/project.md` plus
-one `specs/<feature-slug>.md` per feature area, each with front-matter
+File names embed the ID: `docs/adrs/ADR-0001-<slug>.md`, `tasks/TASK-0001-<slug>.md`,
+`failures/FAIL-0001-<slug>.md`. Specs are not numbered: `docs/specs/project.md` plus
+one `docs/specs/<feature-slug>.md` per feature area, each with front-matter
 `status: draft | current | superseded`.
 
 ### Task lifecycle
@@ -121,7 +122,7 @@ disagree, the orchestrator corrects the file.
 
 ### Canonical commands
 
-`specs/project.md` is the single source of truth for how to build the product
+`docs/specs/project.md` is the single source of truth for how to build the product
 and how to run the **unit test suite**, the **UI test suite**, and the
 **integration test suite**. The first evolution must establish the unit and UI
 commands (via an ADR choosing the stack); the integration command is added when
@@ -152,7 +153,7 @@ ADR status meanings: `proposed` (not yet in force) · `accepted` (in force) ·
 ways) · `deleted` (no code implements the decision anymore).
 
 Maintaining these links is mechanical bookkeeping, not decision-making. It is
-the single exception to "implement-agent never edits `adrs/`": it may update
+the single exception to "implement-agent never edits `docs/adrs/`": it may update
 `governs:` and set `status: deleted`, never decision content. `review-agent`
 audits traceability every run (§4.2 Phase 4).
 
@@ -311,7 +312,7 @@ update produces and references it.
   run is sufficient; a run touching several user-facing flows may carry one per
   flow.
 - **Required arc.** The recording must capture, in order: **boot** (launch the
-  product from a clean start via the canonical run command in `specs/project.md`)
+  product from a clean start via the canonical run command in `docs/specs/project.md`)
   → **prepare** (perform the minimal setup the behavior needs to be exercised) →
   **interact** (drive the new behavior end-to-end through its primary user flow
   so the recording shows it working) → **revert runtime state** (reset the
@@ -410,15 +411,15 @@ the `EnterWorktree` tool unless the human already started the session with
 "fresh"`), and all four phases run inside it.
 
 **Phase 1 — SPEC.** Spawn `spec-agent` with: the user prompt verbatim, `E`, and
-the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `specs/`, and
-everything in `adrs/` to understand the project, then:
+the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `docs/specs/`, and
+everything in `docs/adrs/` to understand the project, then:
 1. creates and checks out the run branch `ai/e<E>-<slug>` inside the Claude
    Code worktree the orchestrator entered at run start (§3 Git contract) and
    does all of its Phase 1 work there — build work never happens on `main` or
    in the primary working tree,
 2. aligns the prompt with the existing project (or defines the project, on the
    first run),
-3. creates or updates spec files in `specs/`,
+3. creates or updates spec files in `docs/specs/`,
 4. writes one ADR per significant decision the prompt forces, seeding its
    `governs:` list with the code paths its tasks will create or shape,
 5. derives an ordered set of tasks for each ADR — each task small enough to
@@ -451,11 +452,11 @@ never in the primary working tree. For each task:
    their `ADR:` comment, `governs:` lists are trued up, and an ADR whose last
    governed code was just removed is marked `deleted`.
 2. Spawn `validate-agent` with the task ID. It reads the canonical commands
-   from `specs/project.md` and executes the **full** unit suite, the **full**
+   from `docs/specs/project.md` and executes the **full** unit suite, the **full**
    UI suite, and — if the integration-test command is present — the **full**
    integration suite (full, not task-scoped — this is the regression gate).
    Integration tests may be skipped when the command is absent from
-   `specs/project.md`; the omission is noted in the report but is not itself
+   `docs/specs/project.md`; the omission is noted in the report but is not itself
    a FAIL. It returns PASS or FAIL with the failing tests and a suspected
    cause. On PASS it also makes the task's commit, pushes the run branch,
    updates the PR description, writes the task's collapsible Test Results

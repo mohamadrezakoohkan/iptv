@@ -13,13 +13,13 @@ validation report verbatim.
 
 1. **Read, in this order:** `CORE_FLOW.md`; your task file in `tasks/`; the
    ADR it belongs to; the spec files that ADR references; `CONVENTIONS.md`
-   (binding code conventions — must be followed exactly); `specs/project.md`
+   (binding code conventions — must be followed exactly); `docs/specs/project.md`
    (stack + canonical commands). Set the task's `status: in-progress`.
 2. **On a retry:** the validation report is your primary input. Diagnose the
    real root cause before changing anything — re-running the same idea is a
    wasted attempt, and attempt 3 is the last one.
 3. **Implement the task** to its acceptance criteria, following the stack and
-   conventions in `specs/project.md` and the existing codebase. Match the
+   conventions in `docs/specs/project.md` and the existing codebase. Match the
    surrounding code's style; introduce no new dependencies or tools unless the
    task's ADR decided them.
 4. **Write the tests the task demands:** unit tests always; UI tests whenever
@@ -42,8 +42,8 @@ validation report verbatim.
 
 ## You must NOT
 
-- Touch `specs/`, `CHANGELOG.md`, `README.md`, `CORE_FLOW.md`, `CLAUDE.md`,
-  or `failures/`. In `adrs/` your ONLY allowed writes are the traceability
+- Touch `docs/specs/`, `CHANGELOG.md`, `README.md`, `CORE_FLOW.md`, `CLAUDE.md`,
+  or `failures/`. In `docs/adrs/` your ONLY allowed writes are the traceability
   fields (`governs:`, `status: deleted`) — never decision content. If the
   spec or ADR is wrong, STOP and report `PHASE-FAILURE` — do not silently
   build something else.
@@ -81,11 +81,11 @@ stable and valuable.
 
 - Place integration tests alongside unit tests but in a clearly named file or
   directory so they are trivially separable: `*.integration.test.*` suffix, or
-  a dedicated `tests/integration/` directory — follow whatever convention
-  `specs/project.md` establishes.
-- The canonical integration-test command lives in `specs/project.md` (an
+  a dedicated `src/tests/integration/` directory — follow whatever convention
+  `docs/specs/project.md` establishes.
+- The canonical integration-test command lives in `docs/specs/project.md` (an
   integration-specific Vitest project, a separate npm script, or similar).
-  If that command is not yet present in `specs/project.md`, add it as part of
+  If that command is not yet present in `docs/specs/project.md`, add it as part of
   this task — validate-agent reads it from there.
 
 **Handling unavailable networks (CI / offline environments).** Integration

@@ -40,8 +40,8 @@ On success the agent returns ONLY this JSON:
   "evolution": E,
   "branch": "ai/e<E>-<slug>",
   "pr_url": "https://github.com/...",
-  "specs_touched": ["specs/..."],
-  "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "adrs/..."}],
+  "specs_touched": ["docs/specs/..."],
+  "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "docs/adrs/..."}],
   "tasks": [{"id": "TASK-NNNN", "adr": "ADR-NNNN", "title": "...",
              "path": "tasks/...", "order": 1, "depends_on": []}],
   "notes": "anything the orchestrator must know, else empty string"

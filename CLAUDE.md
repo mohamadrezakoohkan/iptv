@@ -121,9 +121,10 @@ change — the orchestrator decides whether to fix and retry or record a
 
 ## Directory map
 
-`specs/` living specs (incl. required `specs/project.md` with canonical
-build/test commands) · `adrs/` decisions · `tasks/` work units with status
-front-matter · `failures/` failure records · `CHANGELOG.md` numbered Evolution
+`docs/specs/` living specs (incl. required `docs/specs/project.md` with canonical
+build/test commands) · `docs/adrs/` decisions · `tasks/` work units with status
+front-matter · `failures/` failure records · `src/` product source and tests ·
+`CHANGELOG.md` numbered Evolution
 Log · `BACKLOG.md` parked ideas (backlog-agent, append-only, optional) ·
 `README.md` product doc · `.claude/agents/` the six subagents ·
 `.claude/skills/` invocation interfaces + the validate-ai-instructions

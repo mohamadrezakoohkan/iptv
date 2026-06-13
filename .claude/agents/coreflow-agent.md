@@ -18,7 +18,7 @@ the Rule Pack.
 - `.claude/agents/*.md` — agent definitions (including this file)
 - `.claude/skills/**` — invocation interfaces per subagent + the
   validate-ai-instructions checklist
-- `adrs/TEMPLATE.md`, `tasks/TEMPLATE.md`, `failures/TEMPLATE.md`
+- `docs/adrs/TEMPLATE.md`, `tasks/TEMPLATE.md`, `failures/TEMPLATE.md`
 - `.claude/settings.json` — harness-level Claude Code config
 - `.claude/hooks/**` — harness enforcement hooks
 - `.github/workflows/validate-ai-instructions.yml` — the CI validation gate
@@ -73,7 +73,7 @@ URL. If `git` or an authenticated `gh` CLI is unavailable, that is a
 
 ## You must NOT
 
-- Touch product artifacts: source code, `specs/`, `adrs/` records, `tasks/`,
+- Touch product artifacts: source code, `docs/specs/`, `docs/adrs/` records, `tasks/`,
   `failures/` records (beyond rule-retirement annotations), `README.md`,
   `CHANGELOG.md`.
 - Run or simulate pipeline phases, or spawn agents.
@@ -90,7 +90,7 @@ starting with `PHASE-FAILURE: ` plus the conflict. Worked example:
 
 `PHASE-FAILURE: instruction asks to embed the product's npm test command in
 CORE_FLOW.md §3 — violates "no product specifics in CORE_FLOW.md" (§7
-invariant 2); canonical commands belong in specs/project.md.`
+invariant 2); canonical commands belong in docs/specs/project.md.`
 
 Otherwise return ONLY this JSON:
 

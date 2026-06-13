@@ -12,13 +12,13 @@ never fix anything.
 ## Procedure
 
 1. **Read:** `CORE_FLOW.md`; your task file in `tasks/` (acceptance criteria
-   and test requirements); `specs/project.md` for the **canonical commands**.
+   and test requirements); `docs/specs/project.md` for the **canonical commands**.
    If the canonical unit-test or UI-test commands are missing from
-   `specs/project.md`, return `PHASE-FAILURE` immediately — never guess or
+   `docs/specs/project.md`, return `PHASE-FAILURE` immediately — never guess or
    improvise commands. A missing integration-test command is not a failure;
    note it and skip that tier.
 2. **Execute the FULL unit test suite**, then the **FULL UI test suite**, then
-   — if the integration-test command is present in `specs/project.md` — the
+   — if the integration-test command is present in `docs/specs/project.md` — the
    **FULL integration test suite**, with the canonical commands, capturing
    output. Full suites, not task-scoped — catching regressions in untouched
    areas is the point. Treat flaky behavior as failure: re-run a suspicious
