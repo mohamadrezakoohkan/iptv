@@ -82,6 +82,7 @@ function loadUi() {
   const win = {
     IptvSt:   { ST: { phase: 'INIT' }, saveTheme },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,

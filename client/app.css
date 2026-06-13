@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -113,7 +113,15 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ch-fav:hover { color: var(--acc); }
 .ch-fav.on { color: var(--acc); }
 .ch-name { font: 500 12px/15px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-empty { padding: 40px 0; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }
+/* Contextual no-content placeholder (ADR-0022, specs/empty-states.md §2) —
+   icon + title + body + optional action button, all on existing tokens. */
+.ch-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 56px 20px; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }
+.ch-empty-ico { width: 40px; height: 40px; color: var(--ln); flex: none; }
+.ch-empty-title { font: 600 15px/1.3 var(--font-ui); color: var(--tx); }
+.ch-empty-body { max-width: 320px; font: 400 13px/19px var(--font-ui); color: var(--dim); }
+.ch-empty-btn { margin-top: 6px; height: 34px; padding: 0 16px; border: 1px solid var(--ln); border-radius: 6px; background: var(--sur2); color: var(--tx); font: 600 13px/1 var(--font-ui); cursor: pointer; transition: border-color 140ms, color 140ms; }
+.ch-empty-btn:hover { border-color: var(--acc); color: var(--acc); }
+.ch-empty-btn:focus-visible { outline: none; border-color: var(--acc); }
 
 /* Footer */
 .footer { background: var(--sur); border-top: 1px solid var(--ln); padding: 12px 20px; flex: none; }

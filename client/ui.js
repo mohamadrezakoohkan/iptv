@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -47,6 +47,15 @@ const EL = {
 // Hint text per login mode (ADR-0008)
 const HINT_XTR = 'Type "demo" to try a sample playlist.';
 const HINT_M3U = 'Paste an .m3u / .m3u8 playlist URL — no login needed.';
+
+// Empty-state placeholder icon glyphs (ADR-0022). Decorative inline SVG paths
+// keyed by the icon token IptvEmpty.resolveContent returns; rendered
+// aria-hidden so the title + body carry the meaning (specs/empty-states.md §4).
+const EMPTY_ICOS = {
+  search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  star:   '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  list:   '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+};
 
 // ---------------------------------------------------------------------------
 // Debounce state — module-level vars, TOKENS TABLE compliant
@@ -197,9 +206,43 @@ function toggleFav(id) {
 }
 
 // ---------------------------------------------------------------------------
+// goClrSrch — empty-state "Clear search" action (ADR-0022): clear the search
+// input and re-run the existing debounced search path with an empty query so
+// the grid re-renders to the unfiltered (within current category) result.
+// ---------------------------------------------------------------------------
+function goClrSrch() {
+  if (EL.srch) EL.srch.value = '';
+  srch = '';
+  fireSrch();
+}
+
+// ---------------------------------------------------------------------------
+// goViewAll — empty-state "Browse all channels" action (ADR-0022): switch the
+// active category to "All Channels" through the existing category-filter path
+// (setFlt + rndSide + rndGrid), exactly as a sidebar "All Channels" click does.
+// ---------------------------------------------------------------------------
+function goViewAll() {
+  const st = window.IptvSt.ST;
+  window.IptvSt.setFlt('all');
+  rndSide(st.cats, st.chs, st.favs);
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, 'all', st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// onEmptyAct — route an empty-state action button to its existing handler
+// (ADR-0022); the data-empty-act value is the EmptyState action kind.
+// ---------------------------------------------------------------------------
+function onEmptyAct(kind) {
+  if (kind === 'clear-search') { goClrSrch(); return; }
+  if (kind === 'view-all') goViewAll();
+}
+
+// ---------------------------------------------------------------------------
 // onGridClick — event-delegated click handler on EL.list (ch-grid)
 // ---------------------------------------------------------------------------
 function onGridClick(evt) {
+  const act  = evt.target.closest('[data-empty-act]');
+  if (act) { onEmptyAct(act.getAttribute('data-empty-act')); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
   const card = evt.target.closest('[data-id]');
@@ -546,12 +589,55 @@ function mkEL() {
 }
 
 // ---------------------------------------------------------------------------
-// rndGrid — render channel cards into .ch-grid
+// mkEmptyIco — pure: decorative inline-SVG icon HTML for an EmptyState icon
+// token (ADR-0022). aria-hidden; the title + body carry the meaning (§4).
+// ---------------------------------------------------------------------------
+function mkEmptyIco(name) {
+  const paths = EMPTY_ICOS[name] || EMPTY_ICOS.list;
+  return '<svg class="ch-empty-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + paths + '</svg>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEmptyBtn — pure: action-button HTML for an EmptyState action (ADR-0022).
+// data-empty-act carries the kind so onGridClick can route it through the
+// existing search/category handlers; keyboard-focusable with a label.
+// ---------------------------------------------------------------------------
+function mkEmptyBtn(action) {
+  return '<button type="button" class="ch-empty-btn" data-empty-act="' + action.kind + '">'
+    + action.label + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEmptyBox — pure: full contextual no-content placeholder HTML from a
+// resolved EmptyState (ADR-0022, specs/empty-states.md §2). role="status"
+// container, decorative icon, title, body, and the optional action button.
+// (Distinct name from empty.js's mkEmpty — both are top-level <script> globals.)
+// ---------------------------------------------------------------------------
+function mkEmptyBox(es) {
+  const btn = es.action ? mkEmptyBtn(es.action) : '';
+  return '<div class="ch-empty" role="status">'
+    + mkEmptyIco(es.icon)
+    + '<p class="ch-empty-title">' + es.title + '</p>'
+    + '<p class="ch-empty-body">' + es.body + '</p>'
+    + btn + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndGrid — render channel cards into .ch-grid, or a contextual empty-state
+// placeholder when the filtered list is empty (ADR-0022). The placeholder is
+// chosen by IptvEmpty.resolveContent from the live ST (total source count,
+// active filter, search query, favourites) — same opts other rnd* read.
 // ---------------------------------------------------------------------------
 function rndGrid(chs) {
   if (!EL.list) return;
   if (!chs || chs.length === 0) {
-    EL.list.innerHTML = '<p class="ch-empty">No channels found.</p>';
+    const st = window.IptvSt.ST;
+    const es = window.IptvEmpty.resolveContent({
+      total: st.chs.length, shown: 0, flt: st.flt, srch: st.srch, favs: st.favs,
+    });
+    EL.list.innerHTML = mkEmptyBox(es);
     return;
   }
   let html = '';

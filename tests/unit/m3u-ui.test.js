@@ -68,6 +68,7 @@ function loadUi(phase) {
       setFavs: function setFavs(a) { stObj.favs = a; },
     },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {

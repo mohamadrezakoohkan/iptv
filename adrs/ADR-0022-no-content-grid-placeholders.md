@@ -7,7 +7,6 @@ status: accepted
 governs:
   - client/ui.js
   - client/app.css
-  - index.html
 ---
 
 # ADR-0022 — Render contextual, actionable placeholders for empty channel lists

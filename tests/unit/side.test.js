@@ -44,6 +44,7 @@ function loadUi() {
       setFavs() {}, setCur() {}, setFlt() {}, setSrch() {}, go() {},
     },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     S: {},
     IptvPlay: null,
     document: doc,
