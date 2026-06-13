@@ -1,6 +1,44 @@
+# ADR: ADR-0027
+# Slim, secret-free Docker build context. Excludes everything the runtime does
+# not need; keeps src/client, src/server, src/index.html, package.json, and
+# package-lock.json (the server serves and depends on those at runtime).
+
+# Installed fresh by `npm ci` in the build stage — never copy host modules.
+node_modules/
+
+# Secrets must never enter the image.
+.env.secrets
+
+# OS / local junk
 .DS_Store
+
+# Harness + tooling that the runtime does not need
+.git
+.github/
+.claude/
 .claude/settings.local.json
 .claude/worktrees/
-node_modules/
-.env.secrets
+
+# Docs, tasks, failure records — not runtime artifacts
+docs/
+tasks/
+failures/
+
+# Test sources, fixtures, and runner output
+src/tests/
+test-results/
 .playwright-out/
+
+# Root markdown docs
+CLAUDE.md
+CORE_FLOW.md
+CONVENTIONS.md
+README.md
+CHANGELOG.md
+BACKLOG.md
+
+# Test-runner configs
+vitest.config.js
+vitest.int.config.js
+vitest.smoke.config.js
+playwright.config.js

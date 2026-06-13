@@ -1,4 +1,5 @@
 # syntax = docker/dockerfile:1
+# ADR: ADR-0027
 
 # Adjust NODE_VERSION as desired
 ARG NODE_VERSION=22.21.1
@@ -35,5 +36,5 @@ FROM base
 COPY --from=build /app /app
 
 # Start the server by default, this can be overwritten at runtime
-EXPOSE 3000
+EXPOSE 8080
 CMD [ "npm", "run", "start" ]

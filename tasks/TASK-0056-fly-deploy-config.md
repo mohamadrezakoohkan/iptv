@@ -2,7 +2,7 @@
 id: TASK-0056
 adr: ADR-0027
 evolution: 17
-status: pending
+status: done
 attempts: 0
 depends_on: []
 ---
@@ -61,5 +61,43 @@ source or behavior changes.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched:**
+- `fly.toml` — added `# ADR: ADR-0027`; added `[env]` table with `PORT = '8080'`
+  so `src/server/cfg.js` (`Number(process.env.PORT) || 3000`) binds 8080 to
+  match `internal_port = 8080`; resolved the conflicting memory pair by keeping
+  `memory = '512mb'` and removing `memory_mb = 256` (kept `cpu_kind`/`cpus`);
+  added an `[[http_service.checks]]` HTTP health check (`method = 'get'`,
+  `path = '/'`, `interval = '15s'`, `timeout = '5s'`, `grace_period = '10s'`).
+- `Dockerfile` — added `# ADR: ADR-0027`; changed `EXPOSE 3000` → `EXPOSE 8080`.
+  Multi-stage build, plain `npm ci` (no `--ignore-scripts`, so `ffmpeg-static`'s
+  postinstall runs and the binary lands in the image), and
+  `CMD [ "npm", "run", "start" ]` are unchanged — TASK-0057 proves the binary
+  resolves inside the image.
+- `.dockerignore` — added `# ADR: ADR-0027` header; kept the original exclusions
+  (`node_modules/`, `.env.secrets`, `.DS_Store`, `.claude/settings.local.json`,
+  `.claude/worktrees/`, `.playwright-out/`) and added the slimming exclusions
+  (`.git`, `.github/`, `.claude/`, `docs/`, `tasks/`, `failures/`, `src/tests/`,
+  `test-results/`, the root `*.md` docs, and the test-runner configs incl.
+  `vitest.smoke.config.js`). Does NOT exclude `src/client`/`src/server`/
+  `src/index.html`/`package.json`/`package-lock.json`.
+- `src/tests/unit/deploy.test.js` (new, `// ADR: ADR-0027`) — config-consistency
+  unit test. Parses `fly.toml`/`Dockerfile`/`.dockerignore` with small inline
+  regex helpers (no TOML dependency) and `package.json` with `JSON.parse`, all
+  read from the repo root via `import.meta.url`. Asserts the invariants:
+  `app == 'teeatr'`; port coherence (`internal_port` == `[env] PORT` == Dockerfile
+  `EXPOSE`, and the bound port equals them); exactly one `[[vm]]` memory directive
+  (`memory` present, `memory_mb` absent); Dockerfile `CMD` runs the package `start`
+  script and `scripts.start === 'node src/server/srv.js'`; `.dockerignore` excludes
+  `node_modules` and `.env.secrets` and does NOT exclude the runtime files; a
+  health check with `path = '/'` exists.
+
+**Non-obvious:** the port-coherence test asserts the *relationship* (the three
+values are equal and the bound port equals them) rather than the literal 8080,
+so the gate keeps protecting future port changes. ADR-0027 `governs:` already
+listed all four files (`deploy.test.js` was a planned path, now created) — no
+`governs:` change needed. TASK-0057's two planned paths
+(`src/tests/smoke/docker.test.js`, `vitest.smoke.config.js`) are intentionally
+left for that task.
+
+**Verification:** `npx vitest run` passes — 27 files, 602 tests, including the
+10 new `deploy.test.js` tests; rest of the unit suite unaffected.
