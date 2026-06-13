@@ -64,5 +64,6 @@ from the unit suite's config so `npx vitest run` stays network-free.
 ## Feature specs
 
 - `specs/iptv-player.md` — full IPTV player broadcast console feature spec
+- `specs/empty-states.md` — empty & no-signal placeholder states (player idle, stream error, empty channel lists)
 - `specs/theme.md` — light / dark theme toggle (sun/moon switch, top-right)
 - `specs/integration-testing.md` — live-network integration test tier
