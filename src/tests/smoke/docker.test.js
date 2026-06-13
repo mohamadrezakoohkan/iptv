@@ -1,12 +1,14 @@
-// ADR: ADR-0027
-// Build-smoke — TASK-0057 acceptance gate. Proves the corrected Fly.io
-// deployment artifacts (Dockerfile / fly.toml / .dockerignore, TASK-0056)
-// produce a working runtime image: a real `docker build`, a running container
-// that serves `/` over HTTP (200 + `<title>`), and a resolvable, executable
-// `ffmpeg-static` binary *inside* the image (proves the ADR-0012 remux
-// fallback will work on Fly). Isolated to its own runner (vitest.smoke.config.js)
-// and skipped cleanly when Docker is absent, so it never slows or flakes the
-// normal unit/integration gates.
+// ADR: ADR-0027, ADR-0028
+// Build-smoke — TASK-0058 acceptance gate (refines TASK-0057). Proves the Fly.io
+// deployment artifacts (Dockerfile / fly.toml / .dockerignore) produce a working
+// runtime image that *self-binds* 8080: a real `docker build`, a container started
+// with NO `-e PORT` (relying solely on the image's `ENV PORT=8080`, ADR-0028) that
+// serves `/` over HTTP (200 + `<title>`) on 8080, and a resolvable, executable
+// `ffmpeg-static` binary *inside* the image (proves the ADR-0012 remux fallback
+// will work on Fly). Running without `-e PORT` is the real proof of self-bind:
+// a bare `docker run` of the image must serve on 8080. Isolated to its own runner
+// (vitest.smoke.config.js) and skipped cleanly when Docker is absent, so it never
+// slows or flakes the normal unit/integration gates.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync, execFileSync } from 'child_process';
@@ -89,12 +91,14 @@ describe('Docker build-smoke (Fly.io deployment image)', function () {
     // Build the image from the repo root build context (respects .dockerignore).
     execSync(`docker build -t ${TAG} .`, { cwd: ROOT, stdio: 'inherit', timeout: 590000 });
 
-    // Run the container, mapping an ephemeral host port to the internal port.
+    // Run the container with NO `-e PORT`, relying solely on the image's baked
+    // `ENV PORT=8080` (ADR-0028) — this proves the image self-binds 8080. The
+    // ephemeral host port is still mapped to the internal 8080 the image binds.
     hostPort = await getFreePort();
     // Clean any stale container from a previous interrupted run.
     try { execSync(`docker rm -f ${CTR}`, { stdio: 'ignore' }); } catch (e) { /* none */ }
     execSync(
-      `docker run -d --name ${CTR} -e PORT=${PORT} -p ${hostPort}:${PORT} ${TAG}`,
+      `docker run -d --name ${CTR} -p ${hostPort}:${PORT} ${TAG}`,
       { stdio: 'inherit', timeout: 60000 },
     );
   }, 600000);
@@ -120,7 +124,9 @@ describe('Docker build-smoke (Fly.io deployment image)', function () {
     expect(out).toContain('FFMPEG_OK:');
   }, 90000);
 
-  itDocker('the running container serves / with HTTP 200 and an HTML title', async function () {
+  itDocker('the self-bound container (no -e PORT) serves / with HTTP 200 and an HTML title', async function () {
+    // The container was started with NO `-e PORT`, so a 200 here proves the
+    // image's baked `ENV PORT=8080` made `node src/server/srv.js` bind 8080.
     const res = await waitForServer(`http://127.0.0.1:${hostPort}/`, 30000);
     expect(res.status).toBe(200);
     expect(res.body).toContain('<title');

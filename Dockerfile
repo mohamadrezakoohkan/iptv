@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:1
-# ADR: ADR-0027
+# ADR: ADR-0027, ADR-0028
 
 # Adjust NODE_VERSION as desired
 ARG NODE_VERSION=22.21.1
@@ -12,6 +12,10 @@ WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV="production"
+
+# Self-bind the port so the image serves 8080 with no external env (ADR-0028).
+# An explicit PORT at run time (Fly [env] PORT, docker run -e PORT=...) overrides this.
+ENV PORT=8080
 
 
 # Throw-away build stage to reduce size of final image
