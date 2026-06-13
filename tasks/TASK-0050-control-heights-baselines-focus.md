@@ -2,8 +2,8 @@
 id: TASK-0050
 adr: ADR-0024
 evolution: 14
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0047, TASK-0048, TASK-0049]
 ---
 
@@ -63,4 +63,42 @@ by rewiring the relevant `client/app.css` rules to read TASK-0047's tokens.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+Files touched:
+- `client/app.css` — rewired rules 3 + 7 + 8 + 10 to read TASK-0047 tokens:
+  - **Rule 3 (primary 36px):** `.field input`, `.btn`, `.login-mode` now read
+    `height: var(--ctl)`; `.footer-status` `min-height: var(--ctl)`.
+  - **Rule 3 (secondary 28px):** `.fmt-chip` and `.ch-sort` height now
+    `calc(var(--s6) + var(--s1))` (28px); `.ch-fav` became a real 28×28 hit box
+    (`width`/`height` `calc(var(--s6) + var(--s1))`, centred inline-flex, padding 0).
+  - **Rule 7 (category list):** `.sidebar-list` is now `display: flex;
+    flex-direction: column; gap: 2px` (desktop) keeping `var(--sgut)` gutter
+    (`padding: var(--s2) var(--sgut) var(--s4)`); `.cat-btn` height
+    `var(--ctl)` (was 34px) + `flex: none`, keeps `--s3` inner inset; mobile
+    `.cat-btn` 34px → `var(--ctl)`; `.cat-count` gained `min-width: 26px`,
+    `padding: 3px 5px` (verbatim off-grid exceptions) + `text-align: center`,
+    keeps `tabular-nums` and `var(--s1)` radius. The mobile `max-width: 760px`
+    horizontal-strip rule is preserved.
+  - **Rule 8 (footer baseline):** `.footer-form` gap `10px` → `var(--s3)`;
+    `.field` label-to-input gap `4px` → `var(--s1)`. `align-items: flex-end`
+    already present; 36px inputs + 36px button now share one bottom baseline.
+  - **Rule 10 (one focus ring):** added a single global
+    `:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px }`
+    near the top; removed every per-component `:focus-visible` outline rule
+    (`.sig-btn`, `.ch-empty-btn`, `.ch-sort`, `.thm-toggle`, `.acct-btn`,
+    `.acct-close`, `.acct-row`, `.acct-row-rm`, `.mode-opt input`). Input
+    `:focus` / `:focus-within` border-colour cues (`.field input:focus`,
+    `.search-field:focus-within`) intentionally remain (not outline rules).
+- `tests/unit/controls.test.js` (new) — CSS-source assertions for all four rules.
+- `tests/ui/controls.test.js` (new) — Playwright: input+button both 36px on one
+  baseline, login-mode 36px, chip 28px, star 28×28, category row 36px, and the
+  single global focus ring via real keyboard tabbing. Captures
+  `task-0050-footer-baseline.png`.
+- `adrs/ADR-0024-...md` — `governs:` trued up with the two new test files
+  (traceability only).
+
+Non-obvious: the focus-ring UI test tabs with real `page.keyboard.press('Tab')`
+(not `.focus()`) because `:focus-visible` only matches under the browser's
+keyboard-focus heuristic; programmatic focus would never show the ring.
+
+Full unit suite: 582 passed (25 files). Full UI suite: 172 passed. No
+behaviour change — purely CSS geometry + test updates.
