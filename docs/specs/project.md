@@ -88,4 +88,5 @@ invariants the structure preserves.
 - `empty-states.md` — empty & no-signal placeholder states (player idle, stream error, empty channel lists)
 - `theme.md` — light / dark theme toggle (sun/moon switch, top-right)
 - `spacing-sizing.md` — 4px-grid spacing/sizing/radius token contract (UI alignment pass)
+- `playback-failure-log.md` — session failure log for channels that fail to play, surfaced via a log button beside the account button
 - `integration-testing.md` — live-network integration test tier
