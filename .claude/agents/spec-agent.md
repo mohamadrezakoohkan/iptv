@@ -51,7 +51,9 @@ are binding constraints on everything you produce).
    `git push -u origin ai/e<E>-<slug>`, then open the run PR against `main`
    with `gh pr create`, title `E<N>: <prompt, condensed>`, body in the
    canonical PR-description structure from CORE_FLOW.md §3 (every task line
-   `- [ ] TASK-NNNN — <title> — pending`, Outcome `_Run in progress._`).
+   `- [ ] TASK-NNNN — <title> — pending`, the `### Demo` placeholder seeded
+   verbatim from the template so the slot exists for validate-agent to fill or
+   review-agent to mark exempt, Outcome `_Run in progress._`).
 
 ## You must NOT
 

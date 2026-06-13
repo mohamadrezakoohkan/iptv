@@ -37,9 +37,11 @@ never fix anything.
    report is the implement-agent's primary input for the retry.
 5. **On PASS only — the task's commit** (CORE_FLOW.md §3, Git &
    pull-request contract): you must be on the run's `ai/` branch — never
-   `main`. Ensure any UI-suite screenshots landed in the run-artifacts
-   directory the UI command writes to (so they get committed with the task and
-   can be linked from the PR). `git add -A`, commit as `TASK-NNNN: <title>`,
+   `main`. Ensure any UI-suite screenshots — and, for the task that exercises
+   user-interactable behavior, the UI-suite demo recording (step 7) — landed
+   in the run-artifacts directory the UI command writes to (so they get
+   committed with the task and can be linked from the PR). `git add -A`,
+   commit as `TASK-NNNN: <title>`,
    push with `git push origin <run-branch>` (explicit, never bare
    `git push`). Then update the PR description: read the current body with
    `gh pr view`, flip only your task's line to
@@ -77,6 +79,24 @@ never fix anything.
      exercised with pass/fail each, the external surfaces hit, and any notable
      live-network anomalies or tolerances. Omit this tier when no integration
      command is configured.
+7. **Write the Demo reference** (PASS only, and only on the task that
+   exercises the run's user-interactable behavior — CORE_FLOW.md §3 Demo
+   recording). When this task's UI suite exercises user-interactable product
+   behavior, the suite captures one screen recording of the running product
+   with the arc **boot → prepare → interact → revert runtime state → stop**;
+   ensure that recording landed in the same run-artifacts directory as the
+   screenshots so your task commit (step 5) includes it. Then write the PR's
+   `### Demo` section with `gh pr edit`: a **clickable link** to the committed
+   recording — never an inline player, which renders broken from a branch URL.
+   Use the visibility you already detected for screenshots — `PUBLIC` → the
+   raw URL `https://github.com/<owner>/<repo>/raw/<run-branch>/<path>`; any
+   other visibility → the file-viewer link
+   `https://github.com/<owner>/<repo>/blob/<run-branch>/<path>` with the same
+   one-line manual-drag note. If this task does not exercise user-interactable
+   behavior (it is headless / non-UI, or pure-logic with no interactive
+   surface) and no earlier task in the run wrote the section, write
+   `No demo — <reason>` instead of leaving it blank. Do not write a second
+   recording when the `### Demo` section already carries one for this run.
 
 ## You must NOT
 
@@ -107,6 +127,7 @@ Otherwise return ONLY this JSON:
   "suspected_cause": "root-cause hypothesis, else empty string",
   "commit": "sha pushed on PASS, else null",
   "pr_updated": true | false,
-  "test_results_block_written": true | false
+  "test_results_block_written": true | false,
+  "demo": "recording reference written | exempt: <reason> | already present | not applicable"
 }
 ```

@@ -46,8 +46,10 @@ change — the orchestrator decides whether to fix and retry or record a
   instruction verbatim + the Rule Pack. No pipeline, no evolution number —
   this is how the human contributes to the harness instead of the product.
   Relay its report, and flag that agent, skill-frontmatter, or settings
-  changes load at next session start. The agent leaves its changes
-  uncommitted — committing harness changes is the human's decision.
+  changes load at next session start. Like backlog-agent, it self-publishes:
+  it captures its changes in a dedicated worktree on a `harness/<slug>` branch,
+  commits, pushes, and opens a PR against `main`. Relay its report and the PR
+  URL; merging the harness PR is the human's decision.
 - **Backlog prompt** (explicit request to park an idea for later — "add to the
   backlog", "note this down") → spawn `backlog-agent` with the idea verbatim +
   the Rule Pack. No pipeline, no evolution number. It appends one entry to
@@ -64,8 +66,8 @@ change — the orchestrator decides whether to fix and retry or record a
 |---|---|---|---|
 | 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>` (inside the run's Claude Code worktree), specs + ADRs + tasks, first commit + PR opened, JSON manifest |
 | 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
-| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
+| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block + (for the task exercising user-interactable behavior) committed demo recording + PR `### Demo` reference |
+| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present; `### Demo` section confirmed — recording or `No demo — <reason>`) |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
@@ -92,13 +94,26 @@ change — the orchestrator decides whether to fix and retry or record a
   PR. Test Results blocks are written once, only at a task's terminal
   validation state (PASS or budget-exhausted FAIL) — never on a retried FAIL.
   Merging is the human's decision.
+- Demo recording (CORE_FLOW.md §3): a run that adds or changes
+  user-interactable product behavior must carry a screen recording of the
+  running product (committed run-artifact on the run branch, referenced from
+  the PR's `### Demo` section). The UI tier captures it during validation with
+  the arc boot → prepare → interact → revert runtime state → stop;
+  validate-agent commits and references it on the task that exercises that
+  behavior, review-agent confirms it. Like screenshots it is a clickable link
+  (raw URL on a public repo, blob link on a non-public one), never a broken
+  inline player. Exempt runs (pure refactor / no user-facing change, headless /
+  non-UI change, harness runs, backlog runs) state `No demo — <reason>` in the
+  `### Demo` section instead.
 - Finish every run with the Run Report (CORE_FLOW.md §6) — including the run
   branch and PR URL.
 - Outside the pipeline: `coreflow-agent` maintains the harness itself
   (CORE_FLOW.md §4.4) — it owns `CORE_FLOW.md`, this file, the agent
   definitions, `.claude/skills/**`, templates, `.claude/settings.json`,
   `.claude/hooks/**`, and `.github/workflows/validate-ai-instructions.yml`,
-  and never touches product artifacts. Also outside the pipeline:
+  and never touches product artifacts; it self-publishes its changes in a new
+  worktree and commits, pushes, and opens a PR on a `harness/<slug>` branch
+  (never to `main`). Also outside the pipeline:
   `backlog-agent` (CORE_FLOW.md §4.5) parks ideas as append-only entries in
   `BACKLOG.md`, non-blocking and in parallel, and owns nothing else — it always
   works in a new worktree and commits, pushes, and opens a PR for its entry

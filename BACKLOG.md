@@ -40,19 +40,6 @@ Acceptance: vertical gutter lines catch every block edge; controls in a row shar
 - "16px on mobile" (rule 2): hinges on the project's existing responsive breakpoint; the exact px threshold is left to spec/design since the idea names none — not invented here.
 - off-grid values in the contract (count badge min-width 26px, badge padding `3px 5px`): treated as deliberate stated exceptions to the 4px grid, applied as written rather than snapped.
 
-## 2026-06-13 — Attach end-to-end app demo recording to feature-request PRs
-
-**user input:** include demo of the actual app on the pr description of feature requests, the demo should be a recording navigating through the new feature, navigating end-to-end betweeen boot -> preparing requiriements for the application -> running or touching or interacting with the change -> reverting changes back to normal initial state -> stop recording of the demo and attach it to pr description
-
-**assumptions:**
-- "include demo ... on the pr description": this is a harness-process change to the existing PR workflow (the phase that finalizes the PR) rather than a one-off manual step — routed through coreflow-agent since it touches the pipeline contract; this is a parked idea only.
-- "feature requests": pipeline build runs that add or change user-interactable product behavior (not pure refactors, harness, or backlog runs); whether headless/non-UI changes are exempted is left to the build run since the idea names no cutoff — not invented here.
-- "demo ... a recording navigating through the new feature": a screen/video capture of the actually-running app exercising the new behavior, produced during the run (assumed automated as part of validation rather than hand-recorded), not a static screenshot or text walkthrough.
-- "boot": launching the application via the canonical run command in `specs/project.md` from a clean start.
-- "preparing requiriements for the application": performing the minimal setup/prerequisites the feature needs to be exercised (e.g., loading a playlist/source, seeding state) before interacting with the change.
-- "running or touching or interacting with the change": driving the new feature end-to-end through its primary user flow so the recording shows it working.
-- "reverting changes back to normal initial state": resetting the app's runtime state back to its pre-interaction starting condition (an in-app teardown), not a git revert of source.
-- "attach it to pr description": uploading/hosting the recording and embedding or linking it in the PR body; exact storage mechanism (GitHub asset upload vs external host) left to the build run since the idea names none.
 ## 2026-06-13 — HLS/TS format chips that appear on top instead of dead nav buttons
 
 **user input:** HLS and TS are buttons in top navigation bar but upon click nothing happens, change this behavior make them a chip that will be added on top not something always there

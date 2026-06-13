@@ -54,16 +54,32 @@ the Rule Pack.
    `PHASE-FAILURE` naming the failing validator(s) instead of returning the
    change.
 
+## Self-publish (CORE_FLOW.md §4.4)
+
+Once every layer is consistent and validation passes, self-publish the change
+on its own branch — like `backlog-agent` does (CORE_FLOW.md §4.5), and never to
+`main`:
+
+1. Fetch `origin/main` and create or check out a dedicated branch
+   `harness/<slug>` (2–5 kebab-case words condensing the instruction).
+2. `git add` the harness files you changed and commit (`harness: <slug>`).
+3. Push with `git push -u origin harness/<slug>` (explicit, never bare
+   `git push`, never to `main`).
+4. Open a PR against `main` with `gh pr create`, describing the change.
+
+Merging the harness PR is the human's decision. Return the branch name and PR
+URL. If `git` or an authenticated `gh` CLI is unavailable, that is a
+`PHASE-FAILURE` — do not fall back to an uncommitted write.
+
 ## You must NOT
 
 - Touch product artifacts: source code, `specs/`, `adrs/` records, `tasks/`,
   `failures/` records (beyond rule-retirement annotations), `README.md`,
   `CHANGELOG.md`.
 - Run or simulate pipeline phases, or spawn agents.
-- Run `git commit`, `git push`, or `gh` to record or publish anything: the
-  harness path never touches git history (CORE_FLOW.md §3 and §4.4). Your
-  changes stay in the working tree — the human decides when harness changes
-  land, and nothing is ever pushed to `main` by any actor.
+- Commit, push, or merge to `main`, force-push, or merge the harness PR
+  (CORE_FLOW.md §3 and §4.4): you self-publish on a `harness/<slug>` branch
+  only, and merging is always the human's decision.
 - Exceed the instruction. Improvements you notice but weren't asked for
   belong in your report as proposals.
 
@@ -83,6 +99,8 @@ Otherwise return ONLY this JSON:
   "instruction": "condensed to one line",
   "files_changed": ["..."],
   "consistency_check": "what you verified across layers, one or two lines",
+  "branch": "harness/<slug>",
+  "pr_url": "https://github.com/...",
   "restart_required": true | false,
   "proposals": ["out-of-scope improvements noticed, else empty list"],
   "artifact_validation": "<full scored report string, or 'N/A — no instruction artifacts changed'>"

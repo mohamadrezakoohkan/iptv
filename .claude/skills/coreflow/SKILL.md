@@ -41,6 +41,8 @@ On success the agent returns ONLY this JSON:
   "instruction": "condensed to one line",
   "files_changed": ["..."],
   "consistency_check": "what was verified across layers, one or two lines",
+  "branch": "harness/<slug>",
+  "pr_url": "https://github.com/...",
   "restart_required": true | false,
   "proposals": ["out-of-scope improvements noticed, else empty list"],
   "artifact_validation": "<full scored report string, or 'N/A — no instruction artifacts changed'>"
@@ -57,5 +59,7 @@ No changes are made. Report to the human; they decide next steps.
 `restart_required: true` means agent files, settings, or skill frontmatter
 changed — those load only at next session start. Inform the human.
 
-Changes are left in the working tree uncommitted. Committing harness changes
-is always the human's decision.
+The agent self-publishes: it commits its changes on a `harness/<slug>` branch,
+pushes, and opens a PR against `main` (it never commits/pushes/merges to `main`).
+Relay the returned branch and PR URL; merging the harness PR is the human's
+decision.
