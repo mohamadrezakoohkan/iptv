@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -14,6 +14,23 @@ html, body { height: 100%; }
   --live: #E5484D;
   --font-ui:   'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Spacing/sizing/radius — the 4px-grid token contract (ADR-0024). Geometry,
+     not colour: declared once on :root, theme-agnostic, NOT re-declared in the
+     :root[data-theme="light"] block. TASK-0048..0050 rewire rules to read them;
+     small-badge radius (4px) reuses --s1, so no separate radius token is added. */
+  --s1:   4px;
+  --s2:   8px;
+  --s3:   12px;
+  --s4:   16px;
+  --s5:   20px;
+  --s6:   24px;
+  --gut:  24px;   /* content-column horizontal gutter */
+  --sgut: 16px;   /* sidebar-column horizontal gutter */
+  --ctl:  36px;   /* primary-control height */
+  --hd:   56px;   /* header height (both column headers) */
+  --r1:   6px;    /* control radius */
+  --r2:   8px;    /* card / player radius */
 }
 
 /* Light theme (ADR-0019) — re-defines the same eight colour tokens with

@@ -8,6 +8,8 @@ governs:
   - client/app.css
   - index.html
   - tests/ui/grid-align.test.js
+  - tests/unit/spacing.test.js
+  - tests/ui/spacing.test.js
 ---
 
 # ADR-0024 — Unify spacing/sizing/radii under a single 4px-grid token contract (CSS-only restyle)
