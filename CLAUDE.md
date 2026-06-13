@@ -80,7 +80,7 @@ change — the orchestrator decides whether to fix and retry or record a
   `main`, force-pushes, or merges a PR (`.claude/settings.json` deny rules
   back this up). At run start you (the orchestrator) put the run inside a
   **Claude Code worktree** (the native feature — `EnterWorktree` tool, or the
-  human's `claude --worktree`; not a manual `git worktree add`), branched from
+  human's `claude --worktree`), branched from
   `main` via `worktree.baseRef: "fresh"` in `.claude/settings.json`; all four
   phases run inside that one worktree, isolated from the primary working tree
   (CORE_FLOW.md §3, §4.2). Inside it spec-agent creates branch

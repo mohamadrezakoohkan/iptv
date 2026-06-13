@@ -169,13 +169,12 @@ One build run = one branch = one pull request:
    orchestrator puts the run inside a **Claude Code worktree** — the native
    feature (https://code.claude.com/docs/en/worktrees), entered with the
    `EnterWorktree` tool, or by the human having started the session with
-   `claude --worktree`. It is **not** a manual `git worktree add`. The worktree
-   always branches from the repository's default branch (`origin/HEAD` =
-   `main`), starting from a clean tree matching the remote — the
-   `worktree.baseRef: "fresh"` setting in `.claude/settings.json` makes this
-   "always from main" guarantee durable (the alternative `"head"`, which would
-   branch from local HEAD and carry unpushed state, is never used). All four
-   phases then run inside that single worktree — they share one working tree.
+   `claude --worktree`. The worktree always branches from the repository's
+   default branch (`origin/HEAD` = `main`), starting from a clean tree matching
+   the remote — the `worktree.baseRef: "fresh"` setting in
+   `.claude/settings.json` makes the worktree branch from `main` on a clean
+   tree. All four phases then run inside that single worktree — they share one
+   working tree.
    Inside it, `spec-agent` creates and checks out the run branch `ai/e<E>-<slug>`
    (the evolution number plus 2–5 kebab-case words condensing the prompt). No
    build work ever happens on `main` or in the primary working tree. If `git`
