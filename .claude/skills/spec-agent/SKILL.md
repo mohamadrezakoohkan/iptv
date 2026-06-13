@@ -15,8 +15,7 @@ Full procedure: `.claude/agents/spec-agent.md`.
 ## When to invoke
 
 A **build prompt** — the human is requesting a change to product behavior or
-structure. One invocation = one Evolution = one run branch in a dedicated
-worktree + one PR.
+structure. One invocation = one Evolution = one run branch + one PR.
 
 Do NOT invoke for:
 - Questions or status requests (answer directly from files).
@@ -40,7 +39,6 @@ On success the agent returns ONLY this JSON:
 {
   "evolution": E,
   "branch": "ai/e<E>-<slug>",
-  "worktree_path": "/absolute/path/to/run/worktree",
   "pr_url": "https://github.com/...",
   "specs_touched": ["specs/..."],
   "adrs": [{"id": "ADR-NNNN", "title": "...", "path": "adrs/..."}],
@@ -57,9 +55,5 @@ protocol (CORE_FLOW.md §5) and ask the human.
 
 ## Post-condition check
 
-The run branch `ai/e<E>-<slug>` lives in a dedicated git worktree (mirroring
-backlog-agent's isolation); `worktree_path` in the manifest is where every
-later phase of the run operates — pass it to implement-, validate-, and
-review-agent. Before proceeding to Phase 2, verify every file listed in the
-manifest (`specs_touched`, `adrs[].path`, `tasks[].path`) exists on disk
-under that worktree path.
+Before proceeding to Phase 2, verify every file listed in the manifest
+(`specs_touched`, `adrs[].path`, `tasks[].path`) exists on disk.

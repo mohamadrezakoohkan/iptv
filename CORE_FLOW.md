@@ -168,13 +168,17 @@ One build run = one branch = one pull request:
 1. **Branch in a dedicated worktree.** At the start of Phase 1, `spec-agent`
    creates the run branch from the current HEAD: `ai/e<E>-<slug>` (the
    evolution number plus 2–5 kebab-case words condensing the prompt) in a
-   **new git worktree** (`git worktree add -b ai/e<E>-<slug> <path> HEAD`), so
-   the entire run is isolated from the primary working tree. The run's
-   absolute worktree path is returned in the manifest and is where every
-   later phase of the run operates. No build work ever happens on `main` or in
-   the primary working tree. If `git` or an authenticated `gh` CLI is
-   unavailable, that is a `PHASE-FAILURE` — the harness does not build outside
-   a run worktree.
+   **new git worktree** (`git worktree add -b ai/e<E>-<slug> <path> HEAD`),
+   mirroring `backlog-agent`'s isolation (§4.5), so the entire run is isolated
+   from the primary working tree. spec-agent does all of its Phase 1 work
+   inside that worktree. The orchestrator records the run's absolute worktree
+   path and is responsible for running every later phase of the run inside it
+   (§4.2) — spec-agent reads this contract in full at the start of Phase 1, and
+   the orchestrator sequences the remaining phases there, so no agent needs a
+   bespoke worktree instruction. No build work ever happens on `main` or in the
+   primary working tree. If `git` or an authenticated `gh` CLI is unavailable,
+   that is a `PHASE-FAILURE` — the harness does not build outside a run
+   worktree.
 2. **First commit, then PR.** `spec-agent` commits the Phase 1 artifacts as
    the run's first commit (`E<N> spec: <prompt, condensed>`), pushes the
    branch (`git push -u origin <run-branch>`), and immediately opens the run
@@ -355,8 +359,10 @@ it MUST be included in the prompt of every agent spawned during the run.
 the Rule Pack. The agent reads `CORE_FLOW.md`, everything in `specs/`, and
 everything in `adrs/` to understand the project, then:
 1. creates the run branch `ai/e<E>-<slug>` from the current HEAD in a new git
-   worktree (§3 Git contract) and works inside it — build work never happens
-   on `main` or in the primary working tree,
+   worktree (§3 Git contract) and does all of its Phase 1 work inside it —
+   build work never happens on `main` or in the primary working tree; the
+   orchestrator notes the worktree's path from the branch-creation output and
+   reuses it for every later phase,
 2. aligns the prompt with the existing project (or defines the project, on the
    first run),
 3. creates or updates spec files in `specs/`,
@@ -368,8 +374,9 @@ everything in `adrs/` to understand the project, then:
    external connectivity is involved),
 6. commits the Phase 1 artifacts as the run's first commit, pushes the
    branch, and opens the run PR against `main` (§3 Git contract),
-7. returns a JSON manifest of ADRs and tasks, plus the run branch name, the
-   run's absolute worktree path, and the PR URL.
+7. returns a JSON manifest of ADRs and tasks, plus the run branch name and the
+   PR URL. (The orchestrator already holds the worktree path from the
+   branch-creation step and does not need it echoed in the manifest.)
 
 The orchestrator verifies every file in the manifest exists before proceeding.
 If `spec-agent` reports `PHASE-FAILURE` (e.g. the prompt contradicts accepted
@@ -378,12 +385,13 @@ failure protocol, then ask the human.
 
 **Phases 2+3 — IMPLEMENT + VALIDATE, per task.** Tasks execute sequentially in
 manifest order (no parallel implementation — agents share the run's one
-worktree). Every Phase 2/3/4 agent is told the run's worktree path (from the
-Phase 1 manifest) and operates inside it, never in the primary working tree.
-For each task:
+worktree). The run executes inside the worktree `spec-agent` created in Phase
+1; the orchestrator runs each Phase 2/3/4 agent there (passing the worktree
+path it recorded in Phase 1), so every phase operates in the run worktree,
+never in the primary working tree. For each task:
 
-1. Spawn `implement-agent` with the task ID, the run's worktree path, the Rule
-   Pack, and — on retries — the previous validation report verbatim. It implements the task **and its
+1. Spawn `implement-agent` with the task ID, the Rule Pack, and — on retries —
+   the previous validation report verbatim. It implements the task **and its
    tests** (unit always; UI tests whenever the task touches user-facing
    behavior; integration tests whenever the task involves external
    connectivity, API calls, or proxy behavior), then sets the task to

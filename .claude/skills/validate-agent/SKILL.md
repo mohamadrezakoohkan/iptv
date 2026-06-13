@@ -26,8 +26,7 @@ validate-agent reports only; implement-agent fixes.
 
 | Field | Value |
 |---|---|
-| `task_id` | e.g. `TASK-0001` |
-| `worktree_path` | The run's worktree path from the spec-agent manifest — the agent `cd`s here and works there |
+| `task_id` | e.g. `TASK-0001` — the only required input |
 
 The agent reads everything else it needs from files on disk.
 
