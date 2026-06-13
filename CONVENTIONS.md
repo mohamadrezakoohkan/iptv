@@ -101,28 +101,29 @@ RULE-ID-7: Constants that are not in CFG/S: SCREAMING_SNAKE only if truly file-g
 
 ```
 iptv/
-  server/
-    srv.js    — express entry; mounts rtr; owns server ST
-    rtr.js    — all HTTP routes; no business logic
-    pl.js     — M3U playlist fetch + parse → Ch[]
-    epg.js    — XMLTV EPG fetch + parse → Prg[]
-    cfg.js    — server CFG object (single source of truth for server layer)
+  src/
+    server/
+      srv.js    — express entry; mounts rtr; owns server ST
+      rtr.js    — all HTTP routes; no business logic
+      pl.js     — M3U playlist fetch + parse → Ch[]
+      epg.js    — XMLTV EPG fetch + parse → Prg[]
+      cfg.js    — server CFG object (single source of truth for server layer)
 
-  client/
-    main.js   — DOMContentLoaded entry; initialises all modules; no logic
-    st.js     — ST (state object) + go() state machine; only file that writes ST
-    play.js   — video player wrapper
-    ui.js     — all DOM rnd* functions; owns EL registry
-    nav.js    — keyboard + pointer navigation
-    srch.js   — search + filter logic (pure)
-    cfg.js    — client S config object
+    client/
+      main.js   — DOMContentLoaded entry; initialises all modules; no logic
+      st.js     — ST (state object) + go() state machine; only file that writes ST
+      play.js   — video player wrapper
+      ui.js     — all DOM rnd* functions; owns EL registry
+      nav.js    — keyboard + pointer navigation
+      srch.js   — search + filter logic (pure)
+      cfg.js    — client S config object
 
-  specs/      — living specs (CORE_FLOW managed)
-  adrs/       — architecture decisions (CORE_FLOW managed)
+  docs/specs/ — living specs (CORE_FLOW managed)
+  docs/adrs/  — architecture decisions (CORE_FLOW managed)
   tasks/      — work units (CORE_FLOW managed)
 ```
 
-Rule: no file may import from a sibling layer (server/* cannot import client/* and vice versa).
+Rule: no file may import from a sibling layer (src/server/* cannot import src/client/* and vice versa).
 Rule: rtr.js is the only server file that handles req/res. pl.js, epg.js are pure data modules.
 
 ---

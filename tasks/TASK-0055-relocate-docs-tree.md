@@ -2,8 +2,8 @@
 id: TASK-0055
 adr: ADR-0026
 evolution: 16
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0054]
 ---
 
@@ -78,3 +78,92 @@ implementation notes. ADR ↔ code traceability holds: every accepted ADR's
   `BACKLOG.md` stay at root and are not edited by this task.
 - Depends on TASK-0054 so the `src/...` paths the rewired references point at
   already exist.
+
+### Implementation record (attempt 1)
+
+- **Relocations (`git mv`, history preserved):** all 6 specs moved
+  `specs/* → docs/specs/*` (`empty-states.md`, `integration-testing.md`,
+  `iptv-player.md`, `project.md`, `spacing-sizing.md`, `theme.md`); all 26 ADRs
+  moved `adrs/* → docs/adrs/*` (ADR-0001…ADR-0025 + `TEMPLATE.md`). Empty root
+  `specs/` and `adrs/` directories removed (`rmdir`); both gone from root.
+  `docs/specs/repo-structure.md` and `docs/adrs/ADR-0026-…` (this run's new
+  files) were left in place, not moved or clobbered.
+- **ADR `governs:` rewrite:** 24 ADRs had path prefixes rewritten
+  (`client/→src/client/`, `server/→src/server/`, `tests/→src/tests/`,
+  `index.html→src/index.html`). Config/package entries (`vitest.int.config.js`,
+  `package.json`) and the empty `governs: []` (ADR-0018) were left unchanged.
+  `TEMPLATE.md` placeholder and ADR-0026 untouched. Verified: no `governs:`
+  entry still points at a root-level moved path, and all 144 accepted-ADR
+  `governs:` entries resolve to tracked files at the branch tip.
+- **`docs/specs/project.md`:** build/run command → `node src/server/srv.js`;
+  added a "Where the code lives" section describing the `src/`+`docs/` layout;
+  added a note that config/`package.json` stay at root; rewrote the Feature
+  specs list from `specs/<file>.md` to bare sibling filenames so the links
+  resolve within `docs/specs/`. Canonical test commands left unchanged.
+- **Cross-references in moved specs:** rewrote 10 filesystem-relative
+  `` `specs/<file>.md` `` references to `` `docs/specs/<file>.md` `` across
+  `empty-states.md`, `theme.md`, `integration-testing.md`, `iptv-player.md` so
+  they resolve under the new layout. The two `` `specs/` `` / `` `adrs/` ``
+  mentions in `repo-structure.md` are deliberate harness-state narrative (the
+  cross-PR-dependency note) and were left as-is.
+- **`docs/notes/`:** created `docs/notes/README.md` documenting the
+  implementation-notes convention (what belongs / what does not / naming). No
+  note content fabricated. Carries an `ADR: ADR-0026` comment.
+- **`CONVENTIONS.md` (stays at root):** updated the directory-layout
+  illustration to nest `server/`+`client/` under `src/` and to point
+  `specs/`→`docs/specs/`, `adrs/`→`docs/adrs/`; updated the sibling-layer import
+  rule to `src/server/* cannot import src/client/*`. All token/conceptual
+  content left intact.
+- **Regression checks:** `node src/server/srv.js` boots ("iptv srv listening on
+  port 3000"); full unit suite collects and passes (`npx vitest run` → 26 files,
+  592 tests, all green). Doc relocation did not touch any `src/` code/test or
+  config file.
+- **Scope held:** no edits to `README.md`, `CHANGELOG.md`, `tasks/` content
+  (besides this status/record), `failures/`, `test-results/`, `src/**`, config
+  files, `package.json`, or any harness-owned file (`.claude/**`, `CLAUDE.md`,
+  `CORE_FLOW.md`, `.github/**`). The out-of-scope `test-results/*.webm|*.png`
+  byte-regenerations from a prior UI run were left unstaged and untouched.
+- **Prose path mentions in historical ADR bodies left as narrative:** per the
+  task's functional-gate scope, source-path mentions inside the historical ADR
+  bodies (`docs/adrs/*` prose) are point-in-time history and were not rewritten
+  — the functional gate is `governs:` resolution, which is satisfied.
+
+### Implementation record (attempt 1 follow-up — living-spec prose accuracy)
+
+Closed the prose-accuracy gap flagged above, but ONLY for LIVING feature specs
+(historical ADR bodies remain as written — point-in-time history, `governs:`
+already trued up). Substituted filesystem-style backticked prose path
+references to the new `src/...` layout:
+
+- `docs/specs/iptv-player.md` (6 mentions): L249 `` `client/api.js` `` →
+  `` `src/client/api.js` ``; L250 `` `server/rtr.js` `` → `` `src/server/rtr.js` ``;
+  L354 `` `client/play.js` `` → `` `src/client/play.js` ``; L360 `` `index.html` ``
+  → `` `src/index.html` ``; L389 `` `server/hls.js` `` + `` `server/rtr.js` `` →
+  `` `src/server/hls.js` `` + `` `src/server/rtr.js` ``; L410 `` `client/st.js` ``
+  → `` `src/client/st.js` ``.
+- `docs/specs/theme.md` (5 mentions): L41 `` `client/app.css` ``, L44
+  `` `index.html` ``, L50 `` `client/cfg.js` ``, L54 `` `client/st.js` ``, L82
+  `` `client/main.js` `` → their `src/…` forms.
+- `docs/specs/spacing-sizing.md` (3 mentions): L26 `` `client/app.css` `` + L27
+  `` `index.html` ``, L31 `` `client/app.css` `` → their `src/…` forms.
+- `docs/specs/integration-testing.md` (1 mention): L108
+  `` `tests/int/**/*.test.js` `` → `` `src/tests/int/**/*.test.js` ``.
+- `docs/specs/empty-states.md` and `docs/specs/project.md`: no filesystem-style
+  `client/`/`server/`/`tests/`/`index.html` prose mentions (project.md's
+  "where the code lives" was already on the `src/` layout from attempt 1).
+
+`docs/specs/repo-structure.md` — the NEW spec describing the restructure — was
+read mention-by-mention and left UNCHANGED: every `client/`/`server/`/`tests/`/
+`index.html` mention there is either ROOT-relative resolution mechanics
+("`express.static(ROOT/client)`", "`../../client/...`"), a description of the
+directory entries that sit under `src/` ("`server/`, `client/`, and
+`index.html` all under `src/`"), or explicit before→after migration narrative
+("rewritten from `client/…`, `server/…`, `tests/…`, `index.html` to its
+`src/…` location"). None wrongly describes the current/target repo-root layout,
+so the before→after narrative was preserved intact.
+
+Out of scope and untouched: historical ADR bodies, `governs:` frontmatter
+(already done), config/package files, `src/` files, README, CHANGELOG, harness
+files. `test-results/` byte-noise left unstaged. Unit suite re-run after the
+edits: `npx vitest run` → 26 files, 592 tests, all green (documentation-only
+change, no runtime impact). No commit; task stays `validating`.
