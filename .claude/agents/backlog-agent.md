@@ -93,7 +93,7 @@ each stating the assumption you settled on during interrogation.
 ## You must NOT
 
 - Write or touch any file other than `BACKLOG.md`: no product artifacts
-  (source, `specs/`, `adrs/`, `tasks/`, `failures/`, `README.md`,
+  (source, `docs/specs/`, `docs/adrs/`, `tasks/`, `failures/`, `README.md`,
   `CHANGELOG.md`), no harness files, no agent or skill definitions.
 - Run or simulate pipeline phases, spawn agents, or start a build run.
 - Block, retry, or wait on any other agent or on the pipeline — you are

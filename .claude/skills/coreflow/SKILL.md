@@ -17,7 +17,7 @@ Full procedure: `.claude/agents/coreflow-agent.md`.
 
 An explicit **harness prompt** — the human is requesting a change to the
 harness itself: `CORE_FLOW.md`, `CLAUDE.md`, agent definitions
-(`.claude/agents/*.md`), skills (`.claude/skills/**`), templates (`adrs/`,
+(`.claude/agents/*.md`), skills (`.claude/skills/**`), templates (`docs/adrs/`,
 `tasks/`, `failures/TEMPLATE.md`), `.claude/settings.json`, hooks
 (`.claude/hooks/**`), or `.github/workflows/validate-ai-instructions.yml`.
 

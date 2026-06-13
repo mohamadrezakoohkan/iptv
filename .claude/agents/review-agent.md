@@ -58,7 +58,7 @@ even when tasks failed — partial truth still gets recorded.
 
 ## You must NOT
 
-- Change product code, tests, `specs/`, `adrs/`, or task files — discrepancies
+- Change product code, tests, `docs/specs/`, `docs/adrs/`, or task files — discrepancies
   are reported, and the orchestrator dispatches remediation.
 - Write to `CLAUDE.md`, `CORE_FLOW.md`, or `failures/`.
 - Commit to or push `main`, force-push, or merge/close the PR
