@@ -16,6 +16,11 @@ lets you switch between saved accounts, add a new one, or remove one. The same
 panel offers a built-in **Community playlists** section — a curated list of
 public iptv-org playlists you can connect to with one click, no URL typing.
 
+Beside the account button is a **Log** button that opens a slide-in
+**playback failure log**: every channel that fails to play this session is
+recorded there (only failures — successful plays are never logged), so you can
+see at a glance which channels would not play and why.
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
