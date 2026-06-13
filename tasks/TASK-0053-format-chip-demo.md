@@ -2,8 +2,8 @@
 id: TASK-0053
 adr: ADR-0025
 evolution: 15
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0052]
 ---
 
@@ -49,5 +49,48 @@ user-interactable change carries a demo per CORE_FLOW.md §3.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched**
+
+- `tests/ui/fmtchip-demo.test.js` (new) — the run's demo recording. A per-spec
+  chromium context with `recordVideo` (size 1280x800) writing under
+  `.playwright-out` (the gitignored `outputDir`), renamed in `afterAll` to the
+  stable committed-artifact path `test-results/e15-format-chip-contextual-demo.webm`
+  (`test-results/` is not gitignored, so the artifact survives). Same pattern as
+  `tests/ui/empty-demo.test.js` (E13) and `tests/ui/grid-align-demo.test.js`
+  (E14). Carries the `ADR: ADR-0025` comment.
+- `adrs/ADR-0025-contextual-format-chip.md` — `governs:` trued up to add
+  `tests/ui/fmtchip-demo.test.js` (traceability field only; no decision content).
+
+**Arc exercised (boot → prepare → interact → revert → stop)**
+
+- boot: fresh load via the canonical webServer (`node server/srv.js`); asserts
+  `#player-idle` visible and the chip + detail hidden (contextual, not always-present).
+- prepare: connect demo mode through the real footer login (`#f-url=demo` →
+  `#btn-conn`), wait for the 31 demo `.ch-card`s, then click a channel so
+  `play.js` resolves the engine and surfaces the chip via the production
+  `rndChip('hls')` path; asserts `#fmt-chip` becomes visible.
+- interact 1: chip visible, labelled `HLS`, located inside `.content-head` (added
+  on top), detail collapsed, `aria-expanded=false`.
+- interact 2: functional click reveals `#fmt-detail` ("Playing via hls.js") and
+  sets `aria-expanded=true`; second click hides it and resets `aria-expanded=false`.
+- interact 3: stopping playback (PLAY→READY) hides the chip — proves contextual
+  presence.
+- revert: in-app teardown (stopPlay, clear current, back to idle, clear search,
+  All Channels); asserts idle visible and chip/detail gone. No git revert.
+- stop: asserts the recorder is active; `afterAll` flushes + renames the `.webm`.
+
+**Non-obvious for reviewers**
+
+- Headless chromium cannot actually play the demo HLS stream, so `play.js`
+  `onEngErr` can fire a fatal media error at an unpredictable moment, calling
+  `rndPhase()` (PLAY→ERR) which tears the contextual chip down mid-recording. To
+  keep the demo deterministic without faking behavior, a `pinPlaying([open])`
+  helper re-walks the state machine to PLAY and re-pushes the resolved engine
+  through the **production** `rndChip('hls')` path right before each interaction;
+  the click toggle itself is still driven by the real `onFmtChip` handler. The
+  genuine engine-resolution + chip-surfacing happens for real during PREPARE (a
+  real channel click); pinning only holds that resolved state up against the
+  headless media-error race. Verified stable across repeated `--workers=4` full
+  UI runs (191 UI tests green twice).
+- Video capture is scoped to this spec only (per-spec recordVideo context), so
+  the rest of the UI suite stays fast and records nothing.
