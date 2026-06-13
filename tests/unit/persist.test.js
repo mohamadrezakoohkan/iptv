@@ -343,6 +343,7 @@ function mkUiWin(opts) {
   const win = {
     localStorage: ls,
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
     document: {
@@ -556,6 +557,7 @@ function runMain(acct) {
     IptvPlay: { mkPlay: vi.fn() },
     IptvApi:  { connect },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
   };
   const src = readFileSync(MAIN_SRC, 'utf8');
   // eslint-disable-next-line no-new-func

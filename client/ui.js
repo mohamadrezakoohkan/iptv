@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -48,6 +48,26 @@ const EL = {
 const HINT_XTR = 'Type "demo" to try a sample playlist.';
 const HINT_M3U = 'Paste an .m3u / .m3u8 playlist URL — no login needed.';
 
+// Empty-state placeholder icon glyphs (ADR-0022). Decorative inline SVG paths
+// keyed by the icon token IptvEmpty.resolveContent returns; rendered
+// aria-hidden so the title + body carry the meaning (specs/empty-states.md §4).
+const EMPTY_ICOS = {
+  search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  star:   '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  list:   '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+};
+
+// Player no-signal placeholder icon glyphs (ADR-0023, specs/empty-states.md §3).
+// Decorative inline SVG paths keyed by the icon token IptvEmpty.resolveSignal
+// returns ('antenna' for idle, 'alert' for stream error); rendered aria-hidden
+// so the title + body carry the meaning (§4). Distinct from EMPTY_ICOS (grid).
+const SIGNAL_ICOS = {
+  antenna: '<line x1="12" y1="20" x2="12" y2="13"/><polyline points="9 23 12 20 15 23"/>'
+    + '<path d="M8 9a4 4 0 0 1 8 0"/><path d="M5 9a7 7 0 0 1 14 0"/><circle cx="12" cy="9" r="1"/>',
+  alert: '<path d="M10.29 3.86 1.82 18a1 1 0 0 0 .86 1.5h18.64a1 1 0 0 0 .86-1.5L13.71 3.86a1 1 0 0 0-1.72 0z"/>'
+    + '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+};
+
 // ---------------------------------------------------------------------------
 // Debounce state — module-level vars, TOKENS TABLE compliant
 // ---------------------------------------------------------------------------
@@ -57,6 +77,16 @@ let srch = '';     // pending search query (srch = search)
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/** HTML-escape a string for safe inclusion in rendered markup (ADR-0023). */
+function escHtml(s) {
+  return String(s)
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;')
+    .split("'").join('&#39;');
+}
 
 /** Zero-pad a channel number to 3 digits. */
 function fmtNum(n) {
@@ -197,9 +227,43 @@ function toggleFav(id) {
 }
 
 // ---------------------------------------------------------------------------
+// goClrSrch — empty-state "Clear search" action (ADR-0022): clear the search
+// input and re-run the existing debounced search path with an empty query so
+// the grid re-renders to the unfiltered (within current category) result.
+// ---------------------------------------------------------------------------
+function goClrSrch() {
+  if (EL.srch) EL.srch.value = '';
+  srch = '';
+  fireSrch();
+}
+
+// ---------------------------------------------------------------------------
+// goViewAll — empty-state "Browse all channels" action (ADR-0022): switch the
+// active category to "All Channels" through the existing category-filter path
+// (setFlt + rndSide + rndGrid), exactly as a sidebar "All Channels" click does.
+// ---------------------------------------------------------------------------
+function goViewAll() {
+  const st = window.IptvSt.ST;
+  window.IptvSt.setFlt('all');
+  rndSide(st.cats, st.chs, st.favs);
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, 'all', st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// onEmptyAct — route an empty-state action button to its existing handler
+// (ADR-0022); the data-empty-act value is the EmptyState action kind.
+// ---------------------------------------------------------------------------
+function onEmptyAct(kind) {
+  if (kind === 'clear-search') { goClrSrch(); return; }
+  if (kind === 'view-all') goViewAll();
+}
+
+// ---------------------------------------------------------------------------
 // onGridClick — event-delegated click handler on EL.list (ch-grid)
 // ---------------------------------------------------------------------------
 function onGridClick(evt) {
+  const act  = evt.target.closest('[data-empty-act]');
+  if (act) { onEmptyAct(act.getAttribute('data-empty-act')); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
   const card = evt.target.closest('[data-id]');
@@ -529,6 +593,7 @@ function mkEL() {
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
+  if (EL.card) EL.card.addEventListener('click', onPlayClick);
   if (EL.list) EL.list.addEventListener('keydown', onGridKey);
   if (EL.srt)  EL.srt.addEventListener('change', onSort);
   const frm = document.getElementById('login-form');
@@ -546,12 +611,126 @@ function mkEL() {
 }
 
 // ---------------------------------------------------------------------------
-// rndGrid — render channel cards into .ch-grid
+// mkEmptyIco — pure: decorative inline-SVG icon HTML for an EmptyState icon
+// token (ADR-0022). aria-hidden; the title + body carry the meaning (§4).
+// ---------------------------------------------------------------------------
+function mkEmptyIco(name) {
+  const paths = EMPTY_ICOS[name] || EMPTY_ICOS.list;
+  return '<svg class="ch-empty-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + paths + '</svg>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEmptyBtn — pure: action-button HTML for an EmptyState action (ADR-0022).
+// data-empty-act carries the kind so onGridClick can route it through the
+// existing search/category handlers; keyboard-focusable with a label.
+// ---------------------------------------------------------------------------
+function mkEmptyBtn(action) {
+  return '<button type="button" class="ch-empty-btn" data-empty-act="' + action.kind + '">'
+    + action.label + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEmptyBox — pure: full contextual no-content placeholder HTML from a
+// resolved EmptyState (ADR-0022, specs/empty-states.md §2). role="status"
+// container, decorative icon, title, body, and the optional action button.
+// (Distinct name from empty.js's mkEmpty — both are top-level <script> globals.)
+// ---------------------------------------------------------------------------
+function mkEmptyBox(es) {
+  const btn = es.action ? mkEmptyBtn(es.action) : '';
+  return '<div class="ch-empty" role="status">'
+    + mkEmptyIco(es.icon)
+    + '<p class="ch-empty-title">' + es.title + '</p>'
+    + '<p class="ch-empty-body">' + es.body + '</p>'
+    + btn + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkSigIco — pure: decorative inline-SVG icon HTML for a player no-signal icon
+// token (ADR-0023). aria-hidden; the title + body carry the meaning (§4).
+// ---------------------------------------------------------------------------
+function mkSigIco(name) {
+  const paths = SIGNAL_ICOS[name] || SIGNAL_ICOS.antenna;
+  return '<svg class="sig-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + paths + '</svg>';
+}
+
+// ---------------------------------------------------------------------------
+// mkSigBtn — pure: player no-signal action-button HTML (ADR-0023). data-sig-act
+// carries the EmptyState action kind ('retry' | 'connect') so onPlayAct can
+// route it; keyboard-focusable with a discernible accessible label.
+// ---------------------------------------------------------------------------
+function mkSigBtn(action) {
+  return '<button type="button" class="sig-btn" data-sig-act="' + action.kind + '">'
+    + action.label + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// mkIdleBox — pure: idle "NO SIGNAL" placeholder HTML from a resolved
+// EmptyState (ADR-0023, specs/empty-states.md §3a). Antenna icon, the visible
+// "NO SIGNAL" title (literal token preserved), a guidance body, and the
+// optional "Connect a source" action in the no-session case.
+// ---------------------------------------------------------------------------
+function mkIdleBox(es) {
+  const btn = es.action ? mkSigBtn(es.action) : '';
+  return mkSigIco(es.icon)
+    + '<span class="idle-label">NO SIGNAL</span>'
+    + '<p class="sig-body">' + es.body + '</p>'
+    + btn;
+}
+
+// ---------------------------------------------------------------------------
+// mkErrBox — pure: stream-error placeholder HTML from a resolved EmptyState
+// (ADR-0023, specs/empty-states.md §3b). Warning icon, the constant headline,
+// a friendly explanation, a Retry button, and the raw engine detail as a small
+// dimmed secondary line — visible text, never console-only (§12). raw is the
+// HTML-escaped engine token (or '' when absent).
+// ---------------------------------------------------------------------------
+function mkErrBox(es, raw) {
+  const btn  = es.action ? mkSigBtn(es.action) : '';
+  const dtl  = raw ? '<p class="sig-detail">' + raw + '</p>' : '';
+  return mkSigIco(es.icon)
+    + '<p class="sig-title">' + es.title + '</p>'
+    + '<p class="sig-body">' + es.body + '</p>'
+    + btn + dtl;
+}
+
+// ---------------------------------------------------------------------------
+// onPlayAct — route a player no-signal action button to its handler (ADR-0023):
+// 'retry' re-attempts playback of the current channel through the existing play
+// path (IptvPlay.goPlay); 'connect' focuses the footer login URL field so the
+// user can connect a source (the no-session guidance affordance).
+// ---------------------------------------------------------------------------
+function onPlayAct(kind) {
+  if (kind === 'retry') { if (window.IptvPlay) window.IptvPlay.goPlay(); return; }
+  if (kind === 'connect' && EL.url && EL.url.focus) EL.url.focus();
+}
+
+// ---------------------------------------------------------------------------
+// onPlayClick — event-delegated click on the player card: a [data-sig-act]
+// button routes to its action handler (ADR-0023); anything else is ignored.
+// ---------------------------------------------------------------------------
+function onPlayClick(evt) {
+  const btn = evt.target.closest('[data-sig-act]');
+  if (btn) onPlayAct(btn.getAttribute('data-sig-act'));
+}
+
+// ---------------------------------------------------------------------------
+// rndGrid — render channel cards into .ch-grid, or a contextual empty-state
+// placeholder when the filtered list is empty (ADR-0022). The placeholder is
+// chosen by IptvEmpty.resolveContent from the live ST (total source count,
+// active filter, search query, favourites) — same opts other rnd* read.
 // ---------------------------------------------------------------------------
 function rndGrid(chs) {
   if (!EL.list) return;
   if (!chs || chs.length === 0) {
-    EL.list.innerHTML = '<p class="ch-empty">No channels found.</p>';
+    const st = window.IptvSt.ST;
+    const es = window.IptvEmpty.resolveContent({
+      total: st.chs.length, shown: 0, flt: st.flt, srch: st.srch, favs: st.favs,
+    });
+    EL.list.innerHTML = mkEmptyBox(es);
     return;
   }
   let html = '';
@@ -860,7 +1039,11 @@ function rndChip(eng) {
 }
 
 // ---------------------------------------------------------------------------
-// rndPlayer — update player-card visibility based on current phase
+// rndPlayer — update player-card visibility and render both no-output states
+// from IptvEmpty.resolveSignal (ADR-0023, specs/empty-states.md §3). Idle ("NO
+// SIGNAL" + guidance, optional Connect) shows whenever not playing; the
+// stream-error placeholder (warning icon + headline + friendly body + Retry +
+// dimmed raw detail) replaces it on phase ERR with a current channel.
 // ---------------------------------------------------------------------------
 function rndPlayer() {
   const st   = window.IptvSt.ST;
@@ -868,11 +1051,19 @@ function rndPlayer() {
   const err  = st.phase === 'ERR' && st.cur !== null;
   if (EL.wrap) EL.wrap.style.display = err ? 'block' : '';
   if (EL.card) EL.card.classList.toggle('player-idle', !play);
-  if (EL.idle) EL.idle.style.display = play ? 'none' : '';
+  if (EL.idle) {
+    EL.idle.style.display = play || err ? 'none' : '';
+    if (!play && !err) {
+      EL.idle.innerHTML = mkIdleBox(window.IptvEmpty.resolveSignal({ phase: st.phase, cur: st.cur }));
+    }
+  }
   if (EL.play) EL.play.style.display = play ? '' : 'none';
   if (EL.err) {
     EL.err.style.display = err ? '' : 'none';
-    if (err) EL.err.textContent = st.err ? st.err : '';
+    if (err) {
+      const es = window.IptvEmpty.resolveSignal({ phase: st.phase, cur: st.cur });
+      EL.err.innerHTML = mkErrBox(es, st.err ? escHtml(st.err) : '');
+    }
   }
 }
 
@@ -894,4 +1085,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };

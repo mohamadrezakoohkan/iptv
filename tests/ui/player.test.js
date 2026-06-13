@@ -1,7 +1,8 @@
-// ADR: ADR-0004
-// UI tests — Player component idle/play/error DOM state for TASK-0007.
+// ADR: ADR-0004, ADR-0023
+// UI tests — Player component idle/play/error DOM state for TASK-0007, plus the
+// guided no-signal idle + stream-error placeholders with retry (TASK-0045).
 // Full live-stream playback is not testable in headless Playwright without
-// a real stream — tests verify DOM state transitions only.
+// a real stream — tests verify DOM state + placeholder rendering only.
 
 'use strict';
 
@@ -100,7 +101,7 @@ test('rndPhase() in ERR phase with cur set shows player-err overlay', async func
   await expect(err).toBeVisible();
 });
 
-test('player-err overlay shows the error message text', async function ({ page }) {
+test('player-err overlay keeps the raw engine token as a dimmed detail line', async function ({ page }) {
   await setup(page);
   await page.evaluate(function () {
     window.IptvSt.go('LOAD');
@@ -110,8 +111,80 @@ test('player-err overlay shows the error message text', async function ({ page }
     window.IptvSt.go('ERR');
     window.IptvUi.rndPhase();
   });
+  const detail = page.locator('#player-err .sig-detail');
+  await expect(detail).toHaveText('bufferStalledError');
+});
+
+// ---------------------------------------------------------------------------
+// Idle placeholder guidance (TASK-0045, specs/empty-states.md §3a)
+// ---------------------------------------------------------------------------
+test('idle placeholder shows the "NO SIGNAL" title and a guidance line', async function ({ page }) {
+  await setup(page);
+  await page.evaluate(function () { window.IptvUi.rndPhase(); });
+  const idle = page.locator('#player-idle');
+  await expect(idle).toContainText('NO SIGNAL');
+  await expect(idle).toContainText('to start watching');
+});
+
+test('idle placeholder offers a Connect a source action with no session', async function ({ page }) {
+  await setup(page);
+  await page.evaluate(function () { window.IptvUi.rndPhase(); });
+  const connect = page.locator('#player-idle button[data-sig-act="connect"]');
+  await expect(connect).toBeVisible();
+  await expect(connect).toHaveText('Connect a source');
+  await connect.focus();
+  await expect(connect).toBeFocused();
+});
+
+// ---------------------------------------------------------------------------
+// Stream-error placeholder + Retry (TASK-0045, specs/empty-states.md §3b)
+// ---------------------------------------------------------------------------
+test('stream-error placeholder shows the human-readable headline and a focusable Retry button', async function ({ page }) {
+  await setup(page);
+  await page.evaluate(function () {
+    window.IptvSt.go('LOAD');
+    window.IptvSt.go('READY');
+    window.IptvSt.setCur({ id: '1', name: 'Test Channel', url: '', img: '', cat: 'news', num: 1 });
+    window.IptvSt.setErr('MPEG-TS not supported');
+    window.IptvSt.go('ERR');
+    window.IptvUi.rndPhase();
+  });
   const err = page.locator('#player-err');
-  await expect(err).toHaveText('bufferStalledError');
+  await expect(err).toContainText("This channel won't play");
+  await expect(err).toContainText('The stream could not be loaded');
+  // the friendly body is NOT the raw engine token; the raw token survives only
+  // in the dimmed secondary detail line (specs/empty-states.md §3b).
+  await expect(page.locator('#player-err .sig-body')).not.toContainText('MPEG-TS not supported');
+  await expect(page.locator('#player-err .sig-detail')).toHaveText('MPEG-TS not supported');
+  const retry = page.locator('#player-err button[data-sig-act="retry"]');
+  await expect(retry).toBeVisible();
+  await expect(retry).toHaveText('Retry');
+  await retry.focus();
+  await expect(retry).toBeFocused();
+});
+
+test('player-idle carries role=status and player-err carries role=alert', async function ({ page }) {
+  await setup(page);
+  await expect(page.locator('#player-idle')).toHaveAttribute('role', 'status');
+  await expect(page.locator('#player-err')).toHaveAttribute('role', 'alert');
+});
+
+// ---------------------------------------------------------------------------
+// Screenshots of each player placeholder for the PR Test Results block
+// ---------------------------------------------------------------------------
+test('capture idle and stream-error player placeholders', async function ({ page }) {
+  await setup(page);
+  await page.evaluate(function () { window.IptvUi.rndPhase(); });
+  await page.locator('#player-card').screenshot({ path: 'test-results/task-0045-player-idle.png' });
+  await page.evaluate(function () {
+    window.IptvSt.go('LOAD');
+    window.IptvSt.go('READY');
+    window.IptvSt.setCur({ id: '1', name: 'Test Channel', url: '', img: '', cat: 'news', num: 1 });
+    window.IptvSt.setErr('mediaError');
+    window.IptvSt.go('ERR');
+    window.IptvUi.rndPhase();
+  });
+  await page.locator('#player-card').screenshot({ path: 'test-results/task-0045-player-error.png' });
 });
 
 // ---------------------------------------------------------------------------

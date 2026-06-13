@@ -35,6 +35,7 @@ function loadUi() {
       go:      function go() {},
     },
     IptvSrch: { getChs: function getChs() { return []; }, SORTS },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     IptvPlay: null,
     document: {
       getElementById: function getEl() { return null; },

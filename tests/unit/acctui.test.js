@@ -79,6 +79,7 @@ function loadUi() {
   const win = {
     IptvSt:   { ST: { phase: 'INIT' } },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     S: {},
     IptvApi:  { connect: vi.fn() },
     IptvPlay: null,
@@ -262,6 +263,7 @@ function loadUiStore(store) {
       go: function go() {},
     },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     S: {},
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
@@ -456,6 +458,7 @@ function loadUiPst(store) {
       go: function go() {},
     },
     IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
     IptvApi:  { connect: function connect(url, opts) { calls.connect.push({ url, opts }); return new Promise(function () {}); } },
     IptvPlay: null,
     document: {

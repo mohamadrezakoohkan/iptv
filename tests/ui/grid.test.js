@@ -1,10 +1,22 @@
-// ADR: ADR-0001
-// UI tests — Channel grid + channel card for TASK-0006
+// ADR: ADR-0001, ADR-0022
+// UI tests — Channel grid + channel card for TASK-0006; contextual empty-state
+// placeholders + working actions for TASK-0044 (ADR-0022).
 // Uses page.evaluate to set up state directly (TASK-0009 main.js not yet done).
 
 'use strict';
 
 const { test, expect } = require('@playwright/test');
+
+// ---------------------------------------------------------------------------
+// Helper: connect demo mode through the real footer login flow.
+// ---------------------------------------------------------------------------
+async function connectDemo(page) {
+  await page.goto('http://localhost:3000');
+  await page.fill('#f-url', 'demo');
+  await page.click('#btn-conn');
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
+  await page.locator('.ch-card').first().waitFor({ state: 'visible', timeout: 5000 });
+}
 
 // ---------------------------------------------------------------------------
 // Helper: load page, init EL, set up 31-channel demo state, render grid
@@ -171,4 +183,62 @@ test('window.IptvUi.toggleFav is a function', async function ({ page }) {
     return typeof window.IptvUi !== 'undefined' && typeof window.IptvUi.toggleFav === 'function';
   });
   expect(ok).toBe(true);
+});
+
+// ---------------------------------------------------------------------------
+// TASK-0044 (ADR-0022) — contextual empty placeholders + working actions.
+// No-match search: real demo connect → type a non-matching query → the grid
+// shows the "No matches" placeholder + a working "Clear search" button that
+// restores the grid. Captures a screenshot of the placeholder for the PR.
+// ---------------------------------------------------------------------------
+test('no-match search shows "No matches" placeholder and Clear search restores the grid', async function ({ page }) {
+  await connectDemo(page);
+  await page.fill('#search', 'zzzznotachannel');
+  await page.locator('.ch-empty').waitFor({ state: 'visible', timeout: 3000 });
+  const empty = page.locator('.ch-empty');
+  await expect(empty).toHaveAttribute('role', 'status');
+  await expect(empty.locator('.ch-empty-title')).toHaveText('No matches');
+  await expect(empty.locator('.ch-empty-body')).toContainText('zzzznotachannel');
+  await page.screenshot({ path: 'test-results/task-0044-empty-no-match.png' });
+  const btn = empty.locator('.ch-empty-btn');
+  await expect(btn).toHaveText('Clear search');
+  await btn.click();
+  // Clearing the search restores the (unfiltered) grid.
+  await expect(page.locator('.ch-card').first()).toBeVisible();
+  await expect(page.locator('.ch-empty')).toHaveCount(0);
+  await expect(page.locator('#search')).toHaveValue('');
+});
+
+// ---------------------------------------------------------------------------
+// Empty favourites: drive the favourites filter with zero favourites, assert
+// the "No favourites yet" placeholder, then click the real "Browse all
+// channels" action and assert it restores the full channel grid.
+// ---------------------------------------------------------------------------
+test('empty favourites shows "No favourites yet" and Browse all channels restores all', async function ({ page }) {
+  await connectDemo(page);
+  // Reach the empty-favourites state: favourites filter active, no favourites.
+  await page.evaluate(function () {
+    const st = window.IptvSt.ST;
+    window.IptvSt.setFlt('favs');
+    window.IptvUi.rndGrid(window.IptvSrch.getChs(st.chs, st.srch, 'favs', st.favs, st.sort));
+  });
+  const empty = page.locator('.ch-empty');
+  await expect(empty).toHaveAttribute('role', 'status');
+  await expect(empty.locator('.ch-empty-title')).toHaveText('No favourites yet');
+  const btn = empty.locator('.ch-empty-btn');
+  await expect(btn).toHaveText('Browse all channels');
+  await btn.click();
+  await expect(page.locator('[data-cat="all"]')).toHaveClass(/active/);
+  await expect(page.locator('.ch-empty')).toHaveCount(0);
+  await expect(page.locator('.ch-card')).toHaveCount(31);
+});
+
+// ---------------------------------------------------------------------------
+// The empty placeholder icon is decorative (aria-hidden) — accessibility.
+// ---------------------------------------------------------------------------
+test('empty placeholder icon is aria-hidden', async function ({ page }) {
+  await connectDemo(page);
+  await page.fill('#search', 'zzzznotachannel');
+  await page.locator('.ch-empty').waitFor({ state: 'visible', timeout: 3000 });
+  await expect(page.locator('.ch-empty .ch-empty-ico')).toHaveAttribute('aria-hidden', 'true');
 });

@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023
 /* global window */
 
 'use strict';
@@ -185,6 +185,25 @@ function loadPlay(url) {
 }
 
 // ---------------------------------------------------------------------------
+// goPlay — Retry entry point (ADR-0023, specs/empty-states.md §3b). Re-attempts
+// playback of the current channel after a stream error: clears ST.err, walks the
+// phase back through the state machine (ERR→INIT→LOAD→READY→PLAY, §6) so a fresh
+// PLAY transition is legal, re-renders the player overlay, then re-runs the
+// existing play path for ST.cur. No-op when there is no current channel.
+// ---------------------------------------------------------------------------
+function goPlay() {
+  const st = window.IptvSt;
+  if (!st.ST.cur) return;
+  st.setErr(null);
+  if (st.ST.phase === 'ERR') st.go('INIT');
+  if (st.ST.phase === 'INIT') st.go('LOAD');
+  if (st.ST.phase === 'LOAD') st.go('READY');
+  if (st.ST.phase === 'READY') st.go('PLAY');
+  if (window.IptvUi && window.IptvUi.rndPhase) window.IptvUi.rndPhase();
+  loadPlay(st.ST.cur.url);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvPlay = { mkPlay, loadPlay, stopPlay, getEng, getPrx, getRmx };
+window.IptvPlay = { mkPlay, loadPlay, goPlay, stopPlay, getEng, getPrx, getRmx };

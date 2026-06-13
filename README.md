@@ -90,14 +90,22 @@ command.
   collapse to a single `Classic` category); clicking one filters the channel
   grid.
 - **Channel grid** — card per channel showing logo, number, and name; star to
-  favourite.
+  favourite. When a list renders no rows, the grid shows a contextual,
+  actionable placeholder that explains *why* it is empty (no search matches,
+  empty category, no favourites yet, or a source with no channels) and offers a
+  one-tap way out where one exists (Clear search, Browse all channels).
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).
 - **Search** — live-filter channels by name from the sidebar search input.
 - **Dual-engine player** — idle, playing, and error states; autoplay on
   channel select; engine chosen from the stream URL (`.m3u8` → hls.js,
-  otherwise mpegts.js), with HLS/TS chips indicating the engine in use.
+  otherwise mpegts.js), with HLS/TS chips indicating the engine in use. The
+  no-signal states are guided rather than terse: the idle player tells you to
+  pick a channel (or connect a source when there is no session), and a failed
+  stream shows a human-readable "This channel won't play" message with a
+  **Retry** button — the raw engine detail is kept only as a small diagnostic
+  line, not the headline.
 - **MSE-less fallback (iOS Safari)** — when the browser lacks Media Source
   Extensions, raw TS streams are remuxed server-side to live HLS
   (`GET /api/hls?url=…`, ffmpeg stream copy, per-source sessions reaped
