@@ -1,4 +1,4 @@
-// ADR: ADR-0012
+// ADR: ADR-0012, ADR-0023
 // UI tests — MSE-less TS→remuxed-HLS fallback for TASK-0026.
 // window.mpegts feature flags are stubbed to emulate an MSE-less browser
 // (iOS Safari); window.Hls is stubbed to capture the URL handed to the HLS
@@ -125,7 +125,10 @@ test('overlay appears only when the fallback HLS path cannot play', async functi
   }, RAW_TS);
   const err = page.locator('#player-err');
   await expect(err).toBeVisible();
-  await expect(err).toHaveText('MPEG-TS not supported');
+  // Stream-error placeholder (ADR-0023): friendly headline + the raw engine
+  // token preserved as the dimmed secondary detail line.
+  await expect(err).toContainText("This channel won't play");
+  await expect(page.locator('#player-err .sig-detail')).toHaveText('MPEG-TS not supported');
 });
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -82,13 +82,19 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .player-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 /* Keep player-card positioned correctly when player-idle class is toggled onto it for state tracking */
 #player-card.player-idle { position: relative; inset: auto; }
-.idle-icon { width: 48px; height: 48px; border: 2px solid var(--ln); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; }
-.idle-bar { height: 3px; border-radius: 2px; background: var(--ln); }
-.idle-bar:nth-child(1) { width: 28px; }
-.idle-bar:nth-child(2) { width: 20px; }
-.idle-bar:nth-child(3) { width: 24px; }
 .idle-label { font: 500 11px/1 var(--font-mono); color: var(--dim); letter-spacing: 0.1em; }
-.player-err { position: absolute; bottom: 0; left: 0; right: 0; padding: 8px 12px; background: rgba(229,72,77,0.88); font: 500 12px/16px var(--font-ui); color: #fff; }
+/* Player no-signal placeholders (ADR-0023, specs/empty-states.md §3) — idle
+   guidance + stream-error, both on existing tokens so they recolour by theme. */
+.player-idle { padding: 16px; text-align: center; }
+.sig-ico { width: 40px; height: 40px; color: var(--ln); flex: none; }
+.sig-title { font: 600 15px/1.3 var(--font-ui); color: var(--tx); }
+.sig-body { max-width: 300px; font: 400 13px/19px var(--font-ui); color: var(--dim); }
+.sig-detail { max-width: 300px; font: 400 11px/15px var(--font-mono); color: var(--dim); opacity: 0.7; }
+.sig-btn { margin-top: 4px; height: 32px; padding: 0 16px; border: 1px solid var(--ln); border-radius: 6px; background: var(--sur2); color: var(--tx); font: 600 13px/1 var(--font-ui); cursor: pointer; transition: border-color 140ms, color 140ms; }
+.sig-btn:hover { border-color: var(--acc); color: var(--acc); }
+.sig-btn:focus-visible { outline: none; border-color: var(--acc); }
+.player-err { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; background: var(--sur); }
+.player-err .sig-ico { color: var(--acc); }
 
 /* Channel grid */
 .ch-section { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px 16px; scrollbar-width: thin; scrollbar-color: var(--ln) transparent; }

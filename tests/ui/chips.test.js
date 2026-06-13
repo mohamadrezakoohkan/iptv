@@ -1,4 +1,4 @@
-// ADR: ADR-0010, ADR-0012
+// ADR: ADR-0010, ADR-0012, ADR-0023
 // UI tests — HLS/TS format chips + dual-engine error overlay for TASK-0023.
 // Live TS playback is proven by integration tests in TASK-0024; here the
 // mpegts global is stubbed where needed.
@@ -120,7 +120,10 @@ test('unsupported mpegts shows the error overlay', async function ({ page }) {
   });
   const err = page.locator('#player-err');
   await expect(err).toBeVisible();
-  await expect(err).toHaveText('MPEG-TS not supported');
+  // Stream-error placeholder (ADR-0023): friendly headline + the raw engine
+  // token preserved as the dimmed secondary detail line.
+  await expect(err).toContainText("This channel won't play");
+  await expect(page.locator('#player-err .sig-detail')).toHaveText('MPEG-TS not supported');
 });
 
 // ---------------------------------------------------------------------------
@@ -152,7 +155,10 @@ test('fatal mpegts error shows the error overlay', async function ({ page }) {
   });
   const err = page.locator('#player-err');
   await expect(err).toBeVisible();
-  await expect(err).toHaveText('Exception');
+  // Stream-error placeholder (ADR-0023): friendly headline + the raw engine
+  // token ('Exception') preserved as the dimmed secondary detail line.
+  await expect(err).toContainText("This channel won't play");
+  await expect(page.locator('#player-err .sig-detail')).toHaveText('Exception');
 });
 
 // ---------------------------------------------------------------------------

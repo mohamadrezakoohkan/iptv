@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -489,6 +489,42 @@ describe('loadPlay() — engine switch teardown', function () {
     ctx.iptvPlay.loadPlay('http://stream.test/ch2.ts');
     expect(ts.log.destroyCalls).toBe(1);
     expect(ts.log.createCalls.length).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// goPlay() — Retry entry point re-attempts ST.cur through the play path (ADR-0023)
+// ---------------------------------------------------------------------------
+describe('goPlay() — retry re-plays the current channel', function () {
+  it('re-invokes loadPlay for ST.cur after a stream error', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    const ch  = { id: '7', name: 'Seven', url: 'http://stream.test/seven.m3u8', img: '', cat: '', num: 7 };
+    ctx.win.IptvSt.setCur(ch);
+    ctx.win.IptvSt.go('ERR');
+    ctx.win.IptvSt.setErr('mediaError');
+    ctx.iptvPlay.goPlay();
+    // a fresh load of ST.cur.url went through the proxied HLS path
+    expect(hls.log.loadSourceCalls).toContain(prxOf(ch.url));
+  });
+
+  it('clears ST.err and leaves the phase out of ERR', function () {
+    const ctx = loadPlay({ hls: mkHlsStub(true), ts: null, native: false });
+    const ch  = { id: '8', name: 'Eight', url: 'http://stream.test/eight.m3u8', img: '', cat: '', num: 8 };
+    ctx.win.IptvSt.setCur(ch);
+    ctx.win.IptvSt.go('ERR');
+    ctx.win.IptvSt.setErr('mediaError');
+    ctx.iptvPlay.goPlay();
+    expect(ctx.win.IptvSt.ST.phase).not.toBe('ERR');
+    expect(ctx.win.IptvSt.ST.err).toBe(null);
+  });
+
+  it('is a no-op when there is no current channel', function () {
+    const hls = mkHlsStub(true);
+    const ctx = loadPlay({ hls, ts: null, native: false });
+    ctx.win.IptvSt.setCur(null);
+    ctx.iptvPlay.goPlay();
+    expect(hls.log.loadSourceCalls.length).toBe(0);
   });
 });
 
