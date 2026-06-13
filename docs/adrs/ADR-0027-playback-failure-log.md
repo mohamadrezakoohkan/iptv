@@ -9,6 +9,7 @@ governs:
   - src/client/play.js
   - src/index.html
   - src/tests/unit/errlog.test.js
+  - src/tests/unit/playcap.test.js
 ---
 
 # ADR-0027 — Capture only channel-playback failures into an in-memory failure log

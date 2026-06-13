@@ -2,8 +2,8 @@
 id: TASK-0057
 adr: ADR-0027
 evolution: 17
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0056]
 ---
 
@@ -56,5 +56,40 @@ never logged (ADR-0027).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/play.js` — `onEngErr(msg)` records exactly one failure entry as
+  its **first** statement, before `stopPlay()` tears the engine down:
+  `if (window.IptvErrLog) window.IptvErrLog.add(window.IptvErrLog.mkEntry(window.IptvSt.ST.cur, msg))`.
+  Guarded exactly like the existing `window.IptvUi` reads, so play.js still
+  works when `IptvErrLog` is absent (test isolation). `onEngErr` is the single
+  capture site: all three fatal paths (`onHlsErr` fatal hls.js error, `onTsErr`
+  mpegts.js error, the `runHls` "not supported" dead-end) already funnel through
+  it, so no second capture site exists and successes are structurally never
+  logged. ADR comment line extended with `ADR-0027`.
+- `src/index.html` — `/errlog.js` is included before `/play.js` (writer) and
+  before `/ui.js` (future reader, ADR-0028) in the existing script block; head
+  HTML ADR comment lists `ADR-0027`.
+- `src/tests/unit/playcap.test.js` — new focused capture unit test (the
+  `errlog.test.js` store tests stay store-only). It evaluates `st.js`,
+  `errlog.js` (optionally), and `play.js` against an isolated `window` and
+  exercises: one entry on failure with the correct name/num/url/detail; capture
+  via both the fatal hls.js and mpegts.js error handlers; null `ST.cur` →
+  `"Unknown channel"`; no throw when `IptvErrLog` is absent; and that every
+  success path (HLS, native HLS, mpegts, `goPlay` retry) records nothing.
+
+Non-obvious:
+
+- The "not supported" path passes the `Result`-shaped error string (`'HLS not
+  supported'` / `'MPEG-TS not supported'`) as the `detail`, while the engine
+  error paths pass the raw engine token (`data.details` / mpegts detail) — both
+  flow through the one `onEngErr` argument, so `detail` is always the message
+  that drove the `ERR` transition.
+- Traceability needed no change: ADR-0027's `governs:` already listed all five
+  files (`errlog.js`, `play.js`, `index.html`, `errlog.test.js`,
+  `playcap.test.js`) and each carries its `ADR: ADR-0027` comment.
+
+Tests: `npx vitest run src/tests/unit/playcap.test.js` (15) — full unit suite
+`npx vitest run` green (623 tests, 28 files). No UI/integration tests: this task
+only wires capture + load order (UI surfacing is TASK-0058+); capture is local,
+no external connectivity.
