@@ -4,7 +4,7 @@
 const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
-  testDir: './tests/ui',
+  testDir: './src/tests/ui',
   outputDir: '.playwright-out',
   timeout: 30000,
   reporter: [['list']],
@@ -12,7 +12,7 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:3000',
   },
   webServer: {
-    command: 'node server/srv.js',
+    command: 'node src/server/srv.js',
     port: 3000,
     reuseExistingServer: true,
   },
