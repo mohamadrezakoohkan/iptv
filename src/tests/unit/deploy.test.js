@@ -1,4 +1,4 @@
-// ADR: ADR-0027
+// ADR: ADR-0027, ADR-0028
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -52,29 +52,45 @@ describe('fly.toml app name', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Port coherence: internal_port == [env] PORT == Dockerfile EXPOSE
+// Port coherence (4-way): Dockerfile ENV PORT == Dockerfile EXPOSE ==
+// fly.toml internal_port == fly.toml [env] PORT == 8080 (ADR-0028).
+// The Dockerfile ENV PORT is the load-bearing member: it makes the image
+// self-bind 8080 with no external env, so a bare `docker run` is correct.
 // ---------------------------------------------------------------------------
 describe('port coherence', function () {
-  it('internal_port, [env] PORT, and EXPOSE are all the same number', function () {
-    const internal = flyNum(FLY, 'internal_port');
-    const envPort  = Number(flyStr(FLY, 'PORT'));
+  it('Dockerfile ENV PORT, Dockerfile EXPOSE, internal_port, and [env] PORT all equal 8080', function () {
+    // Reads `ENV PORT=8080`, `ENV PORT 8080`, and quoted forms — no dependency.
+    const envM     = DOCKER.match(/(?:^|\n)\s*ENV\s+PORT[= ]['"]?([0-9]+)/);
+    const dockerEnv = envM ? Number(envM[1]) : null;
     const exposeM  = DOCKER.match(/(?:^|\n)\s*EXPOSE\s+([0-9]+)/);
     const expose   = exposeM ? Number(exposeM[1]) : null;
+    const internal = flyNum(FLY, 'internal_port');
+    const envPort  = Number(flyStr(FLY, 'PORT'));
 
+    expect(dockerEnv).not.toBeNull();
+    expect(expose).not.toBeNull();
     expect(internal).not.toBeNull();
     expect(Number.isNaN(envPort)).toBe(false);
-    expect(expose).not.toBeNull();
 
+    // All four members of the coherence set agree.
+    expect(dockerEnv).toBe(expose);
+    expect(expose).toBe(internal);
     expect(internal).toBe(envPort);
-    expect(expose).toBe(envPort);
+
+    // The shipped configuration binds 8080 across all four.
+    expect(dockerEnv).toBe(8080);
+    expect(expose).toBe(8080);
+    expect(internal).toBe(8080);
+    expect(envPort).toBe(8080);
   });
 
-  it('the bound port equals them (server reads PORT, so PORT is what it binds)', function () {
+  it('the image self-binds the coherent port with no external env (Dockerfile ENV PORT)', function () {
     // src/server/cfg.js: port = Number(process.env.PORT) || 3000.
-    // With [env] PORT set, the bound port is exactly that PORT value.
-    const envPort  = Number(flyStr(FLY, 'PORT'));
-    const internal = flyNum(FLY, 'internal_port');
-    const bound    = envPort || 3000;
+    // The image bakes ENV PORT, so a bare `docker run` (no -e PORT) binds it.
+    const envM      = DOCKER.match(/(?:^|\n)\s*ENV\s+PORT[= ]['"]?([0-9]+)/);
+    const dockerEnv = envM ? Number(envM[1]) : null;
+    const internal  = flyNum(FLY, 'internal_port');
+    const bound     = dockerEnv || 3000;
     expect(bound).toBe(internal);
   });
 });

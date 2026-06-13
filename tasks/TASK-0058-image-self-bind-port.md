@@ -2,8 +2,8 @@
 id: TASK-0058
 adr: ADR-0028
 evolution: 18
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -66,8 +66,39 @@ logged "listening on port 3000" while Fly routed to 8080.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+- `Dockerfile` — added `ENV PORT=8080` in the `base` stage, immediately after
+  `ENV NODE_ENV="production"` (with a comment noting an explicit `PORT` still
+  overrides). `base` is inherited by the final `FROM base` stage, so the runtime
+  image self-binds 8080 with no external env. `EXPOSE 8080` and
+  `CMD ["npm","run","start"]` unchanged. ADR marker now `# ADR: ADR-0027, ADR-0028`.
+- `src/tests/unit/deploy.test.js` — widened the port-coherence invariant to a
+  4-way check. The new reader `DOCKER.match(/(?:^|\n)\s*ENV\s+PORT[= ]['"]?([0-9]+)/)`
+  parses the Dockerfile `ENV PORT` value (handles `ENV PORT=8080`, `ENV PORT 8080`,
+  quoted forms), and the test asserts Dockerfile `ENV PORT` == Dockerfile `EXPOSE`
+  == `fly.toml internal_port` == `fly.toml [env] PORT` == 8080 (all four equal).
+  A second test asserts the image self-binds the coherent port from its baked
+  `ENV PORT` with no external env. All other invariants kept unchanged. ADR marker
+  now `// ADR: ADR-0027, ADR-0028`.
+- `src/tests/smoke/docker.test.js` — the container-run step dropped `-e PORT=${PORT}`
+  so the run relies solely on the image's baked `ENV PORT=8080` (proving self-bind);
+  the `-p ${hostPort}:8080` mapping stays. The `/` 200 + `<title>` assertion is
+  unchanged but now proves self-bind. `docker build`, the ffmpeg-static `FFMPEG_OK`
+  check, the Docker-availability skip guard, and the container+image teardown in
+  `afterAll` are all kept. ADR marker now `// ADR: ADR-0027, ADR-0028`.
+
+Non-obvious:
+- `src/server/*` and `fly.toml` were NOT modified — the app stays env-driven and
+  `fly.toml [env] PORT='8080'` stays as a member of the 4-way coherence set.
+- ADR-0028 `governs:` already listed all three files; no ADR edit was required
+  beyond confirming each governed file now references ADR-0028. Traceability holds.
+
+Verification (this worktree, Docker available):
+- `npx vitest run` — 602 passed (27 files); `deploy.test.js` now 10 tests incl.
+  the 4-way coherence.
+- `npx vitest run --config vitest.smoke.config.js` — 3 passed; the container
+  started with NO `-e PORT` served `/` with HTTP 200 + `<title` on 8080, proving
+  self-bind, and ffmpeg-static resolved inside the image.
 
 Hints for the implementer:
 - The current Dockerfile `base` stage (lines ~6–14) ends with
