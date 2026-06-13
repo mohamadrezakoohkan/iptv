@@ -31,10 +31,9 @@
             <span class="on-air-dot"></span>ON AIR
           </div>
           <span class="now-title" id="now-info"></span>
-          <div class="fmt-chips" id="fmt-chips">
-            <span class="fmt-chip" id="chip-hls">HLS</span>
-            <span class="fmt-chip" id="chip-ts">TS</span>
-          </div>
+          <!-- ADR: ADR-0025 — single contextual, clickable format chip; hidden until a channel plays -->
+          <button type="button" class="fmt-chip" id="fmt-chip" aria-expanded="false" hidden>HLS</button>
+          <span class="fmt-detail" id="fmt-detail" hidden></span>
           <!-- sun/moon theme toggle (ADR-0019) — top-right, immediately before the account button -->
           <button type="button" class="thm-toggle" id="theme-toggle" role="switch" aria-checked="false" aria-label="Toggle light theme">
             <svg class="thm-ico thm-sun" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -31,8 +31,8 @@ const EL = {
   mode: null,   // #login-mode (radiogroup container)
   mxt:  null,   // #mode-xtream radio
   mm3u: null,   // #mode-m3u radio
-  chls: null,   // #chip-hls format chip (ADR-0010)
-  cts:  null,   // #chip-ts format chip (ADR-0010)
+  fchp: null,   // #fmt-chip contextual format chip button (ADR-0025)
+  fdtl: null,   // #fmt-detail inline engine-detail text (ADR-0025)
   apnl: null,   // #acct-panel aside (ADR-0014)
   abtn: null,   // #acct-btn nav button (ADR-0014)
   ascr: null,   // #acct-scrim backdrop (ADR-0014)
@@ -578,8 +578,8 @@ function mkEL() {
   EL.mode  = document.getElementById('login-mode');
   EL.mxt   = document.getElementById('mode-xtream');
   EL.mm3u  = document.getElementById('mode-m3u');
-  EL.chls  = document.getElementById('chip-hls');
-  EL.cts   = document.getElementById('chip-ts');
+  EL.fchp  = document.getElementById('fmt-chip');
+  EL.fdtl  = document.getElementById('fmt-detail');
   EL.apnl  = document.getElementById('acct-panel');
   EL.abtn  = document.getElementById('acct-btn');
   EL.ascr  = document.getElementById('acct-scrim');
@@ -590,6 +590,7 @@ function mkEL() {
   EL.apst  = document.getElementById('acct-psts');
   EL.thm   = document.getElementById('theme-toggle');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
+  if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -1030,12 +1031,44 @@ function onDisc() {
 }
 
 // ---------------------------------------------------------------------------
-// rndChip — highlight the format chip of the engine in use (ADR-0010)
+// Contextual format chip (ADR-0025): label + inline-detail text per resolved
+// engine token. A remuxed .ts surfaces 'hls' upstream (ADR-0012), so 'hls'
+// here always means the hls.js / native-HLS engine is the one in use.
+// ---------------------------------------------------------------------------
+const FMT_LBL = { hls: 'HLS', ts: 'TS' };
+const FMT_DTL = { hls: 'Playing via hls.js', ts: 'Playing via mpegts.js' };
+
+// ---------------------------------------------------------------------------
+// rndChip — surface the contextual format chip for the resolved engine, or
+// hide it (and collapse its detail) when no engine is playing (ADR-0025).
 // ---------------------------------------------------------------------------
 function rndChip(eng) {
-  if (!EL.chls || !EL.cts) return;
-  EL.chls.classList.toggle('active', eng === 'hls');
-  EL.cts.classList.toggle('active', eng === 'ts');
+  if (!EL.fchp || !EL.fdtl) return;
+  const lbl = FMT_LBL[eng];
+  if (!lbl) {
+    EL.fchp.hidden = true;
+    EL.fchp.classList.remove('active');
+    EL.fchp.setAttribute('aria-expanded', 'false');
+    EL.fdtl.hidden = true;
+    EL.fdtl.textContent = '';
+    return;
+  }
+  EL.fchp.textContent = lbl;
+  EL.fchp.dataset.eng = eng;
+  EL.fchp.hidden = false;
+  EL.fchp.classList.add('active');
+}
+
+// ---------------------------------------------------------------------------
+// onFmtChip — presentational toggle of the inline engine-detail (ADR-0025).
+// Never touches ST.phase or the running engine; mirrors aria-expanded.
+// ---------------------------------------------------------------------------
+function onFmtChip() {
+  if (!EL.fchp || !EL.fdtl) return;
+  const open = EL.fchp.getAttribute('aria-expanded') !== 'true';
+  EL.fchp.setAttribute('aria-expanded', open ? 'true' : 'false');
+  EL.fdtl.textContent = open ? (FMT_DTL[EL.fchp.dataset.eng] ?? '') : '';
+  EL.fdtl.hidden = !open;
 }
 
 // ---------------------------------------------------------------------------
@@ -1049,6 +1082,7 @@ function rndPlayer() {
   const st   = window.IptvSt.ST;
   const play = st.phase === 'PLAY';
   const err  = st.phase === 'ERR' && st.cur !== null;
+  if (!play) rndChip('');
   if (EL.wrap) EL.wrap.style.display = err ? 'block' : '';
   if (EL.card) EL.card.classList.toggle('player-idle', !play);
   if (EL.idle) {
@@ -1085,4 +1119,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };

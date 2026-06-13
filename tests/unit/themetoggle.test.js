@@ -66,7 +66,7 @@ function loadUi() {
     'player-err', 'grp-nav', 'footer', 'player-card', 'player-idle',
     'player-wrap', 'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
-    'login-mode', 'mode-xtream', 'mode-m3u', 'login-form', 'chip-hls', 'chip-ts',
+    'login-mode', 'mode-xtream', 'mode-m3u', 'login-form', 'fmt-chip', 'fmt-detail',
     'acct-panel', 'acct-btn', 'acct-scrim', 'acct-close', 'acct-add',
     'acct-list', 'acct-conn', 'acct-psts',
   ];

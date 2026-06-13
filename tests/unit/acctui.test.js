@@ -65,7 +65,7 @@ function loadUi() {
     'grp-nav', 'footer', 'player-card', 'player-idle', 'player-wrap',
     'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
-    'login-form', 'chip-hls', 'chip-ts',
+    'login-form', 'fmt-chip', 'fmt-detail',
     'acct-scrim', 'acct-close', 'acct-add', 'acct-list', 'acct-conn',
   ];
   for (let i = 0; i < ids.length; i += 1) {
@@ -228,7 +228,7 @@ function loadUiStore(store) {
     'grp-nav', 'footer', 'player-card', 'player-idle', 'player-wrap',
     'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
-    'login-form', 'chip-hls', 'chip-ts',
+    'login-form', 'fmt-chip', 'fmt-detail',
     'acct-scrim', 'acct-close', 'acct-add', 'acct-list', 'acct-conn',
     'acct-label',
   ];
@@ -425,7 +425,7 @@ function loadUiPst(store) {
     'grp-nav', 'footer', 'player-card', 'player-idle', 'player-wrap',
     'f-url', 'f-user', 'f-pass', 'footer-conn', 'footer-login',
     'footer-hint', 'footer-err', 'btn-conn', 'btn-disc', 'conn-text',
-    'login-form', 'chip-hls', 'chip-ts',
+    'login-form', 'fmt-chip', 'fmt-detail',
     'acct-scrim', 'acct-close', 'acct-add', 'acct-list', 'acct-conn',
     'acct-label', 'acct-psts',
   ];

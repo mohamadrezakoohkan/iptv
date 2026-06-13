@@ -100,7 +100,9 @@ command.
 - **Search** — live-filter channels by name from the sidebar search input.
 - **Dual-engine player** — idle, playing, and error states; autoplay on
   channel select; engine chosen from the stream URL (`.m3u8` → hls.js,
-  otherwise mpegts.js), with HLS/TS chips indicating the engine in use. The
+  otherwise mpegts.js). A single contextual format chip appears on top of the
+  player only while a channel is playing, labelled for the resolved engine
+  (HLS / TS); clicking it toggles an inline "Playing via …" detail. The
   no-signal states are guided rather than terse: the idle player tells you to
   pick a channel (or connect a source when there is no session), and a failed
   stream shows a human-readable "This channel won't play" message with a

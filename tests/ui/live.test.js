@@ -48,7 +48,7 @@ function getReady(page) {
 // ---------------------------------------------------------------------------
 async function tryCard(page, i) {
   await page.locator('.ch-card').nth(i).click();
-  await expect(page.locator('#chip-ts')).toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toHaveText('TS');
   const t0 = Date.now();
   while (Date.now() - t0 < WAIT) {
     if (await page.locator('#player-err').isVisible()) return { ok: false, err: 'overlay' };
@@ -96,7 +96,7 @@ test('selecting a live channel attaches the TS engine and plays', async function
   // Flake policy: at least one of the sample must reach playable/loading
   // state with the TS chip active and no error overlay.
   expect(hit).toBe(true);
-  await expect(page.locator('#chip-ts')).toHaveClass(/active/);
-  await expect(page.locator('#chip-hls')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('TS');
   await expect(page.locator('#player-err')).toBeHidden();
 });
