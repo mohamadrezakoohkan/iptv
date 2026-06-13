@@ -2,8 +2,8 @@
 id: TASK-0054
 adr: ADR-0026
 evolution: 16
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -63,6 +63,62 @@ test assertions change.
   paths are intact after the move.
 
 ## Implementation notes
+
+### Done (attempt 1)
+
+Relocations (all via `git mv`, 75 files tracked as renames, history preserved):
+
+- `index.html` → `src/index.html`
+- `client/` → `src/client/`
+- `server/` → `src/server/`
+- `tests/` → `src/tests/` (carries `unit/`, `ui/`, `int/` intact)
+
+Reference rewires:
+
+- `package.json`: `"main"` `server/srv.js` → `src/server/srv.js`; `start`
+  script `node server/srv.js` → `node src/server/srv.js`. `test` / `test:int`
+  scripts left unchanged (they point at root configs).
+- `vitest.config.js`: `include` `tests/unit/**/*.test.js` →
+  `src/tests/unit/**/*.test.js`.
+- `vitest.int.config.js`: `include` `tests/int/**/*.test.js` →
+  `src/tests/int/**/*.test.js`.
+- `playwright.config.js`: `testDir` `./tests/ui` → `./src/tests/ui`;
+  `webServer.command` `node server/srv.js` → `node src/server/srv.js`.
+
+Verified no-edit-needed (each confirmed by reading + by suites/boot):
+
+- `src/server/srv.js` — unchanged. `ROOT = path.join(__dirname, '..')` now
+  resolves to `src/`, so `express.static(ROOT/client)` → `src/client` and
+  `sendFile(ROOT/index.html)` → `src/index.html` both resolve. Booted the
+  server and probed `GET /` (200, served index.html `<title>`) and
+  `GET /app.css` (200, `text/css`).
+- `src/index.html` — unchanged. All local asset links are server-route-absolute
+  (`/app.css`, `/cfg.js`, `/api.js`, …) served from the static `client/` mount;
+  external URLs are CDN absolutes. No filesystem/relative paths to fix.
+- Test internal paths — unchanged. Unit/int tests use `../../client/...` /
+  `../../server/...` relative offsets; tests and source moved together
+  preserving the offset, so they keep resolving. UI tests use HTTP
+  `http://localhost:3000`, no filesystem path. Confirmed by the full unit suite
+  (26 files / 592 tests) passing from `src/tests/unit/`.
+- `.gitignore` — unchanged. Globs (`node_modules/`, `.playwright-out/`,
+  `.env.secrets`, `.claude/...`) are `process.cwd()`/root-relative and stay
+  correct.
+
+ADR traceability: ADR-0026 `governs:` already lists the `src/...` code/test
+paths and the four root config/package files (spec-agent seeded them), so all
+this task's landed paths resolve — no `governs:` edit required. In-file
+`// ADR:` comments traveled inside the moved files unchanged. Other ADRs'
+`governs:` paths (still pointing at the old `client/` / `server/` / `tests/`
+locations) are deliberately left for TASK-0055, which owns `adrs/`.
+
+Self-check (authoritative run is validate-agent's): server boots from the new
+path and serves the app; unit suite green from `src/tests/unit/`; Playwright
+discovers 191 tests in 27 files from `./src/tests/ui`. Full UI + live-network
+integration runs deferred to validate-agent.
+
+No deviations from the planned moves.
+
+### Original plan
 
 - Prefer `git mv` for every relocation so history follows the files. Land the
   config/script reference updates in the SAME task so the committed state is

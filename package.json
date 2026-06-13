@@ -1,9 +1,9 @@
 {
   "name": "iptv-broadcast-console",
   "version": "0.1.0",
-  "main": "server/srv.js",
+  "main": "src/server/srv.js",
   "scripts": {
-    "start": "node server/srv.js",
+    "start": "node src/server/srv.js",
     "test": "npx vitest run",
     "test:int": "vitest run --config vitest.int.config.js"
   },
