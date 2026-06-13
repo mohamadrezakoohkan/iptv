@@ -11,6 +11,7 @@ governs:
   - src/client/play.js
   - src/tests/unit/logui.test.js
   - src/tests/ui/log.test.js
+  - src/tests/ui/log-demo.test.js
 ---
 
 # ADR-0028 — Surface the playback failure log via a top-bar button beside the account button
