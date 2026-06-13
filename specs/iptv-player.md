@@ -105,11 +105,43 @@ when none is connected), opening the right-side account panel on click.
 - Slim bar (40px) above the player.
 - Left: "ON AIR" badge (red, visible only when a channel is playing) and the
   channel name (`#now-info`, set when a channel is selected, empty otherwise).
-- Right: format chips — "HLS" and "TS". The chip matching the active
-  channel's stream format is highlighted automatically; the chips are
-  informational indicators of the engine in use (hls.js vs mpegts.js).
+- Right: a single **contextual format chip** (§5f). It is **not** an
+  always-present pair of "HLS"/"TS" pills; instead one chip is shown only when
+  a channel is actively playing and an engine has resolved, reflecting the
+  engine actually in use (hls.js vs mpegts.js — a `.ts` channel remuxed to HLS
+  surfaces "HLS"), and it is **functional on click**. See §5f.
 - Far right (pushed to the bar's right edge): the **account navigation
   button** (§13).
+
+### 5f. Contextual format chip
+
+The stream format is surfaced by a **single contextual chip** at the right of
+the content-head bar (ADR-0025), replacing the previous always-present pair of
+inert "HLS" and "TS" pills (which were rendered at all times and did nothing on
+click).
+
+- **Contextual presence.** The chip is **absent (not rendered / hidden) until a
+  channel is actively playing** and an engine has resolved. When no channel is
+  playing (idle, error, logged-out, or while connecting) the content-head shows
+  **no** format chip — nothing inert sits there. When playback resolves an
+  engine the chip appears "on top" at the right of the content-head, above the
+  player region.
+- **Label = resolved engine.** The chip's label is the engine **actually in
+  use**: `"HLS"` for the hls.js / native-HLS path, `"TS"` for the mpegts.js
+  path. Consistent with ADR-0010/ADR-0012, a `.ts` channel played through the
+  server TS→HLS remux fallback shows `"HLS"` (the engine that is really
+  running), not `"TS"`.
+- **Functional click.** The chip is a real `<button>` (keyboard-focusable),
+  not a static span. Clicking it is **not a no-op**: it toggles a small inline
+  format detail next to/under the chip naming the active engine (e.g. "Playing
+  via hls.js" / "Playing via mpegts.js") so the user learns what the resolved
+  format means. Clicking again hides the detail. Toggling the detail is purely
+  presentational — it does not change the state-machine phase or the running
+  engine.
+- **Styling.** The chip is a secondary control: 28px tall, `--r1` radius, mono
+  label, reading ADR-0024 spacing/sizing tokens and ADR-0019 colour tokens; its
+  active/accent treatment reuses the existing `--acc` chip styling. The
+  toggled-detail affordance also reads the same token layer.
 
 ### 5b. Player card
 
@@ -348,8 +380,9 @@ written and `iptv_creds` is removed. Migration applies to stored data only.
    `ERROR` event), show the error overlay.
 8. Switching channels fully destroys the previous engine instance
    (whichever type) before attaching the new one — no orphaned XHRs.
-9. The HLS/TS format chips reflect the engine actually in use (§5a):
-   a `.ts` channel played through the remux fallback highlights **HLS**.
+9. The contextual format chip reflects the engine actually in use (§5f):
+   a `.ts` channel played through the remux fallback shows **HLS**. The chip
+   is shown only while a channel is playing and is removed when playback stops.
 
 ### Server-side TS→HLS remux endpoint
 
