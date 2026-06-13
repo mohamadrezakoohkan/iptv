@@ -7,7 +7,6 @@ status: accepted
 governs:
   - client/app.css
   - index.html
-  - tests/ui/grid-align.test.js
   - tests/unit/spacing.test.js
   - tests/ui/spacing.test.js
   - tests/unit/gutters.test.js
