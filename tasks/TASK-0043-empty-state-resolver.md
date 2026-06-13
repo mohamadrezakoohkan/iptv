@@ -2,8 +2,8 @@
 id: TASK-0043
 adr: ADR-0021
 evolution: 13
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -56,5 +56,31 @@ logic for every empty/no-signal case is decided in one tested place; rendering
 
 ## Implementation notes
 
-_Filled by implement-agent._
+Files touched:
+- `client/empty.js` (new) — IIFE exposing `window.IptvEmpty` with the two pure
+  resolvers. Carries `// ADR: ADR-0021`. No DOM, no other globals. Internal
+  helpers: `esc` (HTML-escape), `mkEmpty` (EmptyState constructor), `KINDS`
+  (fixed action-kind vocabulary).
+- `index.html` — added `<script src="/empty.js">` ordered before `/ui.js`
+  (and after `/play.js`), matching the dependency order; the server serves
+  `client/` at `/` (`express.static(client)` in `server/srv.js`).
+- `tests/unit/empty.test.js` (new) — 18 unit tests.
+
+Non-obvious decisions:
+- `resolveContent` priority is `shown>0 → null`, then active search, then
+  `flt==='favs'`, then any other non-`all` category, else (`flt==='all'`)
+  the zero-channel-source state with no action — matching `specs/empty-states.md`
+  §2 priority order. The zero-channel case is the `flt==='all'` fall-through;
+  `total` is part of the documented signature but the empty-grid reason is
+  already determined by `shown`/`flt`.
+- `resolveSignal` treats `phase==='INIT'` as the "no session" case (per spec
+  §3a "No session (INIT)") → `connect` action; any other non-ERR phase is the
+  connected idle state with no action. `ERR` with a current channel is the
+  stream-error state; `ERR` without `cur` falls back to idle (the error
+  placeholder only applies when a channel was being played).
+
+ADR traceability: `ADR-0021.governs` already lists `client/empty.js` (seeded by
+spec-agent); no change needed.
+
+Tests: `npx vitest run tests/unit/empty.test.js` → 18 passed.
 </content>
