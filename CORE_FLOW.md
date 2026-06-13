@@ -44,17 +44,19 @@ outside the pipeline.
 | **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
 | **spec-agent** | 1 — SPEC | `specs/`, `adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
-| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, and the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
+| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block, and (for the task that exercises user-interactable behavior) the committed demo recording + the PR `### Demo` reference (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
-| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, or git-commit/push anything (harness changes await the human) |
+| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `specs/`, `adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
 | **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only — in its own dedicated worktree, where it commits, pushes, and opens the backlog PR (§4.5) | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, commit/push/merge to `main`, or force-push |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
 to `main`, pushes to `main`, force-pushes, or merges a pull request.** All run
 work lands on the run's `ai/` branch and reaches `main` only through a PR
-merged by the human (§3, Git & pull-request contract). The backlog path is the
-one path that always commits, pushes, and opens its own PR (§4.5), but on its
-own branch only — never to `main`.
+merged by the human (§3, Git & pull-request contract). The two outside-the-
+pipeline paths always self-publish — `backlog-agent` on a `backlog/<slug>`
+branch (§4.5) and `coreflow-agent` on a `harness/<slug>` branch (§4.4) — each
+committing, pushing, and opening its own PR, but on its own branch only —
+never to `main`.
 
 The subagents are defined in `.claude/agents/<name>.md` and are spawned by the
 orchestrator via the Agent tool with `subagent_type` set to the agent name.
@@ -214,6 +216,10 @@ this harness: no force pushes, no rebases, no amending pushed commits.
 ### Tasks
 - [ ] TASK-NNNN — <title> — pending
 
+### Demo
+_Populated when the run's user-interactable behavior is first exercised, or
+marked exempt._
+
 ### Test Results
 _Populated as each task reaches a terminal validation state._
 
@@ -289,13 +295,55 @@ and says so. In every case: never promise an image that will not render. On
 terminal FAIL the summary state is `FAIL`, the unit/UI tables mark the failing
 rows, and the integration block records what failed.
 
-The harness path (§4.4) makes no commits at all: `coreflow-agent` leaves its
-changes in the working tree, and the human decides when harness changes land.
-(Rule-ledger appends during a build run are different: the orchestrator's
-terminal-failure commit carries them, as part of the run's record.) The backlog
-path (§4.5) is the opposite: `backlog-agent` always commits, pushes, and opens a
-PR for its single appended entry — on a dedicated branch in its own worktree,
-never on `main`.
+**Demo recording** — a run that adds or changes **user-interactable product
+behavior** must carry a screen recording of the actually-running product
+exercising that behavior, referenced from the PR's `### Demo` section. Like UI
+screenshots, the recording is a **committed run-artifact on the run branch**
+(written by the UI suite to the same known run-artifacts directory, committed
+with its task), not pasted bytes — and the same actor that owns the per-task PR
+update produces and references it.
+
+- **Who.** The UI tier records it. The first task whose validation exercises the
+  run's user-interactable behavior captures the recording during its full UI
+  suite run; `validate-agent` commits it with that task and writes the `### Demo`
+  reference into the PR on PASS. `review-agent` confirms the section is present
+  and accurate at finalization (it audits, never re-records). One recording per
+  run is sufficient; a run touching several user-facing flows may carry one per
+  flow.
+- **Required arc.** The recording must capture, in order: **boot** (launch the
+  product from a clean start via the canonical run command in `specs/project.md`)
+  → **prepare** (perform the minimal setup the behavior needs to be exercised) →
+  **interact** (drive the new behavior end-to-end through its primary user flow
+  so the recording shows it working) → **revert runtime state** (reset the
+  product's in-app runtime state back to its pre-interaction starting condition —
+  an in-app teardown, never a git revert of source) → **stop**. Capture is
+  produced during the run by the UI suite, not hand-recorded.
+- **How referenced.** A committed video does not render as an inline player from
+  a branch URL (GitHub plays a `<video>` only for assets uploaded through the web
+  UI), so the `### Demo` reference is always a **clickable link** to the
+  committed artifact — never an inline tag that would render broken. Its URL
+  obeys the same visibility rule as screenshots: on a **publicly readable repo**
+  the link targets the committed-artifact raw URL on the run branch
+  (`.../raw/<run-branch>/<path>`); on a **non-public repo** it targets the
+  file-viewer URL (`.../blob/<run-branch>/<path>`), with a one-line note that
+  inline playback requires manually dragging the file into the PR in the web UI
+  (out of scope for automation).
+- **Scope cutoff.** A demo is **required** only for runs that add or change
+  user-interactable product behavior. A run is **exempt** — no recording — when
+  it is a pure refactor or internal change with no user-facing behavior change,
+  a headless / non-UI change (no interactive surface to record), a harness run
+  (§4.4), or a backlog run (§4.5). An exempt run states it in the `### Demo`
+  section as `No demo — <reason>` rather than leaving it blank, so the absence is
+  deliberate and visible, never an oversight.
+
+The harness path (§4.4) self-publishes like the backlog path: `coreflow-agent`
+commits its harness changes on a dedicated `harness/<slug>` branch, pushes, and
+opens a PR against `main` — merging that PR is the human's decision. (Rule-ledger
+appends during a build run are different: the orchestrator's terminal-failure
+commit carries them on the run branch, as part of the run's record.) The backlog
+path (§4.5) likewise always commits, pushes, and opens a PR for its single
+appended entry — on a `backlog/<slug>` branch in its own worktree. Neither path
+ever commits, pushes, or merges to `main`, and neither force-pushes.
 
 ## 4. The pipeline
 
@@ -410,8 +458,11 @@ never in the primary working tree. For each task:
    `specs/project.md`; the omission is noted in the report but is not itself
    a FAIL. It returns PASS or FAIL with the failing tests and a suspected
    cause. On PASS it also makes the task's commit, pushes the run branch,
-   updates the PR description, and writes the task's collapsible Test Results
-   block into the PR (§3 Git contract, Test Results); on FAIL nothing is
+   updates the PR description, writes the task's collapsible Test Results
+   block into the PR, and — when this task is the one that exercises the run's
+   user-interactable behavior — commits the UI suite's demo recording and
+   writes the PR's `### Demo` reference (§3 Git contract, Test Results, Demo
+   recording); on FAIL nothing is
    committed and no Test Results block is written — the retry reworks the tree
    in place, and the block is written only at the task's terminal state.
 3. On FAIL: increment `attempts`. If `attempts < 4`, loop to step 1. After the
@@ -433,7 +484,9 @@ tasks have real code and real passing tests, ADR ↔ code traceability holds
    finalizes the PR description — final task statuses, outcome, rules earned,
    CHANGELOG reference (§3 Git contract), confirming every concluded task has
    its Test Results block (it audits, never regenerates — the terminal actor
-   wrote each block).
+   wrote each block) and that the `### Demo` section carries a recording
+   reference for a user-interactable run or an explicit `No demo — <reason>`
+   for an exempt one (§3 Demo recording).
 
 If review finds discrepancies that require code changes, the orchestrator
 dispatches **one remediation round** through the standard implement→validate
@@ -447,7 +500,7 @@ discrepant → failure protocol; the discrepancy is recorded, not hidden.
 | implement ↔ validate, per task | 1 initial attempt + 3 retries |
 | review remediation, per run | 1 round (1 attempt + 1 retry), then record failure |
 | spec, review themselves | no retries — a phase that cannot complete is a terminal failure |
-| `coreflow-agent` (harness path) | no retries — a failed harness change is reported, recorded, and left to the human |
+| `coreflow-agent` (harness path) | no retries — a coherent change self-publishes on a `harness/<slug>` branch (§4.4); a failed harness change is reported, recorded, and left to the human |
 | `backlog-agent` (backlog path) | no retries — a failed capture is reported and left to the human |
 
 ### 4.4 The harness path (coreflow-agent, no pipeline)
@@ -472,9 +525,23 @@ instruction artifacts (`CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`,
 checklist to every changed artifact, including the full scored report with
 `VERDICT:` line in its return.
 
-The harness path never touches git history: `coreflow-agent` commits nothing
-and pushes nothing. Its changes stay in the working tree until the human
-commits them — committing harness changes is always the human's decision.
+The harness path **always** self-publishes — it consumes no evolution number
+but, like the backlog path (§4.5), never leaves its work in the working tree
+for the human to commit. On every spawn that produces a coherent change,
+`coreflow-agent`:
+
+1. fetches `origin/main` and creates or uses a dedicated branch
+   `harness/<slug>` (2–5 kebab-case words condensing the instruction),
+2. commits its harness changes there (`harness: <slug>`),
+3. pushes the branch (`git push -u origin harness/<slug>`),
+4. opens a PR against `main` (`gh pr create`) describing the change.
+
+It commits and pushes to its own `harness/<slug>` branch only; it never
+commits, pushes, or merges to `main`, and never force-pushes. Merging the
+harness PR is the human's decision. If the change cannot be executed
+coherently, `coreflow-agent` returns `PHASE-FAILURE` and self-publishes
+nothing; if `git` or an authenticated `gh` CLI is unavailable, that too is a
+`PHASE-FAILURE` — the harness path does not fall back to an uncommitted write.
 
 ### 4.5 The backlog path (backlog-agent, no pipeline)
 

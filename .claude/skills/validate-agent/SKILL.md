@@ -45,7 +45,8 @@ On success the agent returns ONLY this JSON:
   "suspected_cause": "root-cause hypothesis, else empty string",
   "commit": "sha pushed on PASS, else null",
   "pr_updated": true | false,
-  "test_results_block_written": true | false
+  "test_results_block_written": true | false,
+  "demo": "recording reference written | exempt: <reason> | already present | not applicable"
 }
 ```
 
@@ -58,6 +59,13 @@ section. UI screenshots are embedded inline only when the repo is publicly
 readable; on a non-public repo they are clickable file-viewer links, never
 broken inline images (CORE_FLOW.md §3 screenshot-embed rule). The orchestrator
 does NOT commit on PASS.
+
+When this task exercises the run's user-interactable behavior, the agent also
+commits the UI suite's demo recording (arc boot → prepare → interact → revert
+runtime state → stop) and writes a clickable link to it in the PR's `### Demo`
+section — raw URL on a public repo, blob link on a non-public one, never an
+inline player (CORE_FLOW.md §3 Demo recording). A task with no interactive
+surface, when no earlier task wrote the section, sets `No demo — <reason>`.
 
 ## On FAIL
 
