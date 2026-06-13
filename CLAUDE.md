@@ -17,13 +17,22 @@ You own control flow and state; you never produce the work product yourself.
    failures, earn rules, and report to the human.
 3. **Inject the Rule Pack.** Copy the Learned Rules section below, verbatim,
    into the prompt of every agent you spawn. No agent runs without it.
-4. **Every terminal failure becomes a rule** — see §5 of `CORE_FLOW.md`. You
-   write the `failures/FAIL-NNNN-*.md` record and append the rule below. This
+4. **Every terminal failure becomes a rule, and recurrence forces one** — see
+   §5 of `CORE_FLOW.md`. You write the `failures/FAIL-NNNN-*.md` record and
+   append the rule below. You also record every **persistent** recovered
+   near-miss (a real defect fixed within budget, surfaced by `review-agent`) as
+   one row in `failures/NEAR-MISSES.md` with a single kebab-case
+   `root-cause-tag`; **transient** recoveries (network blip, timeout,
+   in-tolerance live-network sampling) are not recorded. When one
+   `root-cause-tag` reaches **2 or more** occurrences across
+   `failures/NEAR-MISSES.md` plus the `root-cause-tag` front-matter of terminal
+   `FAIL-NNNN-*.md` records, you MUST write a `FAIL-NNNN-*.md` record and append
+   its rule below — mechanical, no judgment call. This failure/near-miss writing
    is the only product-adjacent writing you are allowed to do, plus correcting
-   task-status front-matter when it disagrees with reality, plus committing
-   the terminal-failure state to the run branch and writing the failed task's
-   PR Test Results block from the last validation report (CORE_FLOW.md §5,
-   §3 Test Results) — never to `main`.
+   task-status front-matter when it disagrees with reality, plus committing the
+   terminal-failure state to the run branch and writing the failed task's PR
+   Test Results block from the last validation report (CORE_FLOW.md §5, §3 Test
+   Results) — never to `main`.
 
 ## Mandatory artifact validation
 
@@ -73,7 +82,10 @@ change — the orchestrator decides whether to fix and retry or record a
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
   continue with independent tasks.
 - Phase 4 always runs. Review discrepancies get one remediation round, then
-  are recorded as failures — never hidden.
+  are recorded as failures — never hidden. review-agent also surfaces the run's
+  **persistent** recovered near-misses (each with a `root-cause-tag`); you
+  record them in `failures/NEAR-MISSES.md` and auto-promote a tag to a rule once
+  it recurs ≥ 2 times (CORE_FLOW.md §5).
 - ADR ↔ code traceability (CORE_FLOW.md §3): ADRs declare `governs:`, every
   governed code file carries an `ADR: ADR-NNNN` comment, and a change that
   removes a decision's last code marks its ADR `status: deleted` (the ADR
@@ -123,7 +135,8 @@ change — the orchestrator decides whether to fix and retry or record a
 
 `docs/specs/` living specs (incl. required `docs/specs/project.md` with canonical
 build/test commands) · `docs/adrs/` decisions · `tasks/` work units with status
-front-matter · `failures/` failure records · `src/` product source and tests ·
+front-matter · `failures/` failure records + `failures/NEAR-MISSES.md`
+(append-only persistent-recovered near-miss ledger) · `src/` product source and tests ·
 `CHANGELOG.md` numbered Evolution
 Log · `BACKLOG.md` parked ideas (backlog-agent, append-only, optional) ·
 `README.md` product doc · `.claude/agents/` the six subagents ·
@@ -151,7 +164,10 @@ caller-facing contract only — trigger, inputs, outputs, failure signal.
 ## Learned Rules
 
 Append-only. Each rule: `- **R-NNNN** (FAIL-NNNN, E<N>): <imperative rule>`.
-Edit or retire a rule only on explicit human instruction.
+Edit or retire a rule only on explicit human instruction. A rule is earned by a
+terminal failure, by a `root-cause-tag` recurring ≥ 2 times across recorded
+entries (mandatory, CORE_FLOW.md §5), or by a discretionary first-occurrence
+proposal the orchestrator accepts.
 
 <!-- LEARNED-RULES:START -->
 - **R-0001** (FAIL-0001, E2): Before writing unit tests that assert DOM attribute mutations (`setAttribute` / `removeAttribute`), check the baseline HTML to confirm which attributes are actually present on the element — never assert that an attribute is added back if it was never in the source HTML.

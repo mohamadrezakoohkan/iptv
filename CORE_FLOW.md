@@ -41,7 +41,7 @@ outside the pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
-| **Orchestrator** (main session) | all | `failures/`, Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
+| **Orchestrator** (main session) | all | `failures/` (terminal records + the `failures/NEAR-MISSES.md` ledger, §5), Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
 | **spec-agent** | 1 — SPEC | `docs/specs/`, `docs/adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block, and (for the task that exercises user-interactable behavior) the committed demo recording + the PR `### Demo` reference (§3) | fix code or tests (it reports, never repairs) |
@@ -83,8 +83,9 @@ agents and never talk to the human.
 │   └── TEMPLATE.md
 ├── tasks/               Work units derived from ADRs (spec-agent creates; later phases update status)
 │   └── TEMPLATE.md
-├── failures/            Terminal-failure records that earn rules (orchestrator writes)
-│   └── TEMPLATE.md
+├── failures/            Failure records that earn rules (orchestrator writes)
+│   ├── TEMPLATE.md
+│   └── NEAR-MISSES.md    Append-only ledger of persistent recovered near-misses (orchestrator; created on first use)
 ├── src/                 Product source and tests (implement-agent writes)
 ├── .claude/agents/      The six subagent definitions
 └── .claude/skills/      Invocation interfaces (one per subagent) + the
@@ -597,7 +598,8 @@ with the working state on that branch. The orchestrator (never the agents)
 then:
 
 1. Creates `failures/FAIL-NNNN-<slug>.md` from `failures/TEMPLATE.md`:
-   evolution, phase, related ADR/task IDs, symptom, root cause, what each
+   evolution, phase, related ADR/task IDs, a single `root-cause-tag` (the
+   short kebab-case slug defined below), symptom, root cause, what each
    attempt tried, and the **rule earned** — one imperative, generalized
    sentence ("Always…", "Never… when…") that would have prevented the failure.
 2. Appends the rule to the Learned Rules section of `CLAUDE.md`, between the
@@ -620,9 +622,53 @@ an earned rule is a permanent behavior change — the harness must never make
 the same mistake twice. Rules are append-only; a rule may only be edited or
 retired by explicit human instruction.
 
-A failure that was **recovered** within the retry budget earns a rule only if
-the root cause generalizes (e.g. a toolchain quirk, not a one-off typo);
-`review-agent` proposes such rules in its report and the orchestrator decides.
+### Recovered failures, near-misses, and recurrence
+
+A failure that was **recovered** within the retry budget is classified by the
+orchestrator (from `review-agent`'s surfaced per-task outcomes) as one of:
+
+- **transient** — a flaky cause that retry alone is the correct and complete
+  response to: a network blip, a timeout, or live-network integration sampling
+  inside the tolerances already documented in the harness. A transient
+  recovered failure is **not recorded** — no entry, no rule.
+- **persistent** — a real defect the run had to fix: a wrong test assertion,
+  scope-sequencing / half-migrated runtime, a shared-scope collision, a
+  traceability gap, a verification miss, and the like. Every persistent
+  recovered failure gets a **lightweight near-miss entry** (below) — never the
+  full terminal dossier.
+
+**Near-miss entries.** The orchestrator (never the agents) appends one row per
+persistent recovered failure to the append-only ledger `failures/NEAR-MISSES.md`
+(created from its header on first use). Each row carries, at minimum: evolution,
+phase, related task/ADR IDs, a one-line symptom, a single **root-cause tag** (a
+short kebab-case slug — e.g. `shared-scope-collision`, `wrong-test-assertion`,
+`scope-sequencing`, `traceability-gap`, `verification-miss`), and the one-line
+fix. The root-cause tag is **required** on every entry — it is the token the
+recurrence count below is computed from. `review-agent` surfaces the run's
+persistent recovered near-misses in its report (it already sees per-task
+outcomes); the orchestrator writes the rows and commits them with the run's
+working state on the run branch (§3 Git contract), never to `main`.
+
+**Recurrence ⇒ mandatory rule (threshold = 2).** Count the occurrences of each
+root-cause tag across **all recorded entries** — every `root-cause-tag` row in
+`failures/NEAR-MISSES.md` plus every `root-cause-tag` front-matter value on a
+`failures/FAIL-NNNN-*.md` terminal record. When the same root-cause tag has
+appeared **2 or more times** across those recorded entries, it **automatically**
+earns a Learned Rule — no judgment call. The orchestrator MUST then write a
+`failures/FAIL-NNNN-<slug>.md` record (carrying that root-cause tag and
+referencing the recurring entries) and append the `R-NNNN` rule between the
+`LEARNED-RULES` markers in `CLAUDE.md`, exactly as the terminal path (steps
+1–4 above) does — same append-only format, same commit-on-run-branch rule.
+
+**First-occurrence discretionary path (unchanged).** A first-occurrence
+recovered failure whose root cause obviously generalizes (e.g. a toolchain
+quirk, not a one-off typo) may still earn a rule by judgment: `review-agent`
+proposes it in its report and the orchestrator decides. This discretionary path
+is additive — it does not replace the mechanical recurrence ≥ 2 trigger above,
+which is mandatory regardless of judgment.
+
+Rules earned by either path follow the append-only constraint: a rule may only
+be edited or retired by explicit human instruction.
 
 ## 6. Run Report
 

@@ -52,9 +52,19 @@ even when tasks failed — partial truth still gets recorded.
    a blank or missing `### Demo` section is a discrepancy (`needs: status-fix`)
    — report it, do not record the demo yourself. Merging or closing the PR is
    the human's — never yours.
-6. **Propose rules (optional):** if a recovered failure this run had a
-   generalizable root cause, propose a rule in your report — the orchestrator
-   decides whether it is earned.
+6. **Surface recovered near-misses + propose rules** (CORE_FLOW.md §5): for
+   each task that recovered within its retry budget, classify the recovered
+   failure as `transient` (a flaky cause retry alone correctly answers —
+   network blip, timeout, in-tolerance live-network sampling) or `persistent`
+   (a real defect the run had to fix — wrong test assertion, scope-sequencing,
+   shared-scope collision, traceability gap, verification miss, and the like).
+   Report every `persistent` one as a near-miss with a single kebab-case
+   `root-cause-tag` (e.g. `shared-scope-collision`, `wrong-test-assertion`), a
+   one-line symptom, and the one-line fix — the orchestrator records these in
+   `failures/NEAR-MISSES.md`; you never write `failures/` yourself. Do NOT
+   report `transient` recoveries (they are not recorded). Separately, if a
+   first-occurrence recovered failure's root cause obviously generalizes, also
+   propose a rule — the orchestrator decides whether it is earned.
 
 ## You must NOT
 
@@ -82,6 +92,12 @@ If you could not review at all, return a single line starting with
   "pr_finalized": true | false,
   "test_results_blocks_present": true | false,
   "demo_present": true | false,
+  "near_misses": [{"task": "TASK-NNNN", "phase": "implement | validate", "related": ["ADR/TASK IDs"], "symptom": "one line", "root_cause_tag": "kebab-case-slug", "fix": "one line"}],
   "proposed_rules": ["imperative rule text, if any"]
 }
 ```
+
+`near_misses` carries only `persistent` recovered failures (one object each);
+`transient` recoveries are omitted. The orchestrator records each in
+`failures/NEAR-MISSES.md` and promotes a `root_cause_tag` to a rule when it
+recurs (CORE_FLOW.md §5).

@@ -43,9 +43,15 @@ On success the agent returns ONLY this JSON:
   "pr_finalized": true | false,
   "test_results_blocks_present": true | false,
   "demo_present": true | false,
+  "near_misses": [{"task": "TASK-NNNN", "phase": "implement | validate", "related": ["ADR/TASK IDs"], "symptom": "one line", "root_cause_tag": "kebab-case-slug", "fix": "one line"}],
   "proposed_rules": ["imperative rule text, if any"]
 }
 ```
+
+`near_misses` lists only `persistent` recovered failures (real defects fixed
+within budget); `transient` recoveries are omitted. The orchestrator records
+each in `failures/NEAR-MISSES.md` and auto-promotes a recurring `root_cause_tag`
+to a Learned Rule (CORE_FLOW.md §5).
 
 ## On DISCREPANCIES
 
