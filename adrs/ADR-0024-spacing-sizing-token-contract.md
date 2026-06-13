@@ -12,6 +12,8 @@ governs:
   - tests/ui/spacing.test.js
   - tests/unit/gutters.test.js
   - tests/ui/gutters.test.js
+  - tests/unit/rhythm.test.js
+  - tests/ui/rhythm.test.js
 ---
 
 # ADR-0024 — Unify spacing/sizing/radii under a single 4px-grid token contract (CSS-only restyle)

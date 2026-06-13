@@ -63,10 +63,18 @@ describe('app.css — content gutter = --gut (rule 2)', function () {
   let css;
   beforeEach(function () { css = readFileSync(CSS_SRC, 'utf8'); });
 
-  ['.content-head', '.player-wrap', '.ch-section', '.footer'].forEach(function chk(sel) {
+  // .content-head / .ch-section / .footer carry the content gutter as --gut
+  // (24px). .player-wrap's vertical rhythm (TASK-0049, rule 6) makes its
+  // horizontal gutter read --s6 — identical 24px, so column-left alignment is
+  // unchanged; it is asserted separately below.
+  ['.content-head', '.ch-section', '.footer'].forEach(function chk(sel) {
     it(sel + ' applies the --gut horizontal gutter', function () {
       expect(ruleBody(css, sel)).toContain('var(--gut)');
     });
+  });
+
+  it('.player-wrap applies the 24px content gutter via --s6 (rule 6 rhythm)', function () {
+    expect(ruleBody(css, '.player-wrap')).toMatch(/padding:\s*var\(--s6\) var\(--s6\) 0/);
   });
 
   it('the max-width:760px block narrows content blocks to --s4 (16px)', function () {
