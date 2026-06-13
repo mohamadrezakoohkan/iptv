@@ -68,11 +68,11 @@ test('MSE-less TS playback hands the /api/hls remux URL to the HLS engine', asyn
   expect(out.calls[0]).not.toContain('/api/xtream');
 });
 
-test('MSE-less TS fallback highlights the HLS chip, not the TS chip', async function ({ page }) {
+test('MSE-less TS fallback shows the HLS chip (engine in use)', async function ({ page }) {
   await setup(page);
   await playMseless(page);
-  await expect(page.locator('#chip-hls')).toHaveClass(/active/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('HLS');
 });
 
 // ---------------------------------------------------------------------------
@@ -99,8 +99,8 @@ test('MSE-capable TS playback still highlights the TS chip', async function ({ p
     window.IptvSt.go('PLAY');
     window.IptvPlay.loadPlay(raw);
   }, RAW_TS);
-  await expect(page.locator('#chip-ts')).toHaveClass(/active/);
-  await expect(page.locator('#chip-hls')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('TS');
   await expect(page.locator('#player-err')).not.toBeVisible();
 });
 
@@ -140,7 +140,7 @@ test('demo mode HLS playback is unchanged — HLS chip, no error overlay', async
   await page.click('#btn-conn');
   await expect(page.locator('#footer-conn')).toBeVisible();
   await page.locator('.ch-card').first().click();
-  await expect(page.locator('#chip-hls')).toHaveClass(/active/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('HLS');
   await expect(page.locator('#player-err')).not.toBeVisible();
 });

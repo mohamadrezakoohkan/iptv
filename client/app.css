@@ -93,10 +93,13 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 .now-title { flex: 1; min-width: 0; font: 600 15px/1 var(--font-ui); color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now-cat { font: 500 11px/1 var(--font-mono); color: var(--dim); background: var(--sur2); border: 1px solid var(--ln); border-radius: var(--s1); padding: 3px 8px; white-space: nowrap; flex: none; }
-.fmt-chips { display: flex; gap: 4px; flex: none; }
-.fmt-chip { height: calc(var(--s6) + var(--s1)); padding: 0 9px; border: 1px solid var(--ln); border-radius: var(--r1); background: transparent; font: 600 10px/1 var(--font-mono); color: var(--dim); cursor: pointer; letter-spacing: 0.05em; }
+/* ADR: ADR-0025 — single contextual, clickable format chip (secondary control) */
+.fmt-chip { flex: none; height: calc(var(--s6) + var(--s1)); padding: 0 9px; border: 1px solid var(--ln); border-radius: var(--r1); background: transparent; font: 600 10px/1 var(--font-mono); color: var(--dim); cursor: pointer; letter-spacing: 0.05em; }
 .fmt-chip:hover { border-color: var(--dim); color: var(--tx); }
 .fmt-chip.active { border-color: var(--acc); color: var(--acc); background: rgba(242,163,60,0.08); }
+.fmt-chip[hidden] { display: none; }
+.fmt-detail { flex: none; font: 500 11px/1 var(--font-mono); color: var(--dim); white-space: nowrap; }
+.fmt-detail[hidden] { display: none; }
 
 /* Player */
 .player-wrap { flex: none; padding: var(--s6) var(--s6) 0; }

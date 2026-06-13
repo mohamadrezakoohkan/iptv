@@ -1,7 +1,9 @@
-// ADR: ADR-0010, ADR-0012, ADR-0023
-// UI tests — HLS/TS format chips + dual-engine error overlay for TASK-0023.
-// Live TS playback is proven by integration tests in TASK-0024; here the
-// mpegts global is stubbed where needed.
+// ADR: ADR-0010, ADR-0012, ADR-0023, ADR-0025
+// UI tests — contextual single format chip + dual-engine error overlay for
+// TASK-0023 / TASK-0052. The single #fmt-chip replaces the old #chip-hls /
+// #chip-ts pair (ADR-0025): hidden until a channel plays, labelled for the
+// resolved engine. Live TS playback is proven by integration tests in
+// TASK-0024; here the mpegts global is stubbed where needed.
 
 'use strict';
 
@@ -19,47 +21,39 @@ async function setup(page) {
 }
 
 // ---------------------------------------------------------------------------
-// Baseline — chips rendered, enabled, neither active
+// Baseline — single chip hidden until a channel plays (ADR-0025)
 // ---------------------------------------------------------------------------
-test('HLS and TS chips are rendered in the content-head', async function ({ page }) {
+test('the single format chip is hidden in the content-head at idle', async function ({ page }) {
   await setup(page);
-  await expect(page.locator('#chip-hls')).toBeVisible();
-  await expect(page.locator('#chip-ts')).toBeVisible();
-  await expect(page.locator('#chip-hls')).toHaveText('HLS');
-  await expect(page.locator('#chip-ts')).toHaveText('TS');
+  await expect(page.locator('#fmt-chip')).toBeHidden();
 });
 
-test('chips are not rendered disabled', async function ({ page }) {
+test('the chip is a focusable button, not disabled', async function ({ page }) {
   await setup(page);
-  // R-0001: baseline index.html chips carry no disabled attribute or class
-  await expect(page.locator('#chip-hls')).not.toHaveAttribute('disabled');
-  await expect(page.locator('#chip-ts')).not.toHaveAttribute('disabled');
-  await expect(page.locator('#chip-hls')).not.toHaveClass(/disabled/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/disabled/);
-});
-
-test('neither chip is active before playback starts', async function ({ page }) {
-  await setup(page);
-  await expect(page.locator('#chip-hls')).not.toHaveClass(/active/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/active/);
+  // R-0001: baseline index.html chip carries no disabled attribute or class
+  await expect(page.locator('#fmt-chip')).not.toHaveAttribute('disabled');
+  await expect(page.locator('#fmt-chip')).not.toHaveClass(/disabled/);
+  await expect(page.locator('#fmt-chip')).toHaveJSProperty('tagName', 'BUTTON');
 });
 
 // ---------------------------------------------------------------------------
-// Engine selection — chips reflect the engine in use
+// Engine selection — the chip reflects the engine in use (ADR-0025)
 // ---------------------------------------------------------------------------
-test('loading a .m3u8 url highlights the HLS chip only', async function ({ page }) {
+test('loading a .m3u8 url shows the chip labelled HLS', async function ({ page }) {
   await setup(page);
   await page.evaluate(function () {
     window.IptvSt.go('LOAD');
     window.IptvSt.go('READY');
     window.IptvSt.go('PLAY');
+    window.IptvUi.rndPhase();
     window.IptvPlay.loadPlay('http://stream.test/live.m3u8');
   });
-  await expect(page.locator('#chip-hls')).toHaveClass(/active/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('HLS');
+  await expect(page.locator('#fmt-chip')).toHaveClass(/active/);
 });
 
-test('loading a .ts url highlights the TS chip only', async function ({ page }) {
+test('loading a .ts url shows the chip labelled TS', async function ({ page }) {
   await setup(page);
   await page.evaluate(function () {
     window.mpegts = {
@@ -78,23 +72,25 @@ test('loading a .ts url highlights the TS chip only', async function ({ page }) 
     window.IptvSt.go('LOAD');
     window.IptvSt.go('READY');
     window.IptvSt.go('PLAY');
+    window.IptvUi.rndPhase();
     window.IptvPlay.loadPlay('http://stream.test/live/u/p/1.ts');
   });
-  await expect(page.locator('#chip-ts')).toHaveClass(/active/);
-  await expect(page.locator('#chip-hls')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('TS');
+  await expect(page.locator('#fmt-chip')).toHaveClass(/active/);
 });
 
 // ---------------------------------------------------------------------------
-// Demo mode — connect + select channel, HLS chip active
+// Demo mode — connect + select channel, chip shows HLS
 // ---------------------------------------------------------------------------
-test('demo mode playback activates the HLS chip', async function ({ page }) {
+test('demo mode playback shows the HLS chip', async function ({ page }) {
   await page.goto('http://localhost:3000');
   await page.fill('#f-url', 'demo');
   await page.click('#btn-conn');
   await expect(page.locator('#footer-conn')).toBeVisible();
   await page.locator('.ch-card').first().click();
-  await expect(page.locator('#chip-hls')).toHaveClass(/active/);
-  await expect(page.locator('#chip-ts')).not.toHaveClass(/active/);
+  await expect(page.locator('#fmt-chip')).toBeVisible();
+  await expect(page.locator('#fmt-chip')).toHaveText('HLS');
 });
 
 // ---------------------------------------------------------------------------

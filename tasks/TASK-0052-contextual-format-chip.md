@@ -2,8 +2,8 @@
 id: TASK-0052
 adr: ADR-0025
 evolution: 15
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -70,5 +70,53 @@ chip "on top" while playing, and clicking that chip visibly responds.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Production code**
+
+- `index.html` — replaced the always-present `.fmt-chips` two-span cluster
+  (`#chip-hls`, `#chip-ts`) with a single `<button type="button" id="fmt-chip"
+  class="fmt-chip" aria-expanded="false" hidden>` plus a sibling
+  `<span class="fmt-detail" id="fmt-detail" hidden>` for the toggled engine
+  detail. Carries an `<!-- ADR: ADR-0025 -->` comment.
+- `client/ui.js` — EL registry: `chls`/`cts` → `fchp`/`fdtl`. `rndChip(eng)`
+  rewritten: a resolved token (`'hls'`/`'ts'`) shows the chip, sets its label
+  via `FMT_LBL`, marks `.active`, and records `dataset.eng`; an empty/unknown
+  token hides the chip, clears `.active`, resets `aria-expanded="false"`, and
+  collapses the detail. New `onFmtChip()` handler toggles `#fmt-detail`
+  visibility + text (from `FMT_DTL`) and mirrors `aria-expanded`, never touching
+  `ST.phase` or the engine. `mkEL` wires the chip click; exports add `onFmtChip`.
+  `rndPlayer()` now calls `rndChip('')` whenever phase is not `PLAY`, so the chip
+  is removed on every teardown/error/idle/disconnect/switch path (rndPhase →
+  rndPlayer runs on every transition).
+- `client/app.css` — `.fmt-chips` container rule removed; `.fmt-chip` kept as the
+  single chip's style (28px tall `calc(var(--s6)+var(--s1))`, `--r1` radius,
+  ADR-0019 colour tokens), plus `.fmt-chip[hidden]`, `.fmt-detail`, and
+  `.fmt-detail[hidden]`. Carries a CSS `ADR: ADR-0025` comment.
+
+  Engine resolution in `client/play.js` (ADR-0010/0012) is unchanged — it still
+  pushes the resolved engine through `updChip(eng)` → `rndChip(eng)`, including
+  the remux-to-HLS `updChip('hls')` case.
+
+**New global names** (verified unique across `client/*.js`): `FMT_LBL`,
+`FMT_DTL`, `onFmtChip`.
+
+**Tests**
+
+- Added `tests/unit/fmtchip.test.js` (rndChip resolution/label/hide, onFmtChip
+  toggle + aria-expanded, no phase mutation).
+- Added `tests/ui/fmtchip.test.js` (idle hidden → demo play shows labelled chip
+  → click toggles detail → stop hides chip).
+- Updated `tests/ui/chips.test.js`, `tests/ui/live.test.js`,
+  `tests/ui/fallback.test.js` to the single `#fmt-chip` contract (visible +
+  label) instead of the old two-chip `.active` assertions.
+- Updated `tests/ui/controls.test.js` to measure the chip after playing a demo
+  channel (it is now contextual, hidden at idle).
+- Updated `tests/unit/acctui.test.js` + `tests/unit/themetoggle.test.js` element
+  id lists from `chip-hls`/`chip-ts` to `fmt-chip`/`fmt-detail`.
+
+**Notes for reviewers**
+
+- ADR-0025 `governs:` trued up: removed `tests/ui/fmtchip-demo.test.js` (that file
+  is TASK-0053's demo recording, not created here).
+- `tests/ui/live.test.js` requires live portal credentials/network; only its chip
+  selectors were updated. All other UI tests (182) and the full unit suite (592)
+  pass locally.

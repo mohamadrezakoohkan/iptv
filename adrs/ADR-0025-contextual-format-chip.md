@@ -10,7 +10,6 @@ governs:
   - client/app.css
   - tests/unit/fmtchip.test.js
   - tests/ui/fmtchip.test.js
-  - tests/ui/fmtchip-demo.test.js
 ---
 
 # ADR-0025 — Replace the always-present HLS/TS pills with one contextual, clickable format chip

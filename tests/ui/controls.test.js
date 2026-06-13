@@ -58,7 +58,11 @@ test('the login-mode segmented control is 36px tall (primary control)', async fu
 });
 
 test('a format chip is 28px tall (secondary control)', async function ({ page }) {
-  await page.goto('http://localhost:3000');
+  // The format chip is contextual (ADR-0025): hidden until a channel plays, so
+  // connect demo mode and play one before measuring its bounding box.
+  await connectDemo(page);
+  await page.locator('.ch-card').first().click();
+  await page.locator('#fmt-chip').waitFor({ state: 'visible', timeout: 5000 });
   const chip = await box(page, '.fmt-chip');
   expect(Math.round(chip.height)).toBe(28);
 });
