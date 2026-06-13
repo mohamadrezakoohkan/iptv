@@ -69,6 +69,33 @@ categories/channels, fetch playable MPEG-TS bytes through the proxy). It
 fails by design when the network is down and is excluded from the unit
 command.
 
+## Deployment
+
+The app deploys to **Fly.io** as a Docker container named **`teeatr`**:
+
+```bash
+fly deploy
+```
+
+`fly deploy` builds the repo `Dockerfile` (multi-stage Node image — `npm ci`
+installs dependencies including the bundled `ffmpeg-static` binary) and runs
+the same `node src/server/srv.js` server that runs locally, listening on
+port **8080** (`fly.toml` sets `[env] PORT = '8080'` matching
+`http_service.internal_port = 8080` and the Dockerfile `EXPOSE 8080`).
+
+A long-running container — rather than static or serverless hosting — is the
+deployment target precisely because the product needs a stateful process: the
+**CORS proxy** pipes unbounded, long-lived live streams, and the **server-side
+TS→HLS ffmpeg remux** spawns `ffmpeg` per source and serves the produced HLS
+segments. Both keep working in production unchanged.
+
+Secrets are set with `fly secrets set …` (never baked into the image — the
+`.dockerignore` keeps `.env.secrets` out of the build context). The deployment
+artifacts (`Dockerfile`, `fly.toml`, `.dockerignore`) are guarded by a
+config-consistency unit test (in the `npx vitest run` gate) and a Docker
+build-smoke test; see `docs/specs/deployment.md` and ADR-0027 for the full
+rationale, invariants, and validation strategy.
+
 ## Features
 
 - **Xtream portal playback** — connect with portal URL + username/password;

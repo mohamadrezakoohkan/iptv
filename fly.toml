@@ -2,11 +2,15 @@
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
+# ADR: ADR-0027
 
 app = 'teeatr'
 primary_region = 'iad'
 
 [build]
+
+[env]
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
@@ -16,8 +20,14 @@ primary_region = 'iad'
   min_machines_running = 0
   processes = ['app']
 
+  [[http_service.checks]]
+    method = 'get'
+    path = '/'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '10s'
+
 [[vm]]
-  memory = '1gb'
+  memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 256

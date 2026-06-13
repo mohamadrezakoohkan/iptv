@@ -56,10 +56,17 @@ without real credentials.
 | Unit test suite        | `npx vitest run`                              |
 | UI test suite          | `npx playwright test`                         |
 | Integration test suite | `npx vitest run --config vitest.int.config.js`|
+| Build-smoke (Docker)   | `npx vitest run --config vitest.smoke.config.js`|
 
 The integration suite requires live outbound network access (it validates
 real connectivity to public IPTV endpoints). It is intentionally excluded
 from the unit suite's config so `npx vitest run` stays network-free.
+
+The build-smoke command builds and runs the product's Docker image to prove the
+Fly.io deployment artifacts work (HTTP 200 on `/`, ffmpeg binary resolvable
+inside the image). It requires Docker; it is isolated to its own config so it
+never slows or flakes the unit/integration suites, and it skips cleanly when
+Docker is absent. See `deployment.md`.
 
 The test-runner config files (`vitest.config.js`, `vitest.int.config.js`,
 `playwright.config.js`) and `package.json` stay at the repository root by
@@ -89,3 +96,4 @@ invariants the structure preserves.
 - `theme.md` — light / dark theme toggle (sun/moon switch, top-right)
 - `spacing-sizing.md` — 4px-grid spacing/sizing/radius token contract (UI alignment pass)
 - `integration-testing.md` — live-network integration test tier
+- `deployment.md` — Fly.io Docker deployment (app `teeatr`), config invariants, build-smoke verification
