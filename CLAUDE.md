@@ -62,7 +62,7 @@ change — the orchestrator decides whether to fix and retry or record a
 
 | Phase | Agent (`subagent_type`) | In | Out |
 |---|---|---|---|
-| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>`, specs + ADRs + tasks, first commit + PR opened, JSON manifest |
+| 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>` (inside the run's Claude Code worktree), specs + ADRs + tasks, first commit + PR opened, JSON manifest |
 | 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
 | 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
 | 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
@@ -78,8 +78,14 @@ change — the orchestrator decides whether to fix and retry or record a
   file itself is never removed — it is history).
 - Git & PR contract (CORE_FLOW.md §3): no actor ever commits or pushes to
   `main`, force-pushes, or merges a PR (`.claude/settings.json` deny rules
-  back this up). spec-agent creates branch `ai/e<E>-<slug>`, makes the run's
-  first commit, and opens the PR; validate-agent commits, pushes, updates
+  back this up). At run start you (the orchestrator) put the run inside a
+  **Claude Code worktree** (the native feature — `EnterWorktree` tool, or the
+  human's `claude --worktree`), branched from
+  `main` via `worktree.baseRef: "fresh"` in `.claude/settings.json`; all four
+  phases run inside that one worktree, isolated from the primary working tree
+  (CORE_FLOW.md §3, §4.2). Inside it spec-agent creates branch
+  `ai/e<E>-<slug>`, makes the run's first commit, and opens the PR;
+  validate-agent commits, pushes, updates
   the PR description per passed task, and writes that task's collapsible Test
   Results block; you commit terminal-failure state and write the failed task's
   Test Results block; review-agent makes the final commit and finalizes the
