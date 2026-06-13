@@ -2,8 +2,8 @@
 id: TASK-0046
 adr: ADR-0022
 evolution: 13
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0044, TASK-0045]
 ---
 
@@ -55,8 +55,42 @@ changes user-interactable behavior (E13), so it must carry one
 
 ## Implementation notes
 
-_Filled by implement-agent. Configure Playwright video capture for this spec
-(e.g. a project/use override with `video: 'on'` and a known output dir) without
-forcing video on the whole UI suite if that would slow it; ensure the saved video
-path is stable for committing._
+Files touched:
+- `tests/ui/empty-demo.test.js` (new) — the demo recording spec.
+
+Video capture approach: video is scoped to **this spec only**, not the global
+UI suite (cost). The spec opens its own Chromium browser/context in `beforeAll`
+via `chromium.launch()` + `newContext({ recordVideo: { dir: 'test-results',
+size: 1280x800 } })` and runs the whole arc serially in one page
+(`test.describe.configure({ mode: 'serial' })`). `playwright.config.js` is left
+untouched, so the other 144 UI tests record no video and stay fast. The shared
+`webServer` (`node server/srv.js`, the canonical run command) is still started
+by the Playwright runner, so the manually-created context hits the real running
+product on `http://localhost:3000`.
+
+Stable artifact path: in `afterAll`, the auto-named video path is resolved
+(`page.video().path()`), the context is closed to flush the `.webm`, then the
+file is renamed to the deterministic path **`test-results/e13-empty-state-demo.webm`**
+so the terminal actor can commit it and write the PR `### Demo` clickable blob
+link.
+
+Arc coverage (all asserted, in order):
+- boot — `page.goto` fresh load, `#player-idle` visible.
+- prepare — fill `#f-url` with `demo`, click `#btn-conn`, 31 demo channels load.
+- interact — empty search (`.ch-empty` "No matches" + Clear search restores grid),
+  empty favourites ("No favourites yet" + Browse all channels restores 31),
+  empty category ("Nothing in this category"), player idle ("NO SIGNAL"
+  guidance), stream-error ("This channel won't play" + Retry).
+- revert — in-app teardown: stopPlay, clear err/cur, `go('INIT')`, clear search,
+  back to All Channels; asserts idle visible, err hidden, search empty, All
+  Channels active, no `.ch-empty`.
+- stop — context closed in `afterAll`; the `.webm` artifact is produced.
+
+The empty-favourites and empty-category states are driven through the real
+`rndGrid`/`getChs` render path (matching the validated TASK-0044 UI test), since
+the Favourites sidebar button only renders once a favourite exists and the demo
+source has channels in every category; the stream-error state is driven through
+the real `setErr`/`go('ERR')`/`rndPhase` path (matching TASK-0045), since a live
+stream failure is not reproducible in headless Playwright. All copy is asserted
+against `specs/empty-states.md` §2–§3 so the recording is a real demonstration.
 </content>
