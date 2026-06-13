@@ -83,6 +83,12 @@ the same `node src/server/srv.js` server that runs locally, listening on
 port **8080** (`fly.toml` sets `[env] PORT = '8080'` matching
 `http_service.internal_port = 8080` and the Dockerfile `EXPOSE 8080`).
 
+The image **self-binds PORT 8080 by default** — `ENV PORT=8080` is baked into
+the Dockerfile — so `fly deploy` works without any extra env and a bare
+`docker run -p 8080:8080 teeatr` also serves on 8080 (an explicit `PORT` still
+overrides). See ADR-0028 for the self-bind rationale and the 4-way
+port-coherence invariant.
+
 A long-running container — rather than static or serverless hosting — is the
 deployment target precisely because the product needs a stateful process: the
 **CORS proxy** pipes unbounded, long-lived live streams, and the **server-side
