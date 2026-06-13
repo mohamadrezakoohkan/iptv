@@ -2,8 +2,8 @@
 id: TASK-0056
 adr: ADR-0027
 evolution: 17
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -48,5 +48,30 @@ TASK-0058+); this task delivers and unit-tests the store in isolation.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/errlog.js` (created) — the in-memory, session-scoped store. Carries
+  the `// ADR: ADR-0027` reference comment near the top and follows the existing
+  client-module idiom (`'use strict'`, `/* global window */`, single
+  `window.IptvErrLog = { … }` export; no CommonJS). A module-private `const LOG = []`
+  holds entries newest-last; only `add` / `clear` mutate it, and `list()` never
+  hands it out by reference.
+- `src/tests/unit/errlog.test.js` (created, 16 unit tests) — loads `errlog.js`
+  against a fresh `window` via `new Function(...)` per test, so each test gets an
+  isolated in-memory `LOG` (no shared-state bleed between cases).
+
+Non-obvious points for reviewers / future tasks:
+
+- `num` normalization uses `(c.num === 0 || c.num) ? c.num : null` so a legitimate
+  channel number `0` is preserved (not coerced to `null` by a falsy check), while
+  missing/undefined `num` still defaults to `null` per ADR-0027.
+- The 50-entry cap is enforced in `add` with `while (LOG.length > MAX) LOG.shift()`
+  (drops oldest from the front), keeping the newest 50. `list()` returns
+  `LOG.slice().reverse()` — a fresh, newest-first copy.
+- This task delivers the store in isolation; nothing consumes it yet. The single
+  capture hook (`onEngErr` in `play.js`) and the `index.html` load-order change are
+  TASK-0057, and the button/panel UI is TASK-0058+. ADR-0027's `governs:` already
+  lists `play.js` and `index.html` as seeded paths for TASK-0057, so they are left
+  in place (they will gain their `ADR: ADR-0027` comments there); the two files
+  this task creates are already in `governs:`, so no traceability change was needed.
+- API surface is exactly `add / clear / count / list / mkEntry` (asserted by a test).
