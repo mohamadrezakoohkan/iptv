@@ -479,9 +479,11 @@ The backlog path **always** self-publishes — it consumes no evolution number
 but, unlike every other path, never leaves its work in the working tree for the
 human to commit. On every spawn `backlog-agent`:
 
-1. creates a **new git worktree** off the current HEAD on a dedicated branch
-   `backlog/<slug>` (2–5 kebab-case words condensing the idea), so the capture
-   is isolated from any in-flight run sharing the main working tree,
+1. fetches `origin/main` and creates a **new git worktree** off fresh
+   `origin/main` (never off the current working-tree HEAD) on a dedicated
+   branch `backlog/<slug>` (2–5 kebab-case words condensing the idea), so the
+   capture is isolated from any in-flight run sharing the main working tree and
+   the PR diff is exactly the one appended entry,
 2. appends its single entry to `BACKLOG.md` in that worktree,
 3. commits it (`backlog: <slug>`),
 4. pushes the branch (`git push -u origin backlog/<slug>`),
@@ -492,8 +494,8 @@ human to commit. On every spawn `backlog-agent`:
 It commits and pushes to its own `backlog/<slug>` branch only and opens the PR;
 it never commits, pushes, or merges to `main`, and never force-pushes. Merging
 the backlog PR is the human's decision. If `git` or an authenticated `gh` CLI
-is unavailable, that is a `PHASE-FAILURE` — the backlog path does not fall back
-to an uncommitted write.
+is unavailable, or `git fetch origin main` fails, that is a `PHASE-FAILURE` —
+the backlog path does not fall back to an uncommitted write.
 
 ## 5. Failure → Rule protocol
 

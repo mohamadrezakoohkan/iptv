@@ -21,12 +21,15 @@ orchestrator spawned you with one human idea (verbatim) and the Rule Pack.
 
 ## Procedure
 
-1. **Create an isolated worktree.** Slugify the idea into 2–5 kebab-case words
-   (`<slug>`). From the repository root run
-   `git worktree add -b backlog/<slug> <path> HEAD` to get a fresh checkout on
-   a new `backlog/<slug>` branch, isolated from any in-flight run that shares
-   the main working tree. Do all of the following inside that worktree. If
-   `git` or an authenticated `gh` CLI is unavailable, stop and report
+1. **Create an isolated worktree off fresh `origin/main`.** Slugify the idea
+   into 2–5 kebab-case words (`<slug>`). First refresh main with
+   `git fetch origin main`, then from the repository root run
+   `git worktree add -b backlog/<slug> <path> origin/main` — base the branch
+   and worktree on `origin/main`, **never** on the current working-tree `HEAD`,
+   so the backlog PR diff is exactly your one `BACKLOG.md` entry and carries no
+   commits from an in-flight run that shares the main working tree. Do all of
+   the following inside that worktree. If `git` or an authenticated `gh` CLI is
+   unavailable, or `git fetch origin main` fails, stop and report
    `PHASE-FAILURE` (see below) — the backlog path never falls back to an
    uncommitted write.
 2. **Read `BACKLOG.md` if it exists** in the worktree. If it does not, create
@@ -105,10 +108,10 @@ each stating the assumption you settled on during interrogation.
 
 ## Return (your final message — the orchestrator parses it)
 
-If you cannot complete the capture — `BACKLOG.md` not writable, or `git` / an
-authenticated `gh` CLI unavailable so the worktree, commit, push, or PR cannot
-be created — return a single line starting with `PHASE-FAILURE: ` plus the
-reason. Otherwise return ONLY this JSON:
+If you cannot complete the capture — `BACKLOG.md` not writable, `git fetch
+origin main` failed, or `git` / an authenticated `gh` CLI unavailable so the
+worktree, commit, push, or PR cannot be created — return a single line starting
+with `PHASE-FAILURE: ` plus the reason. Otherwise return ONLY this JSON:
 
 ```json
 {
