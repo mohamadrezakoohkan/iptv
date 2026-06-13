@@ -15,3 +15,4 @@ except by explicit human instruction.
 
 | Evolution | Phase | Related (ADR/TASK) | Symptom (one line) | root-cause-tag | Fix (one line) |
 |---|---|---|---|---|---|
+| 17 | 2/3 IMPLEMENT/VALIDATE | ADR-0028 / TASK-0058 | Inserting `#log-btn` between `#theme-toggle` and `#acct-btn` broke the untouched `themetoggle.test.js:31` invariant (theme toggle must sit <20px left of the account button; measured ~88px) | layout-adjacency-regression | Reordered the right-edge cluster with CSS flex `order` so source order (log→toggle→account, per ADR-0028) is preserved while the toggle renders one `--s2` gap left of the account button (ADR-0019 satisfied) |
