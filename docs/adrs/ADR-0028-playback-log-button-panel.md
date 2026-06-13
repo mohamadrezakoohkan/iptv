@@ -8,6 +8,7 @@ governs:
   - src/index.html
   - src/client/app.css
   - src/client/ui.js
+  - src/client/play.js
   - src/tests/unit/logui.test.js
   - src/tests/ui/log.test.js
 ---

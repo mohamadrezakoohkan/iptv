@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0027
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0027, ADR-0028
 /* global window */
 
 'use strict';
@@ -65,6 +65,7 @@ function updChip(eng) {
 // ---------------------------------------------------------------------------
 function onEngErr(msg) {
   if (window.IptvErrLog) window.IptvErrLog.add(window.IptvErrLog.mkEntry(window.IptvSt.ST.cur, msg));
+  if (window.IptvUi && window.IptvUi.rndLog) window.IptvUi.rndLog();
   window.IptvSt.setErr(msg);
   if (window.IptvSt.ST.phase !== 'ERR') window.IptvSt.go('ERR');
   stopPlay();

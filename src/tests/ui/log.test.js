@@ -3,8 +3,10 @@
 // (TASK-0058): the log button is visible in the content-head immediately
 // beside the account button; clicking it slides the panel in; the close
 // button, the scrim, and Escape each hide it; the button is reachable and
-// operable by keyboard. (Rendering log rows + the count badge is TASK-0059;
-// the interact-and-record demo arc is TASK-0060.)
+// operable by keyboard. TASK-0059 (the blocks at the bottom): a captured
+// failure shows the badge count and a matching entry row, multiple failures
+// render newest-first, and Clear empties the list to the empty state and hides
+// the badge. (The interact-and-record demo arc is TASK-0060.)
 //
 // Like the account panel, the log panel is always in the DOM and toggled
 // off-screen via a CSS transform, so open/closed state is asserted via the
@@ -145,4 +147,77 @@ test('opening the log panel leaves an open account panel open', async function (
   await page.evaluate(function () { window.IptvUi.setLog(true); });
   await expect(page.locator('#log-panel')).toHaveClass(/is-open/);
   await expect(page.locator('#acct-panel')).toHaveClass(/is-open/);
+});
+
+// ===========================================================================
+// TASK-0059 — rendering the log from window.IptvErrLog: the badge count, the
+// entry rows newest-first, the empty state, and the Clear action.
+//
+// The failure is induced without a live stream: we drive the app's real
+// in-memory store through window.IptvErrLog.add(mkEntry(...)) then re-render
+// via window.IptvUi.rndLog() — exactly the capture→render path play.js's
+// onEngErr uses (ADR-0027/ADR-0028) — so the test is deterministic and
+// network-free, per the task's integration: n/a note.
+// ===========================================================================
+
+// pushFail — record one failure entry into the live store as the failed
+// channel that onEngErr would, then re-render the log (badge + panel).
+async function pushFail(page, ch, detail) {
+  await page.evaluate(function (args) {
+    const e = window.IptvErrLog.mkEntry(args.ch, args.detail);
+    window.IptvErrLog.add(e);
+    window.IptvUi.rndLog();
+  }, { ch, detail });
+}
+
+test('the badge is hidden and the panel shows the empty state with no failures', async function ({ page }) {
+  await setup(page);
+  await expect(page.locator('#log-count')).toHaveClass(/is-empty/);
+  await page.click('#log-btn');
+  await expect(page.locator('#log-list .log-empty')).toHaveText('No playback failures this session.');
+  await expect(page.locator('#log-list .log-row')).toHaveCount(0);
+});
+
+test('a captured failure shows the badge count and a matching entry row', async function ({ page }) {
+  await setup(page);
+  await pushFail(page, { id: '1', name: 'World News 24', num: 42, url: 'http://s/n.m3u8' }, 'manifestLoadError');
+
+  // badge becomes visible and shows the count
+  await expect(page.locator('#log-count')).not.toHaveClass(/is-empty/);
+  await expect(page.locator('#log-count')).toHaveText('1');
+
+  // open the panel and assert the matching entry row
+  await page.click('#log-btn');
+  await expect(page.locator('#log-list .log-row')).toHaveCount(1);
+  await expect(page.locator('#log-list .log-row-name')).toContainText('World News 24');
+  await expect(page.locator('#log-list .log-row-name')).toContainText('042');
+  await expect(page.locator('#log-list .log-row-detail')).toHaveText('manifestLoadError');
+});
+
+test('multiple failures render newest-first with the count in the badge', async function ({ page }) {
+  await setup(page);
+  await pushFail(page, { id: '1', name: 'Old Channel', num: 1, url: 'http://s/a.m3u8' }, 'networkError');
+  await pushFail(page, { id: '2', name: 'New Channel', num: 2, url: 'http://s/b.m3u8' }, 'mediaError');
+
+  await expect(page.locator('#log-count')).toHaveText('2');
+  await page.click('#log-btn');
+  const names = page.locator('#log-list .log-row-name');
+  await expect(names).toHaveCount(2);
+  // newest-first: the most recently added entry is the first row
+  await expect(names.nth(0)).toContainText('New Channel');
+  await expect(names.nth(1)).toContainText('Old Channel');
+});
+
+test('clicking Clear empties the list to the empty state and hides the badge', async function ({ page }) {
+  await setup(page);
+  await pushFail(page, { id: '1', name: 'World News 24', num: 42, url: 'http://s/n.m3u8' }, 'manifestLoadError');
+  await page.click('#log-btn');
+  await expect(page.locator('#log-list .log-row')).toHaveCount(1);
+
+  await page.click('#log-clear');
+
+  await expect(page.locator('#log-list .log-row')).toHaveCount(0);
+  await expect(page.locator('#log-list .log-empty')).toHaveText('No playback failures this session.');
+  await expect(page.locator('#log-count')).toHaveClass(/is-empty/);
+  await expect(page.locator('#log-count')).toHaveText('0');
 });

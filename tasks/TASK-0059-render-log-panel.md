@@ -2,8 +2,8 @@
 id: TASK-0059
 adr: ADR-0028
 evolution: 17
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0058]
 ---
 
@@ -61,5 +61,57 @@ failure updates the badge and any open panel immediately.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Production code was already in place** (delivered alongside the TASK-0058
+shell on this branch): `src/client/ui.js`, `src/client/play.js`,
+`src/index.html`, and `src/client/app.css` already implement every acceptance
+criterion of this task. This task therefore only added the **tests** the
+criteria demand; no production file was changed (verified each criterion against
+the existing code first):
+
+- `rndLog()` (ui.js): renders `#log-count` (text = `count()`, toggles the
+  `is-empty` hidden CSS class at zero), folds the count into `#log-btn`'s
+  `aria-label` (singular/plural, not colour-only), and renders `#log-list` as
+  one `mkLogRow` per `IptvErrLog.list()` entry **newest-first** (name + zero-
+  padded number, dimmed detail, local time) or the `.log-empty` placeholder
+  ("No playback failures this session.") at zero. All entry text is HTML-escaped
+  via `escHtml`; guarded to no-op when `window.IptvErrLog` is absent.
+- `onLogClear()` (ui.js): `IptvErrLog.clear()` then `rndLog()`. Wired to
+  `#log-clear` in `mkEL`, which also calls `rndLog()` on init.
+- Capture→re-render mechanism: `onEngErr(msg)` in play.js calls
+  `window.IptvUi.rndLog()` (guarded, immediately after `IptvErrLog.add(...)`)
+  so a new failure updates the badge and any open panel live. The capture's
+  failure-only semantics are unchanged.
+
+**Tests added:**
+
+- `src/tests/unit/logui.test.js` (+17 tests, 17→34): rndLog empty state
+  (placeholder + hidden badge + zero accessible name), non-empty (count, visible
+  badge, one row per entry, newest-first ordering, name/number/detail rendered,
+  singular vs plural accessible name), HTML-escaping of name + detail, the
+  IptvErrLog-absent guard, onLogClear (clears + re-renders to empty state, and
+  via the wired `#log-clear` click), rndLog on `mkEL` init (empty and
+  pre-populated), and the capture→rndLog wiring asserted end-to-end by executing
+  the **real** st.js + errlog.js + play.js + ui.js in one synthetic window and
+  inducing a fatal failure through `loadPlay` (no-HLS dead-end). Added `dataset`
+  / `hidden` to the shared `mkEl` stub and `resolveSignal` to the `IptvEmpty`
+  stub so the real play→rndPhase→rndPlayer path runs in the wiring test.
+- `src/tests/ui/log.test.js` (+4 tests, 9→13, Playwright): empty state + hidden
+  badge with no failures; a captured failure (induced via the exposed
+  `IptvErrLog.add(mkEntry(...))` + `rndLog()`, the same path onEngErr uses — no
+  live stream) shows the badge count and a matching entry row; multiple failures
+  render newest-first with the count; Clear empties the list to the empty state
+  and hides the badge.
+
+**R-0001:** the only attribute assertions are on `#log-btn` `aria-expanded` /
+`#log-panel` `aria-hidden` (shipped in index.html as `"false"`/`"true"`), the
+`#log-count` `is-empty` class (shipped on the element in index.html line 67),
+and the `aria-label` rndLog writes itself — no attribute is asserted that the
+baseline markup does not declare.
+
+**Traceability:** no change needed — ADR-0028 already lists all six governed
+files in `governs:` (incl. both test files), and each already carries its
+`ADR: ADR-0028` comment. No ADR decision content touched.
+
+**Run the tests:** unit — `npx vitest run src/tests/unit/logui.test.js`
+(34 pass) or full `npx vitest run` (657 pass); UI —
+`npx playwright test src/tests/ui/log.test.js` (13 pass).

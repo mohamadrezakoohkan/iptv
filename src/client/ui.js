@@ -362,6 +362,82 @@ function onLogClose() {
 }
 
 // ---------------------------------------------------------------------------
+// fmtLogTime — pure: a short local clock time for a failure entry's `at`
+// timestamp (ADR-0028). Falls back to '' for a missing/invalid stamp so a
+// malformed entry never throws during render.
+// ---------------------------------------------------------------------------
+function fmtLogTime(at) {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString();
+}
+
+// ---------------------------------------------------------------------------
+// mkLogRow — pure: build one failure-log row HTML from an ErrEntry (ADR-0028):
+// the channel name (+ number when present) as the primary line, the engine
+// detail as a dimmed secondary line, and the failure time. All entry-derived
+// text is HTML-escaped (entries carry channel names / engine tokens).
+// ---------------------------------------------------------------------------
+function mkLogRow(entry) {
+  const num   = (entry.num === 0 || entry.num) ? '#' + escHtml(fmtNum(entry.num)) + ' ' : '';
+  const name  = escHtml(entry.name);
+  const dtl   = escHtml(entry.detail);
+  const time  = escHtml(fmtLogTime(entry.at));
+  return '<div class="log-row">'
+    + '<div class="log-row-head">'
+    + '<span class="log-row-name">' + num + name + '</span>'
+    + '<span class="log-row-time">' + time + '</span>'
+    + '</div>'
+    + '<span class="log-row-detail">' + dtl + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndLog — render the log button's count badge and the panel's entry list from
+// window.IptvErrLog (ADR-0028): the badge shows count() and gets the is-empty
+// class (hidden, CSS §10) when zero, with the count folded into the button's
+// accessible name (aria-label, not colour-only); the list shows one row per
+// list() entry newest-first, or a single calm empty-state placeholder when the
+// log is empty. Guarded to no-op when IptvErrLog is absent (test isolation),
+// mirroring the existing guarded global reads. Called on init, after every
+// capture (the play.js onEngErr hook), and after clear().
+// ---------------------------------------------------------------------------
+function rndLog() {
+  if (!window.IptvErrLog) return;
+  const n = window.IptvErrLog.count();
+  if (EL.lcnt) {
+    EL.lcnt.textContent = String(n);
+    EL.lcnt.classList.toggle('is-empty', n === 0);
+  }
+  if (EL.lbtn) {
+    EL.lbtn.setAttribute('aria-label', n === 0
+      ? 'Log, no playback failures'
+      : 'Log, ' + n + (n === 1 ? ' playback failure' : ' playback failures'));
+  }
+  if (!EL.llst) return;
+  if (n === 0) {
+    EL.llst.innerHTML = '<p class="log-empty">No playback failures this session.</p>';
+    return;
+  }
+  const entries = window.IptvErrLog.list();
+  let html = '';
+  for (let i = 0; i < entries.length; i += 1) {
+    html += mkLogRow(entries[i]);
+  }
+  EL.llst.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// onLogClear — Clear button: empty the failure log (IptvErrLog.clear) and
+// re-render so the panel falls back to the empty state and the badge hides
+// (ADR-0028). Guarded so it no-ops when the log module is absent.
+// ---------------------------------------------------------------------------
+function onLogClear() {
+  if (window.IptvErrLog) window.IptvErrLog.clear();
+  rndLog();
+}
+
+// ---------------------------------------------------------------------------
 // getSrv — pure: the server URL shown for an account; the demo playlist shows
 // the literal "demo" (its stored url), any other account shows its url (ADR-0014).
 // ---------------------------------------------------------------------------
@@ -656,6 +732,8 @@ function mkEL() {
   if (EL.lbtn) EL.lbtn.addEventListener('click', onLogBtn);
   if (EL.lcls) EL.lcls.addEventListener('click', onLogClose);
   if (EL.lscr) EL.lscr.addEventListener('click', onLogClose);
+  if (EL.lclr) EL.lclr.addEventListener('click', onLogClear);
+  rndLog();
 }
 
 // ---------------------------------------------------------------------------
@@ -1166,4 +1244,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog };
