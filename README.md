@@ -43,7 +43,7 @@ ffmpeg required).
 ## Run
 
 ```bash
-node server/srv.js
+node src/server/srv.js
 ```
 
 Open `http://localhost:3000` in your browser. Enter `demo` as the portal URL
@@ -144,4 +144,4 @@ command.
 ## Architecture
 
 See `CORE_FLOW.md` for how this project is built, `CHANGELOG.md` for the full
-evolution history, and `adrs/` for every architecture decision.
+evolution history, and `docs/adrs/` for every architecture decision.
