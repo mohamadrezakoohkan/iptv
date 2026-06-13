@@ -2,8 +2,8 @@
 id: TASK-0048
 adr: ADR-0024
 evolution: 14
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0047]
 ---
 
@@ -54,4 +54,36 @@ TASK-0047.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+**`client/app.css` (the only product file changed):**
+
+- **Sidebar gutter → `--sgut` (16px), rule 2.** `.sidebar-head` `padding: 0 14px`
+  → `0 var(--sgut)`; `.sidebar-search` `padding: 10px 12px` → `10px var(--sgut)`;
+  `.sidebar-list` `padding: 8px 8px 16px` → `8px var(--sgut) 16px`. Inner controls:
+  `.search-field` `0 10px` → `0 var(--s3)` and `.cat-btn` `0 10px` → `0 var(--s3)`
+  (12px inner inset; the full `.cat-btn` snap is TASK-0050). Vertical values are
+  left untouched — vertical rhythm is TASK-0049's scope.
+- **Content gutter → `--gut` (24px), rule 2.** `.content-head` `0 20px` →
+  `0 var(--gut)`; `.player-wrap` `16px 20px 10px` → `16px var(--gut) 10px`;
+  `.ch-section` `0 20px 16px` → `0 var(--gut) 16px`; `.footer` `12px 20px` →
+  `12px var(--gut)`. At the **existing** `max-width: 760px` breakpoint, four
+  override lines narrow the content gutter to `--s4` (16px) — no new breakpoint
+  introduced.
+- **Both headers 56px on one line, rule 5.** `.sidebar-head` and `.content-head`
+  `height: 56px` → `height: var(--hd)`; each padded to its own column gutter
+  (`--sgut` / `--gut`). Both bottom borders sit at the same y (UI-verified).
+
+No `0 14px` / `10px 12px` / `0 20px` / `56px` one-offs remain on these blocks.
+No JS, markup, or behaviour change. `app.css` already carries `ADR: ADR-0024`.
+
+**Tests added:**
+- `tests/unit/gutters.test.js` — CSS-source assertions: sidebar blocks read
+  `var(--sgut)`, content blocks read `var(--gut)` (and `var(--s4)` in the
+  mobile block), inner controls read `var(--s3)`, both headers read `var(--hd)`,
+  and no surviving gutter/header literals.
+- `tests/ui/gutters.test.js` — Playwright bounding-box checks on a 1280px
+  viewport (content-column content-left x aligned; sidebar block left x aligned;
+  both headers 56px tall with bottom borders on one y) and a 750px-viewport
+  check that the content gutter becomes 16px. Captures
+  `test-results/task-0048-gutters.png`.
+
+ADR-0024 `governs:` trued up to list both new test files.
