@@ -3,3 +3,4 @@
 .claude/worktrees/
 node_modules/
 .env.secrets
+.playwright-out/
