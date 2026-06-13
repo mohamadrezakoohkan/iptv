@@ -6,7 +6,6 @@ evolution: 14
 status: accepted
 governs:
   - client/app.css
-  - index.html
   - tests/unit/spacing.test.js
   - tests/ui/spacing.test.js
   - tests/unit/gutters.test.js
@@ -106,11 +105,9 @@ added for it.
     outline-offset: 1px }` replaces every per-component `:focus-visible`
     declaration; those per-component outline rules are removed.
 
-`index.html` is in `governs:` only because the one inline-style sizing hooks
-(`style="display:none"`) are not geometry — no markup geometry change is
-expected; if a hardcoded size is found in markup during implementation it is
-moved to a token-driven CSS rule (implement-agent trues `governs:` up if
-`index.html` ends up untouched).
+No markup geometry change was needed: this restyle lives entirely in
+`client/app.css` and its tests, so `index.html` is not governed by this ADR
+(it carries no `ADR-0024` reference and was not modified in this run).
 
 ## Consequences
 
@@ -156,6 +153,6 @@ moved to a token-driven CSS rule (implement-agent trues `governs:` up if
 ## Traceability
 
 Every file in `governs:` must carry an `ADR: ADR-0024` comment near the top
-(native comment syntax; `index.html` via HTML comment). When a change removes
+(native comment syntax). When a change removes
 the last governed code, this ADR is marked `status: deleted` — the file itself is
 never removed; it is history.
