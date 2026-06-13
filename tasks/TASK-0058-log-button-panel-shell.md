@@ -2,8 +2,8 @@
 id: TASK-0058
 adr: ADR-0028
 evolution: 17
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0057]
 ---
 
@@ -73,5 +73,56 @@ TASK-0059.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/index.html` — `#log-btn` (log glyph + `.log-label` + empty `#log-count`
+  badge child, `aria-haspopup="dialog"` / `aria-controls="log-panel"` /
+  `aria-expanded="false"`) sits in `.content-head` immediately before
+  `#acct-btn`; `#acct-btn` stays last and keeps `margin-left:auto`. Inside
+  `.app`: a `#log-scrim` backdrop + `#log-panel` aside (`role="dialog"`,
+  `aria-label="Playback failure log"`, `aria-hidden="true"`) with a header
+  (`#log-clear`, `#log-close`) and an empty `#log-list`. ADR comment carries
+  `ADR-0028`.
+- `src/client/app.css` — `.log-btn` / `.log-count` / `.log-scrim` /
+  `.log-panel` / `.log-head` / `.log-title` / `.log-clear` / `.log-close` /
+  `.log-list` rules, structurally parallel to the `.acct-*` panel: fixed to the
+  right edge, full height, 320px wide (full-width `< 760px`), `--sur` bg,
+  inner-edge `--ln` border, off-screen via `transform: translateX(100%)`,
+  `is-open` slides in; `.log-count.is-empty` hides the badge via a CSS class.
+- `src/client/ui.js` — `EL` declares `lbtn/lcnt/lpnl/lscr/lcls/lclr/llst`,
+  resolved in `mkEL`; `setLog(open)` toggles `is-open` on panel+scrim and sets
+  `aria-expanded`/`aria-hidden` (mirrors `setAcct`); `onLogBtn`/`onLogClose`;
+  the shared document keydown handler (`onAcctKey`) closes the log panel when
+  open; listeners wired in `mkEL`; handlers exported on `window.IptvUi`.
+
+Non-obvious notes for reviewers / future tasks:
+
+- The button/panel/CSS/wiring shell already existed in the working tree from
+  earlier work on this branch; this task added the two required test files and
+  fixed two in-scope CSS regressions (below). The acceptance-criteria source was
+  verified against the specs/ADR and exercised by the new tests.
+- **themetoggle adjacency regression fixed (retry):** inserting `#log-btn` in
+  source order between `#theme-toggle` and `#acct-btn` (which the ACs/spec/ADR
+  require — "the log button first, the account button last") pushed the theme
+  toggle ~88px away from the account button, breaking the untouched
+  `themetoggle.test.js:31` invariant (`acct.left - toggle.right < 20`,
+  ADR-0019). Resolved purely in `app.css` with flex `order` on the right-edge
+  cluster: the markup keeps source order `theme-toggle → log-btn → acct-btn`
+  (ADR-0028, `log.test.js` still sees `#log-btn` left of `#acct-btn`), while
+  the cluster renders visually as `[log-btn] [theme-toggle] [acct-btn]` —
+  `.log-btn{order:1;margin-left:auto}`, `.thm-toggle{order:2}`,
+  `.acct-btn{order:3}`, each separated by the same `--s2` (ADR-0024) gap. The
+  log button owns the auto margin so the trio hugs the right edge on both
+  breakpoints; the theme toggle stays one `--s2` gap left of the account
+  button, satisfying ADR-0019. No test was edited; the layout was made to
+  satisfy both `themetoggle.test.js` (12/12) and `log.test.js` (9/9).
+- **CSS regression fixed:** `.log-count` shipped `border-radius: 9px` (a literal
+  rectangular radius), which `src/tests/unit/rhythm.test.js` (ADR-0024 token
+  contract) rejects. Changed to `border-radius: 50%` — the guard explicitly
+  permits `50%`, and for an 18px-tall badge a full round is the intended pill.
+- **UI independence test:** opening the account panel raises a full-viewport
+  scrim that legitimately intercepts a real click on `#log-btn`, so the
+  log+account independence UI assertion drives `window.IptvUi.setLog(true)`
+  rather than a click; the click-path independence is covered by the unit tier.
+- TASK-0059 fills `#log-list` rows + the `#log-count` badge number (via a new
+  `rndLog`) and the clear action; this task left those structurally empty.
