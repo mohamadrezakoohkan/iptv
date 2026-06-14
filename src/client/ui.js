@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -125,8 +125,39 @@ function mkFav(ch, favs) {
 }
 
 /**
+ * Build one now/next row HTML (ADR-0031): a mono marker + the program title,
+ * single-line ellipsized, title HTML-escaped. opts: { kind, prg } where kind is
+ * 'now' | 'nxt'. Returns '' when the program is absent so a missing now/next
+ * part is omitted entirely (never rendered as "null"/"undefined").
+ */
+function mkNnRow(opts) {
+  if (!opts.prg) return '';
+  const mark = opts.kind === 'now' ? 'NOW' : 'NEXT';
+  return '<span class="ch-nn-row ch-nn-' + opts.kind + '">'
+    + '<span class="ch-nn-mark">' + mark + '</span>'
+    + '<span class="ch-nn-title">' + escHtml(opts.prg.title) + '</span>'
+    + '</span>';
+}
+
+/**
+ * Build the now/next line HTML for a channel (ADR-0031), reading
+ * window.IptvEpg.getNowNext(ch.id) at render time. Returns '' when the EPG
+ * module is absent or no guide is loaded (caller guards with has()), and when
+ * both now and next are absent. Decorative within the card — never a click
+ * target (specs/epg.md §4, §7).
+ */
+function mkNowNext(ch) {
+  const nn  = window.IptvEpg.getNowNext(ch.id);
+  const row = mkNnRow({ kind: 'now', prg: nn.now }) + mkNnRow({ kind: 'nxt', prg: nn.next });
+  if (!row) return '';
+  return '<div class="ch-nn" aria-hidden="true">' + row + '</div>';
+}
+
+/**
  * Build a single channel card HTML string.
- * Reads ST.cur and ST.favs from window.IptvSt.
+ * Reads ST.cur and ST.favs from window.IptvSt; appends a now/next line
+ * (ADR-0031) only when a guide is loaded for the channel — guarded so the card
+ * still renders when the EPG module is absent (test isolation, specs/epg.md §4).
  * @param {Object} ch - Ch object
  */
 function mkCard(ch) {
@@ -134,6 +165,7 @@ function mkCard(ch) {
   const favs = st.favs;
   const cur  = st.cur;
   const active = (cur && String(cur.id) === String(ch.id)) ? ' ch-active' : '';
+  const nn = (window.IptvEpg && window.IptvEpg.has(ch.id)) ? mkNowNext(ch) : '';
   return '<div class="ch-card' + active + '" role="button" tabindex="0" data-id="' + ch.id + '">'
     + '<div class="ch-card-top">'
     + '<span class="ch-num">' + fmtNum(ch.num) + '</span>'
@@ -141,6 +173,7 @@ function mkCard(ch) {
     + mkFav(ch, favs)
     + '</div>'
     + '<span class="ch-name">' + ch.name + '</span>'
+    + nn
     + '</div>';
 }
 

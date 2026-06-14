@@ -2,7 +2,7 @@
 id: TASK-0064
 adr: ADR-0031
 evolution: 19
-status: pending
+status: done
 attempts: 0
 depends_on: [TASK-0062]
 ---
@@ -54,5 +54,44 @@ presence). Styling reads ADR-0024 spacing/sizing and ADR-0019 colour tokens.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/ui.js` — added `mkNnRow(opts)` (one NOW/NEXT row, returns `''`
+  when the program is absent) and `mkNowNext(ch)` (the whole `.ch-nn` line,
+  reading `window.IptvEpg.getNowNext(ch.id)` at render time, returns `''` when
+  both now and next are absent). `mkCard` appends the line only when
+  `window.IptvEpg && window.IptvEpg.has(ch.id)` — guarded so the card still
+  renders when the EPG module is absent (test isolation). Titles are
+  HTML-escaped via the existing `escHtml`. Added `ADR-0031` to the file's ADR
+  comment line.
+- `src/client/app.css` — added `.ch-nn` / `.ch-nn-row` / `.ch-nn-mark` /
+  `.ch-nn-title` plus the `.ch-nn-now`/`.ch-nn-nxt` modifiers. Reads ADR-0024
+  spacing tokens (`--s1`) and ADR-0019 colour tokens (`--acc`, `--tx`, `--dim`)
+  and the mono font (`--font-mono`); NOW marker uses `--acc`, NEXT title uses
+  `--dim` (dimmer). Titles ellipsize to one line. Added `ADR-0031` to the file
+  comment.
+- `src/tests/unit/epgui.test.js` (new) — 10 unit tests over `mkCard`: line
+  present with NOW/NEXT markers + titles from `getNowNext`, title escaping, the
+  line is `aria-hidden` and adds no second click target, graceful degradation
+  for a missing now/next/both, no line when the channel has no guide or the EPG
+  module is absent, and byte-identical markup between the module-absent and
+  guide-empty cases (R-0001: the assertions check actual rendered markup).
+- `src/tests/ui/epg.test.js` (new) — 3 Playwright tests booting demo mode
+  through the real footer login (the demo connect generates the synthetic guide
+  and re-renders the grid): demo cards show a NOW/NEXT line with real program
+  titles, the line is decorative (`aria-hidden`) and the card body still
+  selects+plays (`#now-info` updates, body reaches `is-play`), and every demo
+  card (31) carries a line.
+
+Non-obvious notes for reviewers:
+
+- The grid re-render after a guide arrives is already wired by ADR-0030
+  (`goEpg` → `loadEpg` → `onDone: rndGuide`); this task only adds the
+  presentational line to `mkCard`, so the now/next surfaces automatically as
+  guides fill in.
+- `onGridClick` does not re-render the grid on selection, so the card does not
+  gain `ch-active` purely from a click (it gains it on the next grid render).
+  The UI test verifies the click reached the select+play path via `#now-info`
+  and the `is-play` body phase instead — the acceptance criterion is that the
+  now/next line never steals the card's click target.
+- ADR-0031 `governs:` already lists all four touched files; no true-up needed.

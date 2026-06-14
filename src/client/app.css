@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -143,6 +143,17 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ch-fav:hover { color: var(--acc); }
 .ch-fav.on { color: var(--acc); }
 .ch-name { font: 500 12px/15px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Now/next line on the channel card (ADR-0031, specs/epg.md §4) — decorative
+   metadata below the channel name, present only when a guide is loaded. Reads
+   the ADR-0024 spacing/radius tokens and ADR-0019 colour tokens; markers use
+   the mono font like other card meta; titles ellipsize to one line; NEXT is
+   dimmer than NOW. No hard-coded magic colours/spacings. */
+.ch-nn { display: flex; flex-direction: column; gap: var(--s1); margin-top: var(--s1); }
+.ch-nn-row { display: flex; align-items: baseline; gap: var(--s1); min-width: 0; }
+.ch-nn-mark { font: 600 9px/1 var(--font-mono); letter-spacing: 0.08em; color: var(--dim); flex: none; }
+.ch-nn-title { font: 500 11px/14px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-nn-now .ch-nn-mark { color: var(--acc); }
+.ch-nn-nxt .ch-nn-title { color: var(--dim); }
 /* Contextual no-content placeholder (ADR-0022, specs/empty-states.md §2) —
    icon + title + body + optional action button, all on existing tokens. */
 .ch-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 56px 20px; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }
