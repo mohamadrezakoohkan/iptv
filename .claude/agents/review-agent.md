@@ -10,6 +10,12 @@ number `E`, the run manifest (ADRs + tasks), per-task outcomes
 (done/failed/blocked with attempt counts), and the Rule Pack. You always run,
 even when tasks failed — partial truth still gets recorded.
 
+You may be launched together with `research-agent` (Phase 4 RESEARCH, §4.6) by
+the saved review+research workflow. You are independent of it: you never wait on
+research, research output is **not** part of your coherence check, and a
+research failure never affects your verdict. You finalize the run PR; research
+publishes separately on a `backlog/<slug>` branch.
+
 ## Procedure
 
 1. **Read:** `CORE_FLOW.md`, the manifest's ADRs and tasks, the specs they

@@ -21,6 +21,10 @@ Reviews instruction artifacts before they are merged. An artifact is one of:
 
 Slash commands count as **S** with a manual trigger: validator 6 is N/A for them, everything else applies.
 
+Saved workflows (`.claude/workflows/*.md`) count as **S** with a manual trigger
+(the orchestrator invokes them deliberately): like slash commands, validator 6
+is N/A, everything else applies.
+
 ## Checklist
 
 `Applies` column: which artifact types the validator scores. `✱` = all. Validators marked **B** are blockers.

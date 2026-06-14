@@ -77,15 +77,29 @@ change — the orchestrator decides whether to fix and retry or record a
 | 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
 | 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block + (for the task exercising user-interactable behavior) committed demo recording + PR `### Demo` reference |
 | 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present; `### Demo` section confirmed — recording or `No demo — <reason>`) |
+| 4 RESEARCH (non-blocking, alongside REVIEW) | `research-agent` (opus) | E, run prompt, product context paths, Rule Pack | 3 candidate **product** features scored on demand / fit / differentiation (1–5 each, highest total wins), full research report content + structured winner returned to the orchestrator; commits nothing, spawns nothing |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
   on exhaustion: failure protocol, task `failed`, dependents `blocked`,
   continue with independent tasks.
-- Phase 4 always runs. Review discrepancies get one remediation round, then
-  are recorded as failures — never hidden. review-agent also surfaces the run's
-  **persistent** recovered near-misses (each with a `root-cause-tag`); you
-  record them in `failures/NEAR-MISSES.md` and auto-promote a tag to a rule once
-  it recurs ≥ 2 times (CORE_FLOW.md §5).
+- Phase 4 always runs. Once VALIDATE concludes for all tasks, you run the saved
+  review+research workflow (`.claude/workflows/`, CORE_FLOW.md §4.6): it spawns
+  `review-agent` (blocking) and `research-agent` (non-blocking) at the same
+  level and injects the Rule Pack into both. Review discrepancies get one
+  remediation round, then are recorded as failures — never hidden. review-agent
+  also surfaces the run's **persistent** recovered near-misses (each with a
+  `root-cause-tag`); you record them in `failures/NEAR-MISSES.md` and
+  auto-promote a tag to a rule once it recurs ≥ 2 times (CORE_FLOW.md §5).
+- Phase 4 RESEARCH is non-blocking (CORE_FLOW.md §4.6) and you own it
+  end-to-end on every build run — no human prompt needed. `research-agent`
+  (opus) proposes 3 next **product** features, scores them, and returns the
+  winner + the full report content; **you** then spawn `backlog-agent` with the
+  verbatim winner + report (research-agent never spawns it), which commits the
+  report at `docs/research/E<N>-<slug>.md` alongside its `BACKLOG.md` entry on a
+  `backlog/<slug>` PR. RESEARCH never gates REVIEW, PR finalization, or the Run
+  Report; a research failure is recorded for visibility only (Run Report line +
+  optional `research-miss` line in `failures/NEAR-MISSES.md`, **excluded** from
+  the §5 recurrence count) and never earns a rule or blocks the run.
 - ADR ↔ code traceability (CORE_FLOW.md §3): ADRs declare `governs:`, every
   governed code file carries an `ADR: ADR-NNNN` comment, and a change that
   removes a decision's last code marks its ADR `status: deleted` (the ADR
@@ -118,30 +132,38 @@ change — the orchestrator decides whether to fix and retry or record a
   non-UI change, harness runs, backlog runs) state `No demo — <reason>` in the
   `### Demo` section instead.
 - Finish every run with the Run Report (CORE_FLOW.md §6) — including the run
-  branch and PR URL.
+  branch and PR URL, plus the research outcome (winning feature + score +
+  backlog PR URL, or a recorded research miss). RESEARCH is non-blocking, so do
+  not delay the Run Report for it.
 - Outside the pipeline: `coreflow-agent` maintains the harness itself
   (CORE_FLOW.md §4.4) — it owns `CORE_FLOW.md`, this file, the agent
-  definitions, `.claude/skills/**`, templates, `.claude/settings.json`,
-  `.claude/hooks/**`, and `.github/workflows/validate-ai-instructions.yml`,
+  definitions, `.claude/skills/**`, `.claude/workflows/**` (saved Claude Code
+  workflows, e.g. the post-VALIDATE review+research fan-out), templates,
+  `.claude/settings.json`, `.claude/hooks/**`, and
+  `.github/workflows/validate-ai-instructions.yml`,
   and never touches product artifacts; it self-publishes its changes in a new
   worktree and commits, pushes, and opens a PR on a `harness/<slug>` branch
   (never to `main`). Also outside the pipeline:
   `backlog-agent` (CORE_FLOW.md §4.5) parks ideas as append-only entries in
-  `BACKLOG.md`, non-blocking and in parallel, and owns nothing else — it always
-  works in a new worktree and commits, pushes, and opens a PR for its entry
-  (never to `main`).
+  `BACKLOG.md` — and, when you hand it a research winner, the run's research
+  report at `docs/research/E<N>-<slug>.md` committed alongside the entry — and
+  owns nothing else; it is non-blocking and in parallel, always works in a new
+  worktree, and commits, pushes, and opens a PR for its entry (never to `main`).
 
 ## Directory map
 
 `docs/specs/` living specs (incl. required `docs/specs/project.md` with canonical
-build/test commands) · `docs/adrs/` decisions · `tasks/` work units with status
+build/test commands) · `docs/research/` next-feature research reports, one per
+run (research-agent produces, backlog-agent commits; created on first use) ·
+`docs/adrs/` decisions · `tasks/` work units with status
 front-matter · `failures/` failure records + `failures/NEAR-MISSES.md`
 (append-only persistent-recovered near-miss ledger) · `src/` product source and tests ·
 `CHANGELOG.md` numbered Evolution
 Log · `BACKLOG.md` parked ideas (backlog-agent, append-only, optional) ·
-`README.md` product doc · `.claude/agents/` the six subagents ·
+`README.md` product doc · `.claude/agents/` the seven subagents ·
 `.claude/skills/` invocation interfaces + the validate-ai-instructions
-checklist.
+checklist · `.claude/workflows/` saved Claude Code workflows the orchestrator
+invokes (e.g. the post-VALIDATE review+research fan-out).
 
 ## Agent skills
 
@@ -155,6 +177,7 @@ referring to a phase by name:
 | `/implement-agent` | 2 IMPLEMENT | one task (pass task ID + Rule Pack) |
 | `/validate-agent` | 3 VALIDATE | one task (pass task ID) |
 | `/review-agent` | 4 REVIEW | end of every run |
+| `/research` | 4 RESEARCH | non-blocking next-feature research, alongside REVIEW (auto-run every build run) |
 | `/coreflow` | harness | harness change instructions |
 | `/backlog-agent` | backlog | parking an idea for later in `BACKLOG.md` |
 

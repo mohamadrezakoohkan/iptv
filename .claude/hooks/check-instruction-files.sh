@@ -11,7 +11,7 @@ input="$(cat)"
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')"
 [ -n "$file_path" ] || exit 0
 
-pattern='SKILL\.md$|\.claude/agents/|\.claude/commands/|\.agents/skills/|\.cursor/rules/|CLAUDE\.md$|AGENTS\.md$|CORE_FLOW\.md$|\.claude/skills/|\.claude/hooks/'
+pattern='SKILL\.md$|\.claude/agents/|\.claude/commands/|\.agents/skills/|\.cursor/rules/|CLAUDE\.md$|AGENTS\.md$|CORE_FLOW\.md$|\.claude/skills/|\.claude/workflows/|\.claude/hooks/'
 
 if printf '%s' "$file_path" | grep -qE "$pattern"; then
   cat <<'JSON'
