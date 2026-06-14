@@ -2,8 +2,8 @@
 id: TASK-0062
 adr: ADR-0030
 evolution: 19
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -65,5 +65,43 @@ selectors (the data layer of ADR-0030).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched**
+
+- `src/client/epg.js` (new) — self-contained IIFE exposing `window.IptvEpg`,
+  mirroring `errlog.js` (ADR-0027): in-memory `EPG = {}` keyed by chId, the two
+  pure parsers, the store mutators (`set`/`setAll`/`clear`), the pure reads
+  (`get`/`has`/`count`), and the selectors (`getNowNext`/`getSched`). Carries
+  `// ADR: ADR-0030`.
+- `src/index.html` — loads `/epg.js` immediately after `/errlog.js` and before
+  `/ui.js`; ADR-0030 added to the top HTML-comment list.
+- `src/tests/unit/epg.test.js` (new) — 31 unit tests; loads the IIFE against a
+  fresh `window` via `new Function` (per the `errlog.test.js` pattern) so each
+  test gets an isolated store.
+
+**Non-obvious decisions**
+
+- **No `DOMParser` for XMLTV.** The unit suite runs under Vitest's default
+  `node` environment (no jsdom dependency, and introducing one is out of scope /
+  forbidden), so `parsXmltv` is a regex parser over `<programme …>…</programme>`
+  blocks rather than a DOM parse. It runs identically in the browser. This keeps
+  the data layer dependency-free and deterministically testable in Node.
+- **Base64 decode.** `parsXtEpg` decodes `title`/`description` only when the
+  value looks like base64 (`isB64`), using `decodeURIComponent(escape(atob(s)))`
+  for UTF-8 safety; non-base64 values pass through verbatim. `atob`/`escape`/
+  `decodeURIComponent` are globals in both the browser and Node 18+.
+- **`getNowNext` boundary.** `next` is computed from a lower bound of the current
+  program's `stop` (or `now` when nothing airs), so a program starting exactly at
+  `now` is reported as `now` and never doubles as its own `next`.
+- **Malformed-drop rule.** `isPrg` requires a non-empty string `chId`, finite
+  numeric `start`/`stop`, and `start < stop`; failing entries drop during parse
+  (CONVENTIONS §7). Every produced object conforms to `PRG_DEF`
+  (`chId/title/start/stop/desc/cat` with correct types). Xtream listings set
+  `cat: ''` (the short-EPG payload carries no category).
+
+**Traceability** — ADR-0030's `governs:` already listed all three touched files
+(`src/client/epg.js`, `src/index.html`, `src/tests/unit/epg.test.js`); no
+`governs:` change was required. `api.js` and `src/tests/int/epg.test.js` in that
+list belong to TASK-0063 (fetch wiring).
+
+**Tests** — `npx vitest run src/tests/unit/epg.test.js` → 31 passing; full unit
+suite `npx vitest run` → 693 passing (no regressions).
