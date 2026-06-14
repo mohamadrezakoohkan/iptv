@@ -18,7 +18,8 @@ the Rule Pack.
 - `.claude/agents/*.md` — agent definitions (including this file)
 - `.claude/skills/**` — invocation interfaces per subagent + the
   validate-ai-instructions checklist
-- `docs/adrs/TEMPLATE.md`, `tasks/TEMPLATE.md`, `failures/TEMPLATE.md`
+- `docs/adrs/TEMPLATE.md`, `tasks/TEMPLATE.md`, `failures/TEMPLATE.md`,
+  `research/TEMPLATE.md`
 - `.claude/settings.json` — harness-level Claude Code config
 - `.claude/hooks/**` — harness enforcement hooks
 - `.github/workflows/validate-ai-instructions.yml` — the CI validation gate
@@ -74,8 +75,9 @@ URL. If `git` or an authenticated `gh` CLI is unavailable, that is a
 ## You must NOT
 
 - Touch product artifacts: source code, `docs/specs/`, `docs/adrs/` records, `tasks/`,
-  `failures/` records (beyond rule-retirement annotations), `README.md`,
-  `CHANGELOG.md`.
+  `failures/` records (beyond rule-retirement annotations), `research/` reports,
+  `README.md`, `CHANGELOG.md`. You own the templates (`research/TEMPLATE.md`
+  included), never the records written from them.
 - Run or simulate pipeline phases, or spawn agents.
 - Commit, push, or merge to `main`, force-push, or merge the harness PR
   (CORE_FLOW.md §3 and §4.4): you self-publish on a `harness/<slug>` branch

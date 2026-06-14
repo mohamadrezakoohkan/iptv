@@ -35,9 +35,10 @@ Three properties the harness must always preserve:
 
 ## 2. Actors
 
-Seven actors: **one orchestrator + six subagents** — four pipeline phase
-agents, plus one harness maintainer and one backlog capturer that both run
-outside the pipeline.
+Eight actors: **one orchestrator + seven subagents** — four pipeline phase
+agents, one research scout that runs in parallel with the final pipeline phase,
+plus one harness maintainer and one backlog capturer that both run outside the
+pipeline.
 
 | Actor | Phase | May write | Must never |
 |---|---|---|---|
@@ -46,7 +47,8 @@ outside the pipeline.
 | **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
 | **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block, and (for the task that exercises user-interactable behavior) the committed demo recording + the PR `### Demo` reference (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
-| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `docs/specs/`, `docs/adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
+| **research-agent** | research (parallel with Phase 4, build runs only) | `research/RESEARCH-NNNN-*.md` on the run branch (the research report); commits and pushes it there (§4.6), and returns the winning feature for the orchestrator to route to `backlog-agent` | write `BACKLOG.md`, spawn any agent, change product code/tests/specs/ADRs/`CHANGELOG.md`/`README.md`, block or fail the run, or commit/push/merge to `main` |
+| **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the four templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `docs/specs/`, `docs/adrs/` records, `tasks/`, `failures/` records, `research/` reports, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
 | **backlog-agent** | backlog capture (outside the pipeline) | `BACKLOG.md` only — in its own dedicated worktree, where it commits, pushes, and opens the backlog PR (§4.5) | touch any other file (product or harness), run pipeline phases, spawn agents, block on any other work, commit/push/merge to `main`, or force-push |
 
 Git is part of the contract: **no actor — orchestrator included — ever commits
@@ -87,7 +89,9 @@ agents and never talk to the human.
 │   ├── TEMPLATE.md
 │   └── NEAR-MISSES.md    Append-only ledger of persistent recovered near-misses (orchestrator; created on first use)
 ├── src/                 Product source and tests (implement-agent writes)
-├── .claude/agents/      The six subagent definitions
+├── research/            Next-feature research reports, one per build run (research-agent writes; created on first use)
+│   └── TEMPLATE.md
+├── .claude/agents/      The seven subagent definitions
 └── .claude/skills/      Invocation interfaces (one per subagent) + the
                          validate-ai-instructions checklist
 ```
@@ -101,9 +105,11 @@ agents and never talk to the human.
 | Task | `TASK-NNNN` | global, max existing in `tasks/` + 1 (linked to its ADR via front-matter) |
 | Failure | `FAIL-NNNN` | global, max existing in `failures/` + 1 |
 | Rule | `R-NNNN` | mirrors the `FAIL-NNNN` that earned it |
+| Research report | `RESEARCH-NNNN` | global, max existing in `research/` + 1 |
 
 File names embed the ID: `docs/adrs/ADR-0001-<slug>.md`, `tasks/TASK-0001-<slug>.md`,
-`failures/FAIL-0001-<slug>.md`. Specs are not numbered: `docs/specs/project.md` plus
+`failures/FAIL-0001-<slug>.md`, `research/RESEARCH-0001-<slug>.md`. Specs are not
+numbered: `docs/specs/project.md` plus
 one `docs/specs/<feature-slug>.md` per feature area, each with front-matter
 `status: draft | current | superseded`.
 
@@ -397,8 +403,21 @@ Phase 2+3 per task   ┌─► implement-agent (task, rule pack, last failure re
                           + failure commit, task → failed,
                           dependents → blocked, continue others
                                         │
-Phase 4  REVIEW      review-agent: coherence check → CHANGELOG #E → README sync
-                                   → final commit + push → PR finalized
+          once all tasks concluded, the orchestrator launches Phase 4 and the
+          research phase as a parallel dynamic workflow (§4.2 Phase 4):
+                                        │
+            ┌───────────────────────────┴───────────────────────────┐
+            │ (in parallel)                                          │
+Phase 4  REVIEW                                       RESEARCH (non-blocking)
+review-agent: coherence check                research-agent: survey competitors +
+→ CHANGELOG #E → README sync                 app reviews → 3 candidate features →
+→ final commit + push → PR finalized         score → pick winner → commit
+            │                                RESEARCH-NNNN report on run branch
+            │                                → return winner
+            └───────────────────────────┬───────────────────────────┘
+                                        │  orchestrator routes the winner to
+                                        │  backlog-agent (§4.5); a research
+                                        │  failure is recorded, never fails the run
                                         │
                      Run Report to the human (§6)
 ```
@@ -474,6 +493,19 @@ never in the primary working tree. For each task:
    `failed`, mark tasks that depend on it `blocked`, and continue with the
    remaining independent tasks.
 
+**Phase 4 — REVIEW + RESEARCH (parallel dynamic workflow).** Once every task
+has concluded, the orchestrator runs Phase 4 and the research phase **in
+parallel** — a dynamic workflow (https://code.claude.com/docs/en/workflows) in
+which the orchestrator spawns both `review-agent` and `research-agent` in one
+batch (two Agent calls issued together, not sequentially) and collects both
+reports before writing the Run Report. The two are independent: review-agent
+finalizes the run's truth; research-agent scouts the product's next feature.
+Research is **non-blocking and never gates the run** — a research
+`PHASE-FAILURE` is recorded in the Run Report but never marks the run failed,
+never blocks review, and never holds up the human's merge decision. Research
+attaches **only to build runs**: harness runs (§4.4) and backlog runs (§4.5)
+never reach Phase 4, so they never trigger research.
+
 **Phase 4 — REVIEW.** Always runs, even if some tasks failed. Spawn
 `review-agent` with `E`, the manifest, per-task outcomes, and the Rule Pack.
 It verifies the run is coherent — specs match ADRs, ADRs match tasks, done
@@ -495,6 +527,29 @@ dispatches **one remediation round** through the standard implement→validate
 loop (fresh budget of 1 initial + 1 retry), then review re-checks once. Still
 discrepant → failure protocol; the discrepancy is recorded, not hidden.
 
+**RESEARCH (parallel with Phase 4).** Spawn `research-agent` with `E`, the run
+branch name, and the Rule Pack. It researches the **product** (never the
+harness) to find what to build next:
+1. reads `docs/specs/`, `BACKLOG.md`, and `CHANGELOG.md` so it knows the
+   product's current scope and excludes features already built or already
+   parked,
+2. surveys competitors and mines public app reviews for demanded features
+   (it has web-research tools for this),
+3. proposes exactly **3** candidate features to build next and scores each on
+   three dimensions — **(a) user demand / frequency**, **(b) product-fit /
+   alignment with current scope**, **(c) competitive differentiation**
+   (no build-effort dimension) — then picks the single highest-scoring winner,
+4. writes the research report `research/RESEARCH-NNNN-<slug>.md` (from
+   `research/TEMPLATE.md`) capturing all 3 candidates, their per-dimension
+   scores, the chosen winner, and source citations (competitors surveyed,
+   app-review sources), and commits + pushes it on the run branch,
+5. returns the winning feature to the orchestrator. **research-agent never
+   writes `BACKLOG.md`**: the orchestrator routes the returned winner to
+   `backlog-agent` (§4.5), which appends the entry and self-publishes its own
+   `backlog/<slug>` PR — one writer for `BACKLOG.md`. If research-agent reports
+   `PHASE-FAILURE`, the orchestrator records it in the Run Report and routes
+   nothing to backlog; the run still concludes normally.
+
 ### 4.3 Retry budget summary
 
 | Loop | Budget |
@@ -502,6 +557,7 @@ discrepant → failure protocol; the discrepancy is recorded, not hidden.
 | implement ↔ validate, per task | 1 initial attempt + 3 retries |
 | review remediation, per run | 1 round (1 attempt + 1 retry), then record failure |
 | spec, review themselves | no retries — a phase that cannot complete is a terminal failure |
+| `research-agent` (parallel with review) | no retries — non-blocking; a failed research pass is recorded in the Run Report and never fails or blocks the run (§4.6) |
 | `coreflow-agent` (harness path) | no retries — a coherent change self-publishes on a `harness/<slug>` branch (§4.4); a failed harness change is reported, recorded, and left to the human |
 | `backlog-agent` (backlog path) | no retries — a failed capture is reported and left to the human |
 
@@ -511,7 +567,7 @@ Harness prompts bypass the pipeline entirely: the orchestrator spawns
 `coreflow-agent` with the human instruction verbatim plus the Rule Pack, and
 relays its report. The agent owns the whole harness surface — `CORE_FLOW.md`
 (canonical), `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the
-three templates, `.claude/settings.json`, `.claude/hooks/**`,
+four templates, `.claude/settings.json`, `.claude/hooks/**`,
 `.github/workflows/validate-ai-instructions.yml` — and nothing else: it never
 touches product artifacts and never runs pipeline phases.
 
@@ -586,6 +642,47 @@ it never commits, pushes, or merges to `main`, and never force-pushes. Merging
 the backlog PR is the human's decision. If `git` or an authenticated `gh` CLI
 is unavailable, or `git fetch origin main` fails, that is a `PHASE-FAILURE` —
 the backlog path does not fall back to an uncommitted write.
+
+### 4.6 The research phase (research-agent, parallel with review)
+
+The research phase runs at the **end of every build run**, launched together
+with Phase 4 as a parallel dynamic workflow
+(https://code.claude.com/docs/en/workflows): once validate-agent has concluded
+the last task, the orchestrator spawns `review-agent` and `research-agent` in
+one batch and awaits both. Research is **non-blocking**: nothing in Phase 4
+waits on it, and a research failure never fails or blocks the run. It attaches
+only to build runs — harness runs (§4.4) and backlog runs (§4.5) never reach
+this stage.
+
+`research-agent` scouts the **product's** next feature, never the harness:
+
+1. **Read first.** It reads `docs/specs/` (current product scope), `BACKLOG.md`
+   (already-parked ideas), and `CHANGELOG.md` (already-shipped features), and
+   **excludes** any candidate that is already built or already parked — dedup is
+   mandatory.
+2. **Survey.** Using its web-research tools it surveys competitor products and
+   mines public app reviews for demanded-but-missing features.
+3. **Propose, score, pick.** It proposes exactly **3** candidate features and
+   scores each on three dimensions — **(a) user demand / frequency**,
+   **(b) product-fit / alignment**, **(c) competitive differentiation** (no
+   build-effort dimension) — then selects the single highest-scoring winner.
+4. **Persist the report.** It writes `research/RESEARCH-NNNN-<slug>.md` from
+   `research/TEMPLATE.md` — all 3 candidates, per-dimension scores, the winner,
+   and source citations — then commits and pushes it on the run branch
+   (`E<N> research: <slug>`), explicit push, never to `main`, never force-push.
+5. **Hand off the winner.** It **returns** the winning feature to the
+   orchestrator and stops. It never writes `BACKLOG.md` and never spawns another
+   agent; the orchestrator routes the winner to `backlog-agent` (§4.5), the sole
+   writer of `BACKLOG.md`, which appends the entry and self-publishes its own
+   `backlog/<slug>` PR.
+
+The research sub-agent uses the **opus** model for maximum survey coverage (set
+in its agent definition). If `research-agent` reports `PHASE-FAILURE` (e.g. its
+web-research tools are unavailable), the orchestrator records it in the Run
+Report and routes nothing to backlog; the run concludes normally regardless.
+Because the human approved this phase's design once, the orchestrator may
+thereafter own research end-to-end and run it every build run without asking the
+human again.
 
 ## 5. Failure → Rule protocol
 
@@ -674,8 +771,11 @@ be edited or retired by explicit human instruction.
 
 After Phase 4 the orchestrator reports to the human, in this order: evolution
 number and one-line outcome; the run branch and PR URL; ADRs created; tasks
-done / failed / blocked; rules earned (verbatim); CHANGELOG/README updates;
-anything requiring a human decision — merging the PR always is. The report is
+done / failed / blocked; rules earned (verbatim); CHANGELOG/README updates; the
+research outcome (the `RESEARCH-NNNN` report, the winning next-feature, and the
+backlog PR it was routed to — or a one-line note if research reported
+`PHASE-FAILURE`); anything requiring a human decision — merging the PR always
+is. The report is
 conversation output, not a file — the files already hold the durable record.
 
 ## 7. Invariants
