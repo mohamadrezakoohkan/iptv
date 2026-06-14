@@ -2,8 +2,8 @@
 id: TASK-0066
 adr: ADR-0031
 evolution: 19
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0064, TASK-0065]
 ---
 
@@ -57,5 +57,33 @@ E19 adds user-interactable behavior, so the run must carry a demo recording
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks. `src/tests/ui/epg-demo.test.js` carries `// ADR: ADR-0031`._
+Files touched:
+
+- `src/tests/ui/epg-demo.test.js` (new) — the demo recording spec; carries
+  `// ADR: ADR-0031` near the top. Already listed in ADR-0031 `governs:`
+  (seeded by spec-agent), so no traceability true-up was needed.
+
+Notes for reviewers / validate-agent:
+
+- Pattern mirrors `src/tests/ui/log-demo.test.js` / `grid-align-demo.test.js`:
+  a per-spec `chromium` browser context with `recordVideo` on (so the global
+  UI suite stays fast and records nothing), `playwright.config.js` left
+  untouched. The arc runs serially (`test.describe.configure({ mode: 'serial' })`)
+  inside one recorded context; `afterAll` resolves the auto-named video path
+  before closing the page, then closes the context to flush the `.webm` and
+  renames it to the stable artifact path.
+- Deterministic artifact: `test-results/e19-epg-demo.webm` (run-artifacts dir).
+  Verified produced (~465 KB) on attempt 1; all 7 arc steps pass under
+  `npx playwright test`.
+- Arc: boot (fresh load, no guide/cards yet) → prepare (real footer demo
+  connect; 31 cards + 31 now/next lines, synthetic guide) → interact (NOW/NEXT
+  line with titles; expand reveals schedule rows with the airing program marked
+  and asserts no playback started — playback-safe; collapse) → revert (in-app
+  teardown: stop playback, clear cur/search/filter, re-render to idle) → stop
+  (assert the recorder is active).
+- The whole arc drives production code only; no DOM injection or capability
+  shimming was needed (unlike log-demo, which restores HLS capability) because
+  the EPG behavior is purely presentational and exercised by genuine clicks.
+- Repo is **private**, so the PR `### Demo` reference must be a `blob`-URL
+  clickable link to the committed `.webm` on the run branch (CORE_FLOW.md §3),
+  not an inline raw image — for validate-agent to write on PASS.
