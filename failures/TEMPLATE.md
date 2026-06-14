@@ -39,4 +39,8 @@ recovered near-miss** is NOT a full record: it is one row appended to
 `failures/NEAR-MISSES.md` with evolution, phase, related IDs, a one-line
 symptom, its `root-cause-tag`, and the one-line fix (§5). A **transient**
 recovered failure (network blip, timeout, in-tolerance live-network sampling)
-is not recorded at all.
+is not recorded at all. A **Phase 4 RESEARCH miss** (§4.6) is NOT a terminal
+failure and never uses this template: it is recorded for visibility only as a
+`research-miss` line in the dedicated **Research misses** section of
+`failures/NEAR-MISSES.md`, carries **no** `root-cause-tag`, and is **excluded**
+from the §5 recurrence count — it never earns a rule.

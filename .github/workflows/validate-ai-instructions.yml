@@ -7,6 +7,7 @@ on:
       - '.claude/agents/**'
       - '.claude/commands/**'
       - '.claude/skills/**'
+      - '.claude/workflows/**'
       - '.agents/skills/**'
       - '.cursor/rules/**'
       - 'CLAUDE.md'
@@ -46,7 +47,7 @@ jobs:
             1. Read the checklist at ${{ env.VALIDATOR_SKILL_PATH }}. It is the
                single source of truth — do not invent or reorder validators.
             2. List the changed instruction files:
-               git diff --name-only --diff-filter=d 'origin/${{ github.base_ref }}...HEAD' -- '**/SKILL.md' '.claude/agents/**' '.claude/commands/**' '.claude/skills/**' '.agents/skills/**' '.cursor/rules/**' 'CLAUDE.md' '**/CLAUDE.md' 'AGENTS.md' 'CORE_FLOW.md'
+               git diff --name-only --diff-filter=d 'origin/${{ github.base_ref }}...HEAD' -- '**/SKILL.md' '.claude/agents/**' '.claude/commands/**' '.claude/skills/**' '.claude/workflows/**' '.agents/skills/**' '.cursor/rules/**' 'CLAUDE.md' '**/CLAUDE.md' 'AGENTS.md' 'CORE_FLOW.md'
             3. Classify each file (S, A, or R) and score every applicable
                validator 0-2, exactly as the skill's procedure describes,
                including reading sibling artifacts for validators 1 and 15.

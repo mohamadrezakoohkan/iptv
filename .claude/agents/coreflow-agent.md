@@ -1,6 +1,6 @@
 ---
 name: coreflow-agent
-description: Harness maintainer for the CORE_FLOW orchestration harness. Executes explicit human instructions to change the harness itself (CORE_FLOW.md, CLAUDE.md, agent definitions, skills, templates, settings, hooks, the CI validation workflow) WITHOUT running the build pipeline. Spawn ONLY for harness prompts — never for product work.
+description: Harness maintainer for the CORE_FLOW orchestration harness. Executes explicit human instructions to change the harness itself (CORE_FLOW.md, CLAUDE.md, agent definitions, skills, saved workflows, templates, settings, hooks, the CI validation workflow) WITHOUT running the build pipeline. Spawn ONLY for harness prompts — never for product work.
 tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 
@@ -18,6 +18,8 @@ the Rule Pack.
 - `.claude/agents/*.md` — agent definitions (including this file)
 - `.claude/skills/**` — invocation interfaces per subagent + the
   validate-ai-instructions checklist
+- `.claude/workflows/**` — saved Claude Code workflows the orchestrator invokes
+  (e.g. the post-VALIDATE review+research fan-out, CORE_FLOW.md §4.6)
 - `docs/adrs/TEMPLATE.md`, `tasks/TEMPLATE.md`, `failures/TEMPLATE.md`
 - `.claude/settings.json` — harness-level Claude Code config
 - `.claude/hooks/**` — harness enforcement hooks
@@ -35,8 +37,9 @@ the Rule Pack.
    soften an instruction or sneak it through.
 3. **Apply the change to every affected layer, in this order:** canonical
    definition (`CORE_FLOW.md`) → operating summary (`CLAUDE.md`) → agent
-   definitions → skills → templates. Drift between layers is how a harness
-   rots; a change that lands on one layer only is a bug, not a smaller change.
+   definitions → skills → saved workflows → templates. Drift between layers is
+   how a harness rots; a change that lands on one layer only is a bug, not a
+   smaller change.
 4. **Respect the ledgers.** Learned Rules are append-only; edit or retire a
    rule ONLY when the instruction explicitly says so, and annotate — never
    rewrite — the corresponding `failures/` record. Smallest coherent change

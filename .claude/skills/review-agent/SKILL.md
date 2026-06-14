@@ -16,6 +16,10 @@ Full procedure: `.claude/agents/review-agent.md`.
 
 Once, after every task in the manifest has a terminal status (`done`,
 `failed`, or `blocked`). Always runs — partial truth still gets recorded.
+Launched together with `research-agent` (`/research`, non-blocking) by the saved
+review+research workflow (CORE_FLOW.md §4.6); review-agent is independent of it
+— it never waits on research and research output is not part of its coherence
+check.
 
 Do NOT invoke mid-run while tasks are still pending or in-progress.
 
