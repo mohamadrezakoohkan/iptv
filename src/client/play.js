@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0027, ADR-0028
 /* global window */
 
 'use strict';
@@ -56,9 +56,16 @@ function updChip(eng) {
 }
 
 // ---------------------------------------------------------------------------
-// onEngErr — shared fatal handler: set ERR, teardown, re-render overlay
+// onEngErr — shared fatal handler: capture the failure, set ERR, teardown,
+// re-render overlay. The single capture site for the playback-failure log
+// (ADR-0027): records exactly one entry for the failed channel (ST.cur) before
+// the engine is torn down. Guarded like the IptvUi reads so play.js still works
+// when IptvErrLog is absent (test isolation). No success path reaches here, so
+// only failures are ever logged.
 // ---------------------------------------------------------------------------
 function onEngErr(msg) {
+  if (window.IptvErrLog) window.IptvErrLog.add(window.IptvErrLog.mkEntry(window.IptvSt.ST.cur, msg));
+  if (window.IptvUi && window.IptvUi.rndLog) window.IptvUi.rndLog();
   window.IptvSt.setErr(msg);
   if (window.IptvSt.ST.phase !== 'ERR') window.IptvSt.go('ERR');
   stopPlay();

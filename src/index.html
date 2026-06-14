@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023, ADR-0027, ADR-0028 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,6 +52,19 @@
             <svg class="thm-ico thm-moon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5z" fill="currentColor"/>
             </svg>
+          </button>
+          <!-- log button (ADR-0028) — immediately before #acct-btn so the pair sits at the right edge; #acct-btn keeps margin-left:auto -->
+          <button type="button" class="log-btn" id="log-btn" aria-haspopup="dialog" aria-controls="log-panel" aria-expanded="false">
+            <svg class="log-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/>
+              <line x1="3" y1="12" x2="3.01" y2="12"/>
+              <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span class="log-label">Log</span>
+            <span class="log-count is-empty" id="log-count" aria-hidden="true"></span>
           </button>
           <button type="button" class="acct-btn" id="acct-btn" aria-haspopup="dialog" aria-controls="acct-panel" aria-expanded="false">
             <svg class="acct-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -123,6 +136,16 @@
         </div>
       </div>
     </footer>
+    <!-- playback failure log scrim + slide-in panel (ADR-0028), parallel to the account panel -->
+    <div class="log-scrim" id="log-scrim"></div>
+    <aside class="log-panel" id="log-panel" role="dialog" aria-label="Playback failure log" aria-hidden="true">
+      <div class="log-head">
+        <span class="log-title">Playback log</span>
+        <button type="button" class="log-clear" id="log-clear">Clear</button>
+        <button type="button" class="log-close" id="log-close" aria-label="Close playback log panel">&#10005;</button>
+      </div>
+      <div class="log-list" id="log-list"></div>
+    </aside>
     <div class="acct-scrim" id="acct-scrim"></div>
     <aside class="acct-panel" id="acct-panel" role="dialog" aria-label="Accounts" aria-hidden="true">
       <div class="acct-head">
@@ -145,6 +168,7 @@
   <script src="/api.js"></script>
   <script src="/st.js"></script>
   <script src="/srch.js"></script>
+  <script src="/errlog.js"></script>
   <script src="/play.js"></script>
   <script src="/empty.js"></script>
   <script src="/ui.js"></script>

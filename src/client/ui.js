@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -42,6 +42,13 @@ const EL = {
   acon: null,   // #acct-conn connected block (ADR-0014)
   apst: null,   // #acct-psts community presets list (ADR-0016)
   thm:  null,   // #theme-toggle sun/moon switch (ADR-0019)
+  lbtn: null,   // #log-btn nav button (ADR-0028)
+  lcnt: null,   // #log-count badge (ADR-0028)
+  lpnl: null,   // #log-panel aside (ADR-0028)
+  lscr: null,   // #log-scrim backdrop (ADR-0028)
+  lcls: null,   // #log-close button (ADR-0028)
+  lclr: null,   // #log-clear button (ADR-0028)
+  llst: null,   // #log-list container (ADR-0028)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -316,12 +323,118 @@ function onAcctClose() {
 }
 
 // ---------------------------------------------------------------------------
-// onAcctKey — Escape keydown closes the panel only when it is open
+// onAcctKey — Escape keydown closes whichever slide-in panel is open. The
+// single document keydown handler covers both the account panel (ADR-0014) and
+// the log panel (ADR-0028); each is an independent presentational toggle.
 // ---------------------------------------------------------------------------
 function onAcctKey(evt) {
   if (evt.key !== 'Escape') return;
-  if (!EL.apnl || !EL.apnl.classList.contains('is-open')) return;
-  setAcct(false);
+  if (EL.apnl && EL.apnl.classList.contains('is-open')) setAcct(false);
+  if (EL.lpnl && EL.lpnl.classList.contains('is-open')) setLog(false);
+}
+
+// ---------------------------------------------------------------------------
+// setLog — set log panel open/closed presentational state (ADR-0028). No ST
+// phase, no boolean flag (CONVENTIONS §6): the is-open class on panel + scrim
+// plus the aria attributes are the single source of truth (mirrors setAcct).
+// ---------------------------------------------------------------------------
+function setLog(open) {
+  if (!EL.lpnl || !EL.lscr || !EL.lbtn) return;
+  EL.lpnl.classList.toggle('is-open', open);
+  EL.lscr.classList.toggle('is-open', open);
+  EL.lbtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  EL.lpnl.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+// ---------------------------------------------------------------------------
+// onLogBtn — log button click: toggle the panel based on its current is-open
+// ---------------------------------------------------------------------------
+function onLogBtn() {
+  if (!EL.lpnl) return;
+  setLog(!EL.lpnl.classList.contains('is-open'));
+}
+
+// ---------------------------------------------------------------------------
+// onLogClose — close button / scrim click: close the log panel
+// ---------------------------------------------------------------------------
+function onLogClose() {
+  setLog(false);
+}
+
+// ---------------------------------------------------------------------------
+// fmtLogTime — pure: a short local clock time for a failure entry's `at`
+// timestamp (ADR-0028). Falls back to '' for a missing/invalid stamp so a
+// malformed entry never throws during render.
+// ---------------------------------------------------------------------------
+function fmtLogTime(at) {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString();
+}
+
+// ---------------------------------------------------------------------------
+// mkLogRow — pure: build one failure-log row HTML from an ErrEntry (ADR-0028):
+// the channel name (+ number when present) as the primary line, the engine
+// detail as a dimmed secondary line, and the failure time. All entry-derived
+// text is HTML-escaped (entries carry channel names / engine tokens).
+// ---------------------------------------------------------------------------
+function mkLogRow(entry) {
+  const num   = (entry.num === 0 || entry.num) ? '#' + escHtml(fmtNum(entry.num)) + ' ' : '';
+  const name  = escHtml(entry.name);
+  const dtl   = escHtml(entry.detail);
+  const time  = escHtml(fmtLogTime(entry.at));
+  return '<div class="log-row">'
+    + '<div class="log-row-head">'
+    + '<span class="log-row-name">' + num + name + '</span>'
+    + '<span class="log-row-time">' + time + '</span>'
+    + '</div>'
+    + '<span class="log-row-detail">' + dtl + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndLog — render the log button's count badge and the panel's entry list from
+// window.IptvErrLog (ADR-0028): the badge shows count() and gets the is-empty
+// class (hidden, CSS §10) when zero, with the count folded into the button's
+// accessible name (aria-label, not colour-only); the list shows one row per
+// list() entry newest-first, or a single calm empty-state placeholder when the
+// log is empty. Guarded to no-op when IptvErrLog is absent (test isolation),
+// mirroring the existing guarded global reads. Called on init, after every
+// capture (the play.js onEngErr hook), and after clear().
+// ---------------------------------------------------------------------------
+function rndLog() {
+  if (!window.IptvErrLog) return;
+  const n = window.IptvErrLog.count();
+  if (EL.lcnt) {
+    EL.lcnt.textContent = String(n);
+    EL.lcnt.classList.toggle('is-empty', n === 0);
+  }
+  if (EL.lbtn) {
+    EL.lbtn.setAttribute('aria-label', n === 0
+      ? 'Log, no playback failures'
+      : 'Log, ' + n + (n === 1 ? ' playback failure' : ' playback failures'));
+  }
+  if (!EL.llst) return;
+  if (n === 0) {
+    EL.llst.innerHTML = '<p class="log-empty">No playback failures this session.</p>';
+    return;
+  }
+  const entries = window.IptvErrLog.list();
+  let html = '';
+  for (let i = 0; i < entries.length; i += 1) {
+    html += mkLogRow(entries[i]);
+  }
+  EL.llst.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// onLogClear — Clear button: empty the failure log (IptvErrLog.clear) and
+// re-render so the panel falls back to the empty state and the badge hides
+// (ADR-0028). Guarded so it no-ops when the log module is absent.
+// ---------------------------------------------------------------------------
+function onLogClear() {
+  if (window.IptvErrLog) window.IptvErrLog.clear();
+  rndLog();
 }
 
 // ---------------------------------------------------------------------------
@@ -589,6 +702,13 @@ function mkEL() {
   EL.acon  = document.getElementById('acct-conn');
   EL.apst  = document.getElementById('acct-psts');
   EL.thm   = document.getElementById('theme-toggle');
+  EL.lbtn  = document.getElementById('log-btn');
+  EL.lcnt  = document.getElementById('log-count');
+  EL.lpnl  = document.getElementById('log-panel');
+  EL.lscr  = document.getElementById('log-scrim');
+  EL.lcls  = document.getElementById('log-close');
+  EL.lclr  = document.getElementById('log-clear');
+  EL.llst  = document.getElementById('log-list');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
@@ -605,10 +725,15 @@ function mkEL() {
   if (EL.abtn) EL.abtn.addEventListener('click', onAcctBtn);
   if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
   if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
-  if (EL.apnl) document.addEventListener('keydown', onAcctKey);
+  if (EL.apnl || EL.lpnl) document.addEventListener('keydown', onAcctKey);
   if (EL.alst) EL.alst.addEventListener('click', onAcctList);
   if (EL.apst) EL.apst.addEventListener('click', onPstList);
   if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
+  if (EL.lbtn) EL.lbtn.addEventListener('click', onLogBtn);
+  if (EL.lcls) EL.lcls.addEventListener('click', onLogClose);
+  if (EL.lscr) EL.lscr.addEventListener('click', onLogClose);
+  if (EL.lclr) EL.lclr.addEventListener('click', onLogClear);
+  rndLog();
 }
 
 // ---------------------------------------------------------------------------
@@ -1119,4 +1244,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog };

@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -213,10 +213,15 @@ body.is-load .ch-section { opacity: 0.4; pointer-events: none; }
 body.is-err .player-wrap { display: none; }
 
 /* Sun/moon theme toggle (top-right, immediately left of the account button) — ADR-0019.
-   margin-left:auto anchors the top-right cluster; the adjacent .acct-btn rule
-   below resets its own auto margin to a fixed gap so the pair stays together
-   at the right edge on both breakpoints. */
-.thm-toggle { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; }
+   The right-edge cluster is theme-toggle + log button + account button. The log
+   button ships in source order between the toggle and the account button
+   (ADR-0028 markup), but the toggle must stay immediately adjacent to the
+   account button (ADR-0019). flex `order` therefore reorders the cluster
+   visually to [log-btn] [theme-toggle] [acct-btn]: the log button floats to the
+   left, the toggle sits the same fixed gap left of the account button as
+   before. The visually-leftmost cluster member (.log-btn) owns margin-left:auto
+   to push the whole cluster to the right edge on both breakpoints. */
+.thm-toggle { order: 2; margin-left: var(--s2); flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; }
 .thm-toggle:hover { border-color: var(--dim); color: var(--tx); }
 .thm-ico { width: 16px; height: 16px; flex: none; }
 /* Show one glyph at a time: moon in dark (default), sun in light. The is-light
@@ -227,11 +232,11 @@ body.is-err .player-wrap { display: none; }
 .thm-toggle.is-light .thm-sun { display: block; }
 .thm-toggle.is-light .thm-moon { display: none; }
 
-/* Account nav button (right edge of content-head) — ADR-0014 */
-.acct-btn { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; max-width: 180px; padding: 0 11px; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--tx); cursor: pointer; font: 500 12px/1 var(--font-ui); }
-/* When the theme toggle precedes it, the toggle owns the auto margin; the
-   account button sits a fixed gap to its right (keeps both at the right edge). */
-.thm-toggle + .acct-btn { margin-left: 8px; }
+/* Account nav button (right edge of content-head) — ADR-0014.
+   Last in the visual cluster (order:3) and last in the head; the log button
+   owns the auto margin, so the account button sits a fixed --s2 gap to the
+   right of the theme toggle (keeps the trio together at the right edge). */
+.acct-btn { order: 3; margin-left: var(--s2); flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; max-width: 180px; padding: 0 11px; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--tx); cursor: pointer; font: 500 12px/1 var(--font-ui); }
 .acct-btn:hover { border-color: var(--dim); }
 .acct-ico { width: 16px; height: 16px; flex: none; color: var(--dim); }
 .acct-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -277,7 +282,40 @@ body.is-err .player-wrap { display: none; }
 .acct-psts { display: flex; flex-direction: column; gap: 6px; }
 .acct-row.acct-pst { padding-right: 12px; }
 
+/* Log button (in content-head, immediately before #acct-btn in source) — ADR-0028.
+   Mirrors .acct-btn's sizing/border/focus. It is the visually-leftmost member
+   of the right-edge cluster (order:1) and owns margin-left:auto, pushing the
+   whole [log] [toggle] [acct] cluster to the right edge while leaving the theme
+   toggle immediately adjacent to the account button (ADR-0019). */
+.log-btn { order: 1; margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--tx); cursor: pointer; font: 500 12px/1 var(--font-ui); }
+.log-btn:hover { border-color: var(--dim); }
+.log-ico { width: 16px; height: 16px; flex: none; color: var(--dim); }
+.log-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-count { flex: none; min-width: 18px; height: 18px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--live); color: #fff; font: 600 10px/1 var(--font-mono); }
+.log-count.is-empty { display: none; }
+
+/* Log panel scrim + right slide-in panel — ADR-0028, parallel to .acct-* */
+.log-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; visibility: hidden; z-index: 40; transition: opacity 200ms ease, visibility 200ms ease; }
+.log-scrim.is-open { opacity: 1; visibility: visible; }
+.log-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 100%; background: var(--sur); border-left: 1px solid var(--ln); z-index: 50; display: flex; flex-direction: column; gap: 12px; padding: 16px; transform: translateX(100%); transition: transform 220ms ease; }
+.log-panel.is-open { transform: translateX(0); }
+.log-head { display: flex; align-items: center; gap: 10px; flex: none; }
+.log-title { flex: 1; min-width: 0; font: 700 13px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--tx); }
+.log-clear { flex: none; height: 30px; padding: 0 11px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; font: 500 12px/1 var(--font-ui); }
+.log-clear:hover { border-color: var(--dim); color: var(--tx); }
+.log-close { width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; font-size: 13px; line-height: 1; }
+.log-close:hover { border-color: var(--dim); color: var(--tx); }
+.log-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--ln) transparent; }
+.log-row { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); }
+.log-row-head { display: flex; align-items: baseline; gap: 8px; }
+.log-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px/1.3 var(--font-ui); color: var(--tx); }
+.log-row-time { flex: none; font: 500 10px/1 var(--font-mono); color: var(--dim); }
+.log-row-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11px/1.3 var(--font-mono); color: var(--dim); }
+.log-empty { margin: 0; padding: 24px 8px; text-align: center; font: 400 12px/1.5 var(--font-ui); color: var(--dim); }
+
 @media (max-width: 760px) {
   .acct-panel { width: 100%; }
   .acct-btn .acct-label { display: none; }
+  .log-panel { width: 100%; }
+  .log-btn .log-label { display: none; }
 }
