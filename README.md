@@ -150,3 +150,6 @@ command.
 
 See `CORE_FLOW.md` for how this project is built, `CHANGELOG.md` for the full
 evolution history, and `docs/adrs/` for every architecture decision.
+`docs/MEMORY.md` is the product's durable project memory — the cross-cutting
+facts, identities, and rationale not derivable from the source or git history
+that any contributor (human or AI) should consult when working on the product.
