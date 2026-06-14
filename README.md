@@ -21,6 +21,12 @@ Beside the account button is a **Log** button that opens a slide-in
 recorded there (only failures — successful plays are never logged), so you can
 see at a glance which channels would not play and why.
 
+Each channel card also carries a built-in **program guide (EPG)**: a now/next
+line shows what is on now and next, and an expand control reveals that channel's
+upcoming schedule — sourced from the Xtream short-EPG endpoint on the Xtream
+path and an XMLTV guide (matched per channel by `tvg-id`) on the M3U path,
+fetched best-effort through the same proxy.
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
@@ -99,6 +105,17 @@ command.
   actionable placeholder that explains *why* it is empty (no search matches,
   empty category, no favourites yet, or a source with no channels) and offers a
   one-tap way out where one exists (Clear search, Browse all channels).
+- **Program guide (EPG)** — each channel card surfaces what is on **now and
+  next** (a NOW/NEXT line below the channel name) plus a keyboard-focusable
+  **expand control** that reveals that channel's upcoming schedule (local-time
+  range + title + optional category, the airing program marked) without
+  starting playback. Guide data is fetched best-effort after connect through
+  the existing proxy — the Xtream short-EPG endpoint
+  (`get_simple_data_table`) per channel on the Xtream path, an XMLTV guide
+  matched by each entry's `tvg-id` on the M3U path, and a synthetic guide in
+  demo mode — and is in-memory and session-scoped (not persisted). A channel
+  with no loaded guide shows neither the now/next line nor an expand control,
+  so cards never break or gain empty placeholders.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).

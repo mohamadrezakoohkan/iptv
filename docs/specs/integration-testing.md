@@ -39,6 +39,22 @@ the integration tests, never scattered.
 | Live format | raw MPEG-TS (`allowed_output_formats: ["ts"]`); `.m3u8` requests return 405 |
 | Stream URL  | `<portal>/live/<user>/<pass>/<stream_id>.ts`, 302-redirects to a tokenized URL on another host |
 
+### EPG tier (XMLTV guide reference)
+
+| Name          | Value                                              |
+|---------------|----------------------------------------------------|
+| XMLTV guide   | `https://i.mjh.nz/PlutoTV/us.xml`                  |
+| Expected host | `i.mjh.nz`                                         |
+| Expected body | XML containing `<programme>` elements              |
+| Used by       | `src/tests/int/epg.test.js` (EPG over the live proxy) |
+
+A live, well-populated public XMLTV mirror (matthuisman.nz PlutoTV US),
+used to exercise the M3U-path EPG: fetch the guide through the proxy and
+parse it with `parsXmltv`. The Xtream-path EPG is exercised against the
+personal Xtream portal above via `get_simple_data_table`. Like every other
+reference endpoint, the URL is declared **once** as a constant in the
+integration tests (`src/tests/int/epg.test.js`), never scattered.
+
 This is the project owner's **personal testing environment**, explicitly
 provided for integration testing. Credentials are declared once as
 constants in the integration tests. Behavior under test for this tier:
