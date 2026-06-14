@@ -2,7 +2,7 @@
 id: TASK-0061
 adr: ADR-0029
 evolution: 18
-status: pending
+status: done
 attempts: 0
 depends_on: []
 ---
@@ -60,8 +60,38 @@ the harness-owned files (`CLAUDE.md`, `CORE_FLOW.md`) are touched.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `docs/MEMORY.md` (new) — the durable product-project memory file. Top-level
+  `# Product project memory` heading; prose header stating it is durable
+  product-project memory for human or AI contributors to consult; an explicit
+  boundary table distinguishing what belongs here vs. `docs/specs/`, `docs/adrs/`,
+  `README.md`, `CHANGELOG.md`, and `docs/notes/` (plus the harness files);
+  seeded "Durable facts" section carrying the product/UI name "IPTV Broadcast
+  Console" and the code-non-derivable codename / Fly.io app name `teeatr`.
+- `src/tests/unit/memory.test.js` (new) — Vitest unit test with `// ADR: ADR-0029`
+  comment. Resolves the repo root from the test file location (`__dir` via
+  `import.meta.url`, then `../../..` — same style as the other file-reading unit
+  tests) and reads the files from disk to enforce the file contract: MEMORY.md
+  exists/non-empty, begins with a `# ` heading, references the boundary artifacts
+  (specs, ADRs, README, CHANGELOG), contains the seeded `teeatr` fact, and that
+  `docs/specs/project.md` points at `docs/MEMORY.md`. 5 tests, all passing.
+
+Non-obvious notes for reviewers:
+
+- `docs/specs/project.md` was NOT modified — its "Product memory" pointer to
+  `docs/MEMORY.md` was already added in Phase 1 (spec-agent owns that file); the
+  test asserts the pointer is present so it cannot be silently dropped.
+- ADR-0029 `governs:` already lists all four governed paths (the two new files
+  plus the two spec files); no traceability true-up was needed. Markdown files
+  are linked from the ADR side only (no native comment); the test carries the
+  `// ADR: ADR-0029` code-side comment per CORE_FLOW.md §3.
+- `README.md` is intentionally untouched — its pointer is review-agent's job at
+  REVIEW per ADR-0029.
+- No UI/integration tests: this is a documentation file with no user-facing or
+  external-connectivity behaviour. Full unit suite: 662 tests, 30 files, all pass.
+
+Original seeding guidance:
 
 - Seed the durable facts from what is already known to be true and not derivable
   from the repo's code: the product codename is `teeatr` (its Fly.io deployment
