@@ -1,10 +1,14 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030
 /* global window, document */
 
 'use strict';
 
 // Module-level stored state for auto-reconnect sel restoration (ADR-0003)
 let _stored = null;
+
+// Module-level account being reconnected, so onConnRes can kick off its EPG
+// fetch with the same stored connection identity (ADR-0030).
+let _acct = null;
 
 document.addEventListener('DOMContentLoaded', onReady);
 
@@ -29,6 +33,11 @@ function onConnRes(res) {
   rndSide(ST.cats, ST.chs, ST.favs);
   rndGrid(window.IptvSrch.getChs(ST.chs, ST.srch, ST.flt, ST.favs, ST.sort));
   window.IptvUi.rndHead();
+  // Best-effort, non-blocking EPG fetch after the channels are rendered
+  // (ADR-0030). Guarded: a missing goEpg (test isolation) is a silent no-op.
+  if (res.ok && _acct && window.IptvUi.goEpg) {
+    window.IptvUi.goEpg({ src: _acct.url, user: _acct.user, pass: _acct.pass, m3u: _acct.m3u, chs: ST.chs, epgUrl: res.val.epgUrl });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +50,7 @@ function goLoad(acct) {
   const { rndFoot } = window.IptvUi;
   go('LOAD');
   rndFoot();
+  _acct = acct;
   window.IptvApi.connect(acct.url, { user: acct.user, pass: acct.pass, m3u: acct.m3u })
     .then(onConnRes);
 }

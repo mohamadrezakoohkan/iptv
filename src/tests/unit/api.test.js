@@ -505,8 +505,8 @@ describe('IptvApi export surface', function () {
     api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
   });
 
-  it('exposes exactly connect, isDemo, parsM3u, loadM3u — no auto-detect heuristic', function () {
-    expect(Object.keys(api).sort()).toEqual(['connect', 'isDemo', 'loadM3u', 'parsM3u']);
+  it('exposes the public surface (incl. ADR-0030 loadEpg/getTvgUrl) — no auto-detect heuristic', function () {
+    expect(Object.keys(api).sort()).toEqual(['connect', 'getTvgUrl', 'isDemo', 'loadEpg', 'loadM3u', 'parsM3u']);
   });
 
   it('the removed heuristic key is undefined on the export object', function () {

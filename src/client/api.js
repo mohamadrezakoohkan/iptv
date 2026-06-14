@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -6,6 +6,15 @@
 
   const TOUT_MS = 15000;
   const DEMO_MS = 700;
+
+  // EPG fetch wiring (ADR-0030, specs/epg.md §3). Best-effort + non-blocking:
+  // these bound the Xtream short-EPG fan-out so a large portal is not hammered
+  // and shape the synthetic demo guide. All file-global invariants (RULE-ID-7).
+  const EPG_BATCH = 6;          // max concurrent get_simple_data_table fetches
+  const EPG_CAP   = 120;        // max channels we request a short-EPG for
+  const DEMO_PRGS = 4;          // synthetic programs generated per demo channel
+  const DEMO_DUR  = 1800000;    // synthetic program length, ms (30 min)
+  const HR_MS     = 3600000;    // one hour in ms (demo guide spans Date.now())
 
   /**
    * DEMO_DATA: [category-name, [channel-names]][]
@@ -140,14 +149,25 @@
     try { return new URL(url).hostname; } catch (_) { return url; }
   }
 
-  /** Fetch an M3U playlist via proxy, parse it, return Result<{server,host,user,categories,channels}>. */
+  /**
+   * Extract the playlist's XMLTV guide URL from the #EXTM3U header (ADR-0030):
+   * the iptv-org convention exposes it as url-tvg="…" (x-tvg-url="…" alias).
+   * '' when absent — the M3U EPG path simply does nothing without a guide URL.
+   */
+  function getTvgUrl(text) {
+    const hd = String(text).split('\n')[firstNonEmpty(String(text).split('\n'))] || '';
+    const m = hd.match(/(?:url-tvg|x-tvg-url)="([^"]*)"/i);
+    return m ? m[1].split(',')[0].trim() : '';
+  }
+
+  /** Fetch an M3U playlist via proxy, parse it, return Result<{server,host,user,categories,channels,epgUrl}>. */
   async function loadM3u(url) {
     const prx = '/api/xtream?url=' + encodeURIComponent(url);
     const res = await fetchTxt(prx);
     if (!res.ok) return res;
     const parsed = parsM3u(res.val);
     if (!parsed.ok) return parsed;
-    return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels } };
+    return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels, epgUrl: getTvgUrl(res.val) } };
   }
 
   /** Predicate: no-action player_api.php payload carries a truthy user_info.auth. */
@@ -244,6 +264,106 @@
     if (isDemo(src)) return loadDemo();
     if (opts && opts.m3u === true) return loadM3u(src);
     return loadXtream(src, { user: usr, pass: pss });
+  }
+
+  // -------------------------------------------------------------------------
+  // EPG fetch wiring (ADR-0030, specs/epg.md §3) — best-effort, non-blocking.
+  // loadEpg runs AFTER a successful connect (channels already rendered); it
+  // only writes window.IptvEpg and never throws, never changes ST.phase, never
+  // blocks browsing. A failed / empty / timed-out fetch is swallowed.
+  // -------------------------------------------------------------------------
+
+  /** True when the EPG store global is loaded (test isolation guards it). */
+  function hasEpg() {
+    return Boolean(window.IptvEpg);
+  }
+
+  /** Build the proxied get_simple_data_table URL for one stream id. opts: {src, user, pass, id} */
+  function mkEpgUrl(src, opts) {
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
+      + '&password=' + opts.pass + '&action=get_simple_data_table&stream_id=' + opts.id;
+    return '/api/xtream?url=' + encodeURIComponent(tmp);
+  }
+
+  /** Fetch + parse + store one channel's Xtream short-EPG; swallows failure. opts: {src, user, pass} */
+  async function runXtCh(ch, opts) {
+    const res = await loadJson(mkEpgUrl(opts.src, { user: opts.user, pass: opts.pass, id: ch.id }));
+    if (!res.ok) return;
+    window.IptvEpg.set(ch.id, window.IptvEpg.parsXtEpg(res.val, String(ch.id)));
+  }
+
+  /** Run runXtCh over one bounded batch of channels concurrently. opts: {src, user, pass} */
+  async function runBatch(batch, opts) {
+    await Promise.all(batch.map(function each(ch) { return runXtCh(ch, opts); }));
+  }
+
+  /** Xtream EPG path: per-channel short-EPG, batched to EPG_BATCH, capped at EPG_CAP. opts: {src, user, pass, chs} */
+  async function runXtEpg(opts) {
+    const chs = (opts.chs || []).slice(0, EPG_CAP);
+    for (let i = 0; i < chs.length; i += EPG_BATCH) {
+      await runBatch(chs.slice(i, i + EPG_BATCH), { src: opts.src, user: opts.user, pass: opts.pass });
+    }
+  }
+
+  /** M3U EPG path: fetch the XMLTV guide URL through the proxy, parse, bulk-store by tvg-id. */
+  async function runM3uEpg(epgUrl) {
+    if (!epgUrl) return;
+    const res = await fetchTxt('/api/xtream?url=' + encodeURIComponent(epgUrl));
+    if (!res.ok) return;
+    window.IptvEpg.setAll(window.IptvEpg.parsXmltv(res.val));
+  }
+
+  /** Build one synthetic Prg for a demo channel at slot idx around base time. */
+  function mkDemoPrg(ch, opts) {
+    const start = opts.base + opts.idx * DEMO_DUR;
+    return {
+      chId:  String(ch.id),
+      title: ch.name + ' — Program ' + (opts.idx + 1),
+      start,
+      stop:  start + DEMO_DUR,
+      desc:  '',
+      cat:   ch.grp || '',
+    };
+  }
+
+  /** Synthetic guide for one demo channel: DEMO_PRGS programs spanning Date.now(). */
+  function getDemoPrgs(ch, base) {
+    const prgs = [];
+    for (let i = 0; i < DEMO_PRGS; i += 1) prgs.push(mkDemoPrg(ch, { base, idx: i }));
+    return prgs;
+  }
+
+  /** Demo EPG path: generate an in-memory guide per channel — no network call. */
+  function runDemoEpg(chs) {
+    const base = Date.now() - HR_MS;
+    const list = chs || [];
+    for (let i = 0; i < list.length; i += 1) {
+      window.IptvEpg.set(list[i].id, getDemoPrgs(list[i], base));
+    }
+  }
+
+  /** Dispatch the matched EPG path. opts: {src, user, pass, m3u, chs, epgUrl} */
+  async function runEpg(opts) {
+    if (isDemo(opts.src)) { runDemoEpg(opts.chs); return; }
+    if (opts.m3u === true) { await runM3uEpg(opts.epgUrl); return; }
+    await runXtEpg({ src: opts.src, user: opts.user, pass: opts.pass, chs: opts.chs });
+  }
+
+  /**
+   * Best-effort EPG fetch wired into the connect flow (ADR-0030). Populates
+   * window.IptvEpg on whichever path matched, then fires opts.onDone (a guarded
+   * re-render hook). Never throws, never blocks: any failure resolves quietly.
+   * opts: { src, user, pass, m3u, chs, epgUrl, onDone }
+   */
+  async function loadEpg(opts) {
+    if (!hasEpg()) return { ok: false, err: 'EPG store unavailable' };
+    try {
+      await runEpg(opts || {});
+      if (opts && typeof opts.onDone === 'function') opts.onDone();
+      return { ok: true, val: window.IptvEpg.count() };
+    } catch (e) {
+      return { ok: false, err: 'EPG fetch failed' };
+    }
   }
 
   /** Extract quoted attribute value from an #EXTINF line. Returns '' if absent. */
@@ -362,5 +482,5 @@
     return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
   }
 
-  window.IptvApi = { connect, isDemo, parsM3u, loadM3u };
+  window.IptvApi = { connect, isDemo, parsM3u, loadM3u, loadEpg, getTvgUrl };
 }());

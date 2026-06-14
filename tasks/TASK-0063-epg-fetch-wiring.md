@@ -2,8 +2,8 @@
 id: TASK-0063
 adr: ADR-0030
 evolution: 19
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0062]
 ---
 
@@ -72,7 +72,59 @@ surface as guides arrive. No new server route and no new playback engine.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks. If a new public XMLTV reference endpoint is introduced, add it
-to `docs/specs/integration-testing.md` as a declared constant (single source of
-truth), matching how the M3U/Xtream reference endpoints are declared._
+### Files touched
+
+- `src/client/api.js` — added the best-effort, non-blocking EPG fetch layer
+  exposed as `IptvApi.loadEpg(opts)` plus `IptvApi.getTvgUrl(text)`:
+  - `loadEpg({ src, user, pass, m3u, chs, epgUrl, onDone })` dispatches the
+    matched path, populates `window.IptvEpg`, fires `onDone` (the guarded
+    re-render hook), and returns a RULE-FN-4 Result. It never throws; per-path
+    failures are swallowed so connect/browse are never affected.
+  - **Xtream** (`runXtEpg`→`runBatch`→`runXtCh`): builds proxied
+    `player_api.php?...&action=get_simple_data_table&stream_id=<id>` URLs via
+    `mkEpgUrl`, fetched through the existing `/api/xtream` proxy (no new server
+    route), batched `EPG_BATCH=6` concurrent, capped at `EPG_CAP=120` channels,
+    parsed with `IptvEpg.parsXtEpg`, stored via `set`.
+  - **M3U** (`runM3uEpg`): fetches the XMLTV guide URL through the proxy,
+    `parsXmltv` → `setAll`. The guide URL is the playlist's `url-tvg` /
+    `x-tvg-url` header attribute, now extracted by `getTvgUrl` and carried on
+    `loadM3u`'s `val.epgUrl`.
+  - **Demo** (`runDemoEpg`): synthesizes `DEMO_PRGS=4` programs per channel
+    spanning `Date.now()` (in-memory, no network).
+- `src/client/ui.js` — added `goEpg(opts)` (kicks off the best-effort fetch
+  after a successful connect, guarded on `IptvApi.loadEpg`) and `rndGuide()`
+  (re-renders the grid from current ST when a guide arrives; passed as the
+  `onDone` callback). Wired into `onOk` (footer connect) and `onSwOk`
+  (account switch / preset, via `onPstOk`→`onSwOk`). Both exported on
+  `window.IptvUi`.
+- `src/client/main.js` — auto-reconnect path: `onConnRes` now kicks off
+  `IptvUi.goEpg` on success, using the reconnected account's stored identity
+  (threaded via module-level `_acct`).
+- `src/tests/unit/epgfetch.test.js` — new unit suite (16 tests).
+- `src/tests/int/epg.test.js` — new integration suite (5 tests): live Xtream
+  short-EPG through the proxy + live XMLTV guide parse.
+- `src/tests/unit/api.test.js` — updated the one export-surface assertion to
+  include the legitimately added `loadEpg` / `getTvgUrl` (its companion
+  "heuristic removed" assertion is unchanged).
+- `docs/adrs/ADR-0030-...md` — trued up `governs:` (added `ui.js`, `main.js`,
+  `epgfetch.test.js`); ADR decision content untouched.
+
+### Non-obvious notes for reviewers / future tasks
+
+- **No new state-machine phase, no localStorage key, no server route** — the
+  fetch goes through the existing `/api/xtream?url=<encoded>` proxy and writes
+  only to the in-memory `IptvEpg` store. CONVENTIONS §6/§9 unchanged.
+- **Render coupling (ADR-0031, TASK-0064/0065).** `rndGuide()` re-renders the
+  grid so the now/next line (added by ADR-0031) surfaces as guides arrive.
+  Until ADR-0031 adds that line to `mkCard`, the re-render is a harmless full
+  grid re-render; the render-trigger is intentionally a guarded callback
+  (`onDone`) so the fetch layer is testable without the UI loaded.
+- **XMLTV reference endpoint.** The integration test declares the public XMLTV
+  guide as a test-local constant `XMLTV_URL =
+  'https://i.mjh.nz/PlutoTV/us.xml'` (a live, well-populated XMLTV mirror in
+  the canonical `YYYYMMDDHHMMSS ±HHMM` form), declared once at the top of
+  `src/tests/int/epg.test.js` exactly as the M3U/Xtream tiers declare their
+  endpoints in their own int files. `docs/specs/integration-testing.md` was
+  not edited — editing `docs/specs/` is outside implement-agent's allowed
+  writes; spec-agent should mirror this constant into the spec's XMLTV-tier
+  table on a later spec pass if a spec-side declaration is desired.

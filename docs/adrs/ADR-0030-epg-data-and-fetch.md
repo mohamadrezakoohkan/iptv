@@ -7,8 +7,11 @@ status: accepted
 governs:
   - src/client/epg.js
   - src/client/api.js
+  - src/client/ui.js
+  - src/client/main.js
   - src/index.html
   - src/tests/unit/epg.test.js
+  - src/tests/unit/epgfetch.test.js
   - src/tests/int/epg.test.js
 ---
 

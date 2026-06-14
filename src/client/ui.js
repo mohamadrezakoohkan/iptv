@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -1001,6 +1001,38 @@ function saveActive(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// rndGuide — re-render the channel grid from current ST after a guide arrives
+// (ADR-0030, ADR-0031). The grid's now/next line reads window.IptvEpg at
+// render time, so re-rendering surfaces guides as they fill in. Guarded as a
+// callback so the EPG fetch layer (api.js) need not import ui.js.
+// ---------------------------------------------------------------------------
+function rndGuide() {
+  const st = window.IptvSt.ST;
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// goEpg — kick off the best-effort, non-blocking EPG fetch after a successful
+// connect (ADR-0030). Channels are already rendered; this only populates
+// window.IptvEpg and re-renders via rndGuide as guides arrive. A failed /
+// empty / timed-out EPG fetch is swallowed by IptvApi.loadEpg and never
+// affects ST.phase or browsing. opts: { src, user, pass, m3u, chs, epgUrl }
+// ---------------------------------------------------------------------------
+function goEpg(opts) {
+  const api = window.IptvApi;
+  if (!api || typeof api.loadEpg !== 'function') return;
+  api.loadEpg({
+    src:    opts.src,
+    user:   opts.user,
+    pass:   opts.pass,
+    m3u:    opts.m3u,
+    chs:    opts.chs,
+    epgUrl: opts.epgUrl,
+    onDone: rndGuide,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // onOk — handle successful connect result
 // ---------------------------------------------------------------------------
 function onOk(val) {
@@ -1021,6 +1053,7 @@ function onOk(val) {
   if (EL.url)   EL.url.disabled   = false;
   if (EL.uname) EL.uname.disabled = false;
   if (EL.pwd)   EL.pwd.disabled   = false;
+  goEpg({ src, user, pass, m3u, chs: st.chs, epgUrl: val.epgUrl });
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,6 +1108,7 @@ function onSwOk(acct, val) {
   rndFoot();
   rndHead();
   rndAcct();
+  goEpg({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, chs: st.chs, epgUrl: val.epgUrl });
 }
 
 // ---------------------------------------------------------------------------
@@ -1244,4 +1278,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog };
+window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
