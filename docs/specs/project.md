@@ -102,3 +102,4 @@ invariants the structure preserves.
 - `integration-testing.md` — live-network integration test tier
 - `product-memory.md` — durable product-project memory file (`docs/MEMORY.md`) and how it is referenced
 - `epg.md` — electronic program guide: now/next on cards + expandable per-channel schedule (Xtream short-EPG + XMLTV via tvg-id)
+- `reminders.md` — program reminders on the EPG: Remind toggle (aria-pressed) on schedule rows + NOW/NEXT line, localStorage-persisted store, client timer firing an in-app toast + best-effort permission-gated browser Notification with jump-to-channel
