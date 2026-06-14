@@ -1,10 +1,13 @@
 // ADR: ADR-0031
-// UI tests — now/next line on the channel card (TASK-0064, specs/epg.md §4).
-// Boots demo mode through the real footer login: the demo connect flow
-// generates a synthetic in-memory guide (runDemoEpg, TASK-0063) and re-renders
-// the grid (rndGuide), so each demo card shows a NOW/NEXT line with real
-// program titles. Asserts the line is present and decorative, and that the
-// card body remains clickable to select+play the channel.
+// UI tests — now/next line + expandable per-channel schedule on the channel
+// card (TASK-0064, TASK-0065, specs/epg.md §4–§5). Boots demo mode through the
+// real footer login: the demo connect flow generates a synthetic in-memory
+// guide (runDemoEpg, TASK-0063) and re-renders the grid (rndGuide), so each
+// demo card shows a NOW/NEXT line and an expand control. Asserts the now/next
+// line is present and decorative, the card body stays clickable to select+play,
+// and the expand control toggles the schedule presentationally WITHOUT starting
+// playback (it is playback-safe), then collapses again — while a card-body
+// click still plays.
 
 'use strict';
 
@@ -65,4 +68,64 @@ test('every demo card carries a now/next line', async function ({ page }) {
   await connectDemo(page);
   await expect(page.locator('.ch-card')).toHaveCount(31);
   await expect(page.locator('.ch-card .ch-nn')).toHaveCount(31);
+});
+
+// ---------------------------------------------------------------------------
+// Expandable per-channel schedule (TASK-0065, specs/epg.md §5): activating the
+// expand control reveals the schedule list presentationally (is-expanded +
+// aria-expanded=true + visible rows) and does NOT start playback — proving the
+// control is playback-safe. Collapsing hides it again; a card-body click then
+// still plays the channel.
+// ---------------------------------------------------------------------------
+test('the expand control toggles the schedule without starting playback', async function ({ page }) {
+  await connectDemo(page);
+  const card = page.locator('.ch-card').first();
+  const exp  = card.locator('.ch-exp');
+  const list = card.locator('.ch-sched');
+
+  // Every demo card carries an expand control; the schedule is collapsed by
+  // default (aria-expanded=false, list hidden, card not expanded).
+  await expect(exp).toHaveCount(1);
+  await expect(exp).toHaveAttribute('aria-expanded', 'false');
+  await expect(list).toHaveAttribute('aria-hidden', 'true');
+  await expect(list).toBeHidden();
+  await expect(card).not.toHaveClass(/is-expanded/);
+
+  // Activating the control expands the schedule presentationally.
+  await exp.click();
+  await expect(card).toHaveClass(/is-expanded/);
+  await expect(exp).toHaveAttribute('aria-expanded', 'true');
+  await expect(list).toHaveAttribute('aria-hidden', 'false');
+  await expect(list).toBeVisible();
+  // Visible schedule rows render (current program marked).
+  await expect(list.locator('.ch-sched-row').first()).toBeVisible();
+  await expect(list.locator('.ch-sched-row.ch-sched-cur')).toHaveCount(1);
+
+  // Playback never started: the app stayed in READY (no PLAY phase), no channel
+  // was selected, and the player video stays hidden — the control is playback-safe.
+  await expect(page.locator('body')).not.toHaveClass(/is-play/);
+  await expect(page.locator('#now-info')).toHaveText('');
+  await expect(page.locator('#player-video')).toBeHidden();
+
+  // Activating again collapses the schedule.
+  await exp.click();
+  await expect(card).not.toHaveClass(/is-expanded/);
+  await expect(exp).toHaveAttribute('aria-expanded', 'false');
+  await expect(list).toHaveAttribute('aria-hidden', 'true');
+  await expect(list).toBeHidden();
+});
+
+test('clicking the card body still plays the channel after expanding the schedule', async function ({ page }) {
+  await connectDemo(page);
+  const card = page.locator('.ch-card').first();
+
+  // Expand the schedule first (still no playback).
+  await card.locator('.ch-exp').click();
+  await expect(card).toHaveClass(/is-expanded/);
+  await expect(page.locator('body')).not.toHaveClass(/is-play/);
+
+  // Clicking the card body (the channel name) still selects + plays the channel.
+  await card.locator('.ch-name').click();
+  await expect(page.locator('#now-info')).toHaveText('World News 24');
+  await expect(page.locator('body')).toHaveClass(/is-play/);
 });

@@ -154,6 +154,26 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ch-nn-title { font: 500 11px/14px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-nn-now .ch-nn-mark { color: var(--acc); }
 .ch-nn-nxt .ch-nn-title { color: var(--dim); }
+/* Expandable per-channel schedule (ADR-0031, specs/epg.md §5). The expand
+   control is a real focusable button below the now/next line; the schedule list
+   is collapsed by default and revealed when the card carries is-expanded —
+   presentational only, mirroring the panel-open model (ADR-0028, no ST phase).
+   Reads ADR-0024 spacing/radius tokens and ADR-0019 colour tokens; the marker
+   font matches other card meta. No hard-coded magic colours/spacings. */
+.ch-exp { margin-top: var(--s1); align-self: flex-start; display: inline-flex; align-items: center; gap: var(--s1); height: var(--s5); padding: 0 var(--s2); border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; font: 600 9px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; transition: border-color 140ms, color 140ms; }
+.ch-exp:hover { border-color: var(--dim); color: var(--tx); }
+.ch-exp-caret { font-size: 8px; line-height: 1; transition: transform 160ms ease; }
+.ch-card.is-expanded .ch-exp { border-color: var(--acc); color: var(--acc); }
+.ch-card.is-expanded .ch-exp-caret { transform: rotate(180deg); }
+.ch-sched { list-style: none; margin: var(--s1) 0 0; padding: 0; display: none; flex-direction: column; gap: var(--s1); }
+.ch-card.is-expanded .ch-sched { display: flex; }
+.ch-sched-row { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); min-width: 0; }
+.ch-sched-row.ch-sched-cur { border-color: var(--acc); }
+.ch-sched-time { flex: none; font: 500 9px/1.3 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.ch-sched-row.ch-sched-cur .ch-sched-time { color: var(--acc); }
+.ch-sched-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ch-sched-title { font: 500 11px/14px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-sched-cat { font: 500 9px/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Contextual no-content placeholder (ADR-0022, specs/empty-states.md §2) —
    icon + title + body + optional action button, all on existing tokens. */
 .ch-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 56px 20px; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }

@@ -154,6 +154,65 @@ function mkNowNext(ch) {
 }
 
 /**
+ * Pure: a short local-time clock string for a unix-ms timestamp (ADR-0031).
+ * Falls back to '' for a missing/invalid stamp so a malformed program never
+ * throws during schedule render (mirrors fmtLogTime, ADR-0028).
+ */
+function fmtPrgTime(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Build one schedule row HTML for a program (ADR-0031, specs/epg.md §5): a
+ * local-time range (start–stop), the program title, and the optional category.
+ * The currently-airing program (start <= now < stop) gets the ch-sched-cur
+ * marker class. All program-derived text is HTML-escaped (guide data).
+ * opts: { prg, now } where now is the reference time (unix ms).
+ */
+function mkSchedRow(opts) {
+  const prg = opts.prg;
+  const cur = (prg.start <= opts.now && opts.now < prg.stop) ? ' ch-sched-cur' : '';
+  const rng = escHtml(fmtPrgTime(prg.start)) + '–' + escHtml(fmtPrgTime(prg.stop));
+  const cat = prg.cat ? '<span class="ch-sched-cat">' + escHtml(prg.cat) + '</span>' : '';
+  return '<li class="ch-sched-row' + cur + '">'
+    + '<span class="ch-sched-time">' + rng + '</span>'
+    + '<span class="ch-sched-meta">'
+    + '<span class="ch-sched-title">' + escHtml(prg.title) + '</span>'
+    + cat
+    + '</span>'
+    + '</li>';
+}
+
+/**
+ * Build the expandable schedule block HTML for a channel (ADR-0031,
+ * specs/epg.md §5): a keyboard-focusable expand <button> carrying aria-expanded
+ * (always 'false' at render — collapsed baseline, Rule R-0001) and an accessible
+ * label, plus the schedule list (hidden via aria-hidden until expanded). The
+ * list renders getSched(ch.id) rows, the current program marked. Returns '' when
+ * the guide is empty so a guide-less card never gains an expand control. The
+ * control is the only interactive node inside the card besides the fav star; its
+ * handler (onGridClick) stops propagation so expanding never plays the channel.
+ */
+function mkSched(ch) {
+  const now  = Date.now();
+  const prgs = window.IptvEpg.getSched(ch.id, now);
+  if (prgs.length === 0) return '';
+  let rows = '';
+  for (let i = 0; i < prgs.length; i += 1) {
+    rows += mkSchedRow({ prg: prgs[i], now });
+  }
+  const lbl = 'Show guide for ' + escHtml(ch.name);
+  return '<button type="button" class="ch-exp" data-exp="' + ch.id + '"'
+    + ' aria-expanded="false" aria-label="' + lbl + '">'
+    + '<span class="ch-exp-label">Guide</span>'
+    + '<span class="ch-exp-caret" aria-hidden="true">&#9662;</span>'
+    + '</button>'
+    + '<ul class="ch-sched" aria-hidden="true">' + rows + '</ul>';
+}
+
+/**
  * Build a single channel card HTML string.
  * Reads ST.cur and ST.favs from window.IptvSt; appends a now/next line
  * (ADR-0031) only when a guide is loaded for the channel — guarded so the card
@@ -165,7 +224,9 @@ function mkCard(ch) {
   const favs = st.favs;
   const cur  = st.cur;
   const active = (cur && String(cur.id) === String(ch.id)) ? ' ch-active' : '';
-  const nn = (window.IptvEpg && window.IptvEpg.has(ch.id)) ? mkNowNext(ch) : '';
+  const hasEpg = Boolean(window.IptvEpg && window.IptvEpg.has(ch.id));
+  const nn = hasEpg ? mkNowNext(ch) : '';
+  const sched = hasEpg ? mkSched(ch) : '';
   return '<div class="ch-card' + active + '" role="button" tabindex="0" data-id="' + ch.id + '">'
     + '<div class="ch-card-top">'
     + '<span class="ch-num">' + fmtNum(ch.num) + '</span>'
@@ -174,6 +235,7 @@ function mkCard(ch) {
     + '</div>'
     + '<span class="ch-name">' + ch.name + '</span>'
     + nn
+    + sched
     + '</div>';
 }
 
@@ -299,11 +361,31 @@ function onEmptyAct(kind) {
 }
 
 // ---------------------------------------------------------------------------
+// toggleSched — flip a channel card's presentational schedule expansion
+// (ADR-0031, specs/epg.md §5). Purely presentational like the account/log
+// panels (setAcct/setLog, ADR-0014/ADR-0028): an is-expanded class on the card
+// plus the control's aria-expanded and the list's aria-hidden are the single
+// source of truth — no ST phase, no boolean flag (CONVENTIONS §6), no storage
+// key. Reads the live DOM state so a re-render starting collapsed re-collapses.
+// ---------------------------------------------------------------------------
+function toggleSched(btn) {
+  const card  = btn.closest('.ch-card');
+  if (!card) return;
+  const sched = card.querySelector('.ch-sched');
+  const open  = btn.getAttribute('aria-expanded') !== 'true';
+  card.classList.toggle('is-expanded', open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (sched) sched.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+// ---------------------------------------------------------------------------
 // onGridClick — event-delegated click handler on EL.list (ch-grid)
 // ---------------------------------------------------------------------------
 function onGridClick(evt) {
   const act  = evt.target.closest('[data-empty-act]');
   if (act) { onEmptyAct(act.getAttribute('data-empty-act')); return; }
+  const exp  = evt.target.closest('[data-exp]');
+  if (exp) { evt.stopPropagation(); toggleSched(exp); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
   const card = evt.target.closest('[data-id]');
@@ -324,6 +406,10 @@ function onGridClick(evt) {
 // ---------------------------------------------------------------------------
 function onGridKey(evt) {
   if (evt.key !== 'Enter') return;
+  // The expand control is a real <button>: Enter/Space already fire a native
+  // click that toggleSched handles via onGridClick. Routing the keydown here
+  // too would double-toggle, so the button activates itself (ADR-0031).
+  if (evt.target.closest('[data-exp]')) return;
   onGridClick(evt);
 }
 
@@ -1311,4 +1397,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
