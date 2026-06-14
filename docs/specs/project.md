@@ -83,7 +83,7 @@ Product source and tests live under `src/`; product documentation lives under
 invariants the structure preserves.
 
 - `src/index.html` — product HTML entry point (served at `/`).
-- `src/client/**` — vanilla-JS client modules and `app.css`.
+- `src/client/**` — vanilla-JS client modules and `app.css` (incl. `epg.js`, the in-memory program-guide store + parsers + now/next selectors).
 - `src/server/**` — Express server (`srv.js`, `rtr.js`, `cfg.js`, `hls.js`).
 - `src/tests/{unit,ui,int}/**` — Vitest unit, Playwright UI, and Vitest
   integration suites.
@@ -101,3 +101,4 @@ invariants the structure preserves.
 - `playback-failure-log.md` — session failure log for channels that fail to play, surfaced via a log button beside the account button
 - `integration-testing.md` — live-network integration test tier
 - `product-memory.md` — durable product-project memory file (`docs/MEMORY.md`) and how it is referenced
+- `epg.md` — electronic program guide: now/next on cards + expandable per-channel schedule (Xtream short-EPG + XMLTV via tvg-id)
