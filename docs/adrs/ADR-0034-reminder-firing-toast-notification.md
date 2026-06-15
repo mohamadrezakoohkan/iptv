@@ -11,6 +11,7 @@ governs:
   - src/client/main.js
   - src/index.html
   - src/tests/unit/remfire.test.js
+  - src/tests/unit/remtimer.test.js
   - src/tests/ui/reminders.test.js
   - src/tests/ui/reminders-demo.test.js
 ---
