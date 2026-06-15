@@ -203,6 +203,19 @@
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
+  /**
+   * Single-connection gate predicate (ADR-0041, TASK-0090). True only when the
+   * portal advertises exactly one allowed connection (`maxConns === 1`) — that
+   * is the case where the bulk connect-time Xtream EPG/VOD fan-out would starve
+   * live playback, so the fan-out is skipped. `0` (unknown) and `> 1`
+   * (multi-connection) return false → the existing bounded fan-out runs
+   * unchanged (the conservative, non-regressing default for portals that do not
+   * advertise the field).
+   */
+  function isSingleConn(maxConns) {
+    return maxConns === 1;
+  }
+
   /** Read the stream URL extension from the no-action info payload. Fallback "ts". */
   function getExt(inf) {
     const fmts = inf && inf.user_info && inf.user_info.allowed_output_formats;
@@ -379,10 +392,18 @@
     }
   }
 
-  /** Dispatch the matched EPG path. opts: {src, user, pass, m3u, chs, epgUrl} */
+  /**
+   * Dispatch the matched EPG path. opts: {src, user, pass, m3u, chs, epgUrl, maxConns}
+   * The bulk Xtream branch (runXtEpg) is GATED on the portal's advertised
+   * connection capacity (ADR-0041, TASK-0090): on a single-connection portal
+   * (maxConns === 1) the per-channel get_simple_data_table burst is skipped
+   * entirely so the lone connection stays free for live playback. The demo and
+   * M3U branches are NEVER gated — they issue no per-channel Xtream burst.
+   */
   async function runEpg(opts) {
     if (isDemo(opts.src)) { runDemoEpg(opts.chs); return; }
     if (opts.m3u === true) { await runM3uEpg(opts.epgUrl); return; }
+    if (isSingleConn(opts.maxConns)) return;
     await runXtEpg({ src: opts.src, user: opts.user, pass: opts.pass, chs: opts.chs });
   }
 
@@ -476,7 +497,13 @@
    * window.IptvVod movies + series on the Xtream path, synthesizes one demo
    * movie on the demo path, and leaves the store empty on M3U. Fires opts.onDone
    * (a guarded re-render hook) on completion. Never throws, never blocks: any
-   * failure resolves quietly with an empty store. opts: { src, user, pass, m3u, ext, onDone }
+   * failure resolves quietly with an empty store. The bulk Xtream fan-out
+   * (runXtVod) is GATED on the portal's advertised connection capacity
+   * (ADR-0041, TASK-0090): on a single-connection portal (maxConns === 1) the
+   * movies + series bulk calls are skipped entirely so the lone connection stays
+   * free for live playback — the store is still cleared, but stays empty for that
+   * source. The demo path (runDemoVod, in-memory) and the M3U path (no VOD
+   * concept) are NEVER gated. opts: { src, user, pass, m3u, ext, maxConns, onDone }
    */
   async function loadVod(opts) {
     if (!hasVod()) return { ok: false, err: 'VOD store unavailable' };
@@ -484,7 +511,7 @@
     try {
       window.IptvVod.clear();
       if (isDemo(o.src)) { runDemoVod(); }
-      else if (o.m3u !== true) { await runXtVod({ src: o.src, user: o.user, pass: o.pass, ext: o.ext }); }
+      else if (o.m3u !== true && !isSingleConn(o.maxConns)) { await runXtVod({ src: o.src, user: o.user, pass: o.pass, ext: o.ext }); }
       if (typeof o.onDone === 'function') o.onDone();
       return { ok: true, val: window.IptvVod.movies().length + window.IptvVod.series().length };
     } catch (e) {

@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030, ADR-0034, ADR-0039
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030, ADR-0034, ADR-0039, ADR-0041
 /* global window, document, setInterval */
 
 'use strict';
@@ -36,7 +36,7 @@ function onConnRes(res) {
   // Best-effort, non-blocking EPG fetch after the channels are rendered
   // (ADR-0030). Guarded: a missing goEpg (test isolation) is a silent no-op.
   if (res.ok && _acct && window.IptvUi.goEpg) {
-    window.IptvUi.goEpg({ src: _acct.url, user: _acct.user, pass: _acct.pass, m3u: _acct.m3u, chs: ST.chs, epgUrl: res.val.epgUrl });
+    window.IptvUi.goEpg({ src: _acct.url, user: _acct.user, pass: _acct.pass, m3u: _acct.m3u, chs: ST.chs, epgUrl: res.val.epgUrl, maxConns: res.val.maxConns });
   }
 }
 

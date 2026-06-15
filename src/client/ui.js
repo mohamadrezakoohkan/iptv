@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039, ADR-0041
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -2005,19 +2005,22 @@ function rndVod() {
 // connect (ADR-0037/ADR-0038), mirroring goEpg. Channels are already rendered;
 // this only populates window.IptvVod and re-renders the toggle (rndVod) as the
 // store fills. A failed / empty / timed-out fetch is swallowed by IptvApi.loadVod
-// and never affects ST.phase or browsing. opts: { src, user, pass, m3u, ext }
+// and never affects ST.phase or browsing. The connect Result's maxConns is
+// forwarded so loadVod can gate the bulk Xtream fan-out on a single-connection
+// portal (ADR-0041). opts: { src, user, pass, m3u, ext, maxConns }
 // ---------------------------------------------------------------------------
 function goVod(opts) {
   const api = window.IptvApi;
   vodCtx = { src: opts.src, user: opts.user, pass: opts.pass, ext: opts.ext, m3u: opts.m3u };
   if (!api || typeof api.loadVod !== 'function') return;
   api.loadVod({
-    src:    opts.src,
-    user:   opts.user,
-    pass:   opts.pass,
-    m3u:    opts.m3u,
-    ext:    opts.ext,
-    onDone: rndVod,
+    src:      opts.src,
+    user:     opts.user,
+    pass:     opts.pass,
+    m3u:      opts.m3u,
+    ext:      opts.ext,
+    maxConns: opts.maxConns,
+    onDone:   rndVod,
   });
 }
 
@@ -2037,19 +2040,22 @@ function rndGuide() {
 // connect (ADR-0030). Channels are already rendered; this only populates
 // window.IptvEpg and re-renders via rndGuide as guides arrive. A failed /
 // empty / timed-out EPG fetch is swallowed by IptvApi.loadEpg and never
-// affects ST.phase or browsing. opts: { src, user, pass, m3u, chs, epgUrl }
+// affects ST.phase or browsing. The connect Result's maxConns is forwarded so
+// loadEpg can gate the bulk Xtream fan-out on a single-connection portal
+// (ADR-0041). opts: { src, user, pass, m3u, chs, epgUrl, maxConns }
 // ---------------------------------------------------------------------------
 function goEpg(opts) {
   const api = window.IptvApi;
   if (!api || typeof api.loadEpg !== 'function') return;
   api.loadEpg({
-    src:    opts.src,
-    user:   opts.user,
-    pass:   opts.pass,
-    m3u:    opts.m3u,
-    chs:    opts.chs,
-    epgUrl: opts.epgUrl,
-    onDone: rndGuide,
+    src:      opts.src,
+    user:     opts.user,
+    pass:     opts.pass,
+    m3u:      opts.m3u,
+    chs:      opts.chs,
+    epgUrl:   opts.epgUrl,
+    maxConns: opts.maxConns,
+    onDone:   rndGuide,
   });
 }
 
@@ -2076,8 +2082,8 @@ function onOk(val) {
   if (EL.url)   EL.url.disabled   = false;
   if (EL.uname) EL.uname.disabled = false;
   if (EL.pwd)   EL.pwd.disabled   = false;
-  goEpg({ src, user, pass, m3u, chs: st.chs, epgUrl: val.epgUrl });
-  goVod({ src, user, pass, m3u, ext: val.ext });
+  goEpg({ src, user, pass, m3u, chs: st.chs, epgUrl: val.epgUrl, maxConns: val.maxConns });
+  goVod({ src, user, pass, m3u, ext: val.ext, maxConns: val.maxConns });
 }
 
 // ---------------------------------------------------------------------------
@@ -2134,8 +2140,8 @@ function onSwOk(acct, val) {
   rndFoot();
   rndHead();
   rndAcct();
-  goEpg({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, chs: st.chs, epgUrl: val.epgUrl });
-  goVod({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, ext: val.ext });
+  goEpg({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, chs: st.chs, epgUrl: val.epgUrl, maxConns: val.maxConns });
+  goVod({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, ext: val.ext, maxConns: val.maxConns });
 }
 
 // ---------------------------------------------------------------------------
