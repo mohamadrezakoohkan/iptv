@@ -44,6 +44,14 @@ path a live channel uses. The VOD data is fetched best-effort after connect
 through the same proxy; the Movies/Series tabs appear only when the source
 actually serves them (M3U playlists and VOD-less portals show only Live).
 
+While a stream is playing, an **in-player controls layer** sits on the player
+chrome alongside the format chip: a **Fullscreen** toggle and a
+**Picture-in-Picture** toggle (each hidden where the browser cannot support it,
+e.g. PiP on iOS Safari), plus **keyboard shortcuts** active only while playing —
+F for fullscreen, P for picture-in-picture, Space/K for play-pause, M for mute,
+and ArrowUp/ArrowDown for volume. Your volume and mute choice is remembered
+across reloads.
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
@@ -170,6 +178,20 @@ command.
   demo beyond its one synthesized movie, and VOD-less Xtream portals show only
   Live). Demo mode synthesizes one offline-playable movie so the feature is
   demonstrable without a live portal.
+- **In-player controls layer** — over the shared `<video>`, accessible
+  keyboard-focusable **Fullscreen** (`#fs-btn`) and **Picture-in-Picture**
+  (`#pip-btn`) buttons render on the player chrome beside the format chip, each
+  feature-detected and hidden (removed from tab order) where the browser cannot
+  support it. Their pressed state follows the **actual** browser fullscreen/PiP
+  state — a browser-initiated exit (Escape from fullscreen, closing the PiP
+  window) un-presses the button. **Keyboard shortcuts** are active only while a
+  stream is playing and never while typing in a field: F = fullscreen, P =
+  picture-in-picture, Space/K = play-pause, M = mute, ArrowUp/ArrowDown =
+  volume. Escape stays with the panel-close handler (no collision). The single
+  client-wide **volume/mute preference** persists across reloads under
+  `localStorage['iptv_vol']`. The layer is client-only over the existing player
+  — no new playback engine, no new server route, and it applies uniformly to
+  live, catch-up, and VOD.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).
