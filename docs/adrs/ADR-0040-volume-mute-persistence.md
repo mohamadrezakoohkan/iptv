@@ -7,7 +7,7 @@ status: accepted
 governs:
   - src/client/cfg.js
   - src/client/st.js
-  - src/tests/unit/st.test.js
+  - src/tests/unit/vol.test.js
 ---
 
 # ADR-0040 — Persist a single client-wide volume/mute preference (`iptv_vol`)

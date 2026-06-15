@@ -2,8 +2,8 @@
 id: TASK-0084
 adr: ADR-0040
 evolution: 23
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -49,5 +49,27 @@ wiring yet (ADR-0039 does the apply-to-element step).
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+**Files touched**
+
+- `src/client/cfg.js` — added `S.volKey: 'iptv_vol'` (ADR-0040), header ADR ref.
+- `src/client/st.js` — added `VOL_DEF` (1.0) / `MUT_DEF` (false) fallback
+  constants; added `loadVol()` and `saveVol()` helpers (mirroring
+  `loadTheme`/`saveTheme`); `setVol` / `setMuted` now call `saveVol()` after
+  mutating `ST`; exported `loadVol` / `saveVol` on `window.IptvSt`; header ADR ref.
+- `src/tests/unit/vol.test.js` — new unit suite (30 tests).
+
+**Non-obvious notes**
+
+- `loadVol()` returns `{ vol, muted }` and degrades to `{ vol: 1.0, muted: false }`
+  for absent / malformed JSON / non-object / out-of-range (`vol` < 0 or > 1) /
+  non-finite `vol` / non-number `vol` / non-boolean `muted`. Boundary values
+  `vol: 0` and `vol: 1` are accepted. All localStorage/JSON access is guarded so
+  it never throws.
+- `setVol`/`setMuted` persist on every write (mirroring how sort persists on
+  write). Because `saveVol` swallows localStorage exceptions, the setters still
+  mutate `ST` even when the write is blocked.
+- Volume/mute is chrome, NOT a phase field: `ST` phase fields and the `PHASES`
+  transition map are unchanged. The `VOL_DEF`/`MUT_DEF` names are unique in the
+  shared non-module client `window` scope (the recurring shared-scope lesson).
+- Out of scope (ADR-0039 / later tasks): applying the loaded preference to the
+  `<video>` element + controls, and the `onReady` `loadVol()` call.
