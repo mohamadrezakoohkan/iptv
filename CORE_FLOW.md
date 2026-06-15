@@ -17,7 +17,7 @@ executed by `coreflow-agent` (§4.4) — never as a side effect of a build run.
 
 The project evolves exclusively through numbered prompts. A human writes a
 prompt; the harness turns it into specifications, decisions, tasks, code,
-tests, and documentation — and converts every terminal failure into a
+unit tests, and documentation — and converts every terminal failure into a
 permanent rule so the same mistake cannot be made twice.
 
 Three properties the harness must always preserve:
@@ -44,8 +44,8 @@ pipeline.
 |---|---|---|---|
 | **Orchestrator** (main session) | all | `failures/` (terminal records + the `failures/NEAR-MISSES.md` ledger, §5), Learned Rules in `CLAUDE.md`, task-status corrections, terminal-failure commits on the run branch (§5), the failed task's PR Test Results block (§3); puts the run inside a Claude Code worktree at run start (§3, §4.2) | write specs, ADRs, code, tests, or product docs itself |
 | **spec-agent** | 1 — SPEC | `docs/specs/`, `docs/adrs/`, `tasks/`; creates the run branch, makes the run's first commit, opens the run PR (§3) | write source code or tests |
-| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, UI tests, integration tests (where applicable), task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
-| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block, and (for the task that exercises user-interactable behavior) the committed demo recording + the PR `### Demo` reference (§3) | fix code or tests (it reports, never repairs) |
+| **implement-agent** | 2 — IMPLEMENT | source code, unit tests, task status, ADR traceability fields (`governs:`, `status: deleted`) | edit specs or ADR decision content, mark its own work `done`, run `git commit` / `git push` / `gh` |
+| **validate-agent** | 3 — VALIDATE | task status + attempt count; on PASS the per-task commit, push, PR description update, the task's PR Test Results block (§3) | fix code or tests (it reports, never repairs) |
 | **review-agent** | 4 — REVIEW | `CHANGELOG.md`, `README.md`; the run's final commit, push, and PR description finalization (§3) | change product code, tests, specs, or ADRs |
 | **research-agent** | 4 — RESEARCH (non-blocking, alongside REVIEW) | produces the run's research report content and returns it plus the scored winning feature to the orchestrator (§4.6); it persists no committed file — backlog-agent writes `docs/research/E<N>-<slug>.md` on the backlog branch | spawn or trigger any agent (including backlog-agent), commit/push/merge, write to `BACKLOG.md`, write product code/specs/ADRs/tasks, or block the run, REVIEW, or the Run Report |
 | **coreflow-agent** | harness (outside the pipeline) | `CORE_FLOW.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**`, the three templates, `.claude/settings.json`, `.claude/hooks/**`, `.github/workflows/validate-ai-instructions.yml` — in its own dedicated worktree, where it commits, pushes, and opens the harness PR (§4.4) | touch any product artifact (source, `docs/specs/`, `docs/adrs/` records, `tasks/`, `failures/` records, `README.md`, `CHANGELOG.md`), run pipeline phases, spawn agents, or commit/push/merge to `main`, or force-push |
@@ -130,13 +130,11 @@ disagree, the orchestrator corrects the file.
 ### Canonical commands
 
 `docs/specs/project.md` is the single source of truth for how to build the product
-and how to run the **unit test suite**, the **UI test suite**, and the
-**integration test suite**. The first evolution must establish the unit and UI
-commands (via an ADR choosing the stack); the integration command is added when
-a task first requires integration tests. `validate-agent` refuses to validate
-if the unit-test or UI-test commands are missing — that is a phase failure, not
-an excuse to guess. The integration-test command is optional: if absent,
-`validate-agent` skips that tier and notes the omission in its report.
+and how to run the **unit test suite** — the only required test tier in this
+harness. The first evolution must establish the unit-test command (via an ADR
+choosing the stack). `validate-agent` refuses to validate if the unit-test
+command is missing — that is a phase failure, not an excuse to guess. This
+harness requires unit tests only; it has no UI-test or integration-test tier.
 
 ### ADR ↔ code traceability
 
@@ -227,10 +225,6 @@ this harness: no force pushes, no rebases, no amending pushed commits.
 ### Tasks
 - [ ] TASK-NNNN — <title> — pending
 
-### Demo
-_Populated when the run's user-interactable behavior is first exercised, or
-marked exempt._
-
 ### Test Results
 _Populated as each task reaches a terminal validation state._
 
@@ -247,9 +241,9 @@ its terminal validation state**: a PASS (task `done`) or the ultimate FAIL
 after the retry budget is exhausted. Never written on an intermediate FAIL
 that will be retried, and never duplicated across attempts. The actor that
 makes the task's terminal commit owns its block: `validate-agent` on PASS, the
-orchestrator on terminal FAIL. Each task contributes one entry per test tier,
-using GitHub collapsible `<details>` blocks whose `<summary>` carries the test
-count and the final state (`PASS` / `FAIL`):
+orchestrator on terminal FAIL. Each task contributes one Unit entry, using a
+GitHub collapsible `<details>` block whose `<summary>` carries the test count
+and the final state (`PASS` / `FAIL`):
 
 ```
 #### TASK-NNNN — <title>
@@ -261,91 +255,11 @@ count and the final state (`PASS` / `FAIL`):
 | <test name> | pass / fail |
 
 </details>
-
-<details><summary>UI — N tests, PASS</summary>
-
-<screenshot reference per the screenshot-embed rule below — inline image on a
-publicly readable repo, clickable viewer link otherwise>
-
-</details>
-
-<details><summary>Integration — N tests, PASS</summary>
-
-What matters: counts (passed / failed / skipped), the assertion groups
-exercised with pass/fail each, endpoints or external surfaces hit, and any
-notable live-network anomalies or tolerances. Omit the block entirely when no
-integration command is configured.
-
-</details>
 ```
 
-UI screenshots are referenced by **committed artifact path** on the run branch,
-not pasted bytes: the UI suite writes its screenshots to a known run-artifacts
-directory that the terminal actor commits with the task, and the block
-references them by their committed path. How the block references them depends
-on the repository's visibility, because GitHub's image proxy fetches an inline
-image's source URL anonymously — that succeeds only for a publicly readable
-repo. The actor that writes the block (validate-agent on PASS, the orchestrator
-on terminal FAIL) determines visibility deterministically from the host's
-metadata before writing it, and then:
-
-- **Publicly readable repo:** embed each screenshot inline as an image whose
-  source is the committed-artifact raw URL on the run branch
-  (`![<name>](…/raw/<run-branch>/<path>)`) — it renders inline.
-- **Non-public repo (private or internal):** reference each screenshot as a
-  clickable link to its file-viewer URL on the run branch
-  (`[<name>](…/blob/<run-branch>/<path>)`) — never an inline image, which would
-  fetch anonymously and 404. Add a one-line note that inline thumbnails on a
-  non-public repo require manually dragging the images into the PR in the web
-  UI (the only reliable path; out of scope for automation).
-
-The contract is absolute: **never emit an inline image whose source is a raw
-URL on a non-public repo** — it renders broken. When a UI run produces no
-screenshots, the UI block falls back to the same table form as the unit block
-and says so. In every case: never promise an image that will not render. On
-terminal FAIL the summary state is `FAIL`, the unit/UI tables mark the failing
-rows, and the integration block records what failed.
-
-**Demo recording** — a run that adds or changes **user-interactable product
-behavior** must carry a screen recording of the actually-running product
-exercising that behavior, referenced from the PR's `### Demo` section. Like UI
-screenshots, the recording is a **committed run-artifact on the run branch**
-(written by the UI suite to the same known run-artifacts directory, committed
-with its task), not pasted bytes — and the same actor that owns the per-task PR
-update produces and references it.
-
-- **Who.** The UI tier records it. The first task whose validation exercises the
-  run's user-interactable behavior captures the recording during its full UI
-  suite run; `validate-agent` commits it with that task and writes the `### Demo`
-  reference into the PR on PASS. `review-agent` confirms the section is present
-  and accurate at finalization (it audits, never re-records). One recording per
-  run is sufficient; a run touching several user-facing flows may carry one per
-  flow.
-- **Required arc.** The recording must capture, in order: **boot** (launch the
-  product from a clean start via the canonical run command in `docs/specs/project.md`)
-  → **prepare** (perform the minimal setup the behavior needs to be exercised) →
-  **interact** (drive the new behavior end-to-end through its primary user flow
-  so the recording shows it working) → **revert runtime state** (reset the
-  product's in-app runtime state back to its pre-interaction starting condition —
-  an in-app teardown, never a git revert of source) → **stop**. Capture is
-  produced during the run by the UI suite, not hand-recorded.
-- **How referenced.** A committed video does not render as an inline player from
-  a branch URL (GitHub plays a `<video>` only for assets uploaded through the web
-  UI), so the `### Demo` reference is always a **clickable link** to the
-  committed artifact — never an inline tag that would render broken. Its URL
-  obeys the same visibility rule as screenshots: on a **publicly readable repo**
-  the link targets the committed-artifact raw URL on the run branch
-  (`.../raw/<run-branch>/<path>`); on a **non-public repo** it targets the
-  file-viewer URL (`.../blob/<run-branch>/<path>`), with a one-line note that
-  inline playback requires manually dragging the file into the PR in the web UI
-  (out of scope for automation).
-- **Scope cutoff.** A demo is **required** only for runs that add or change
-  user-interactable product behavior. A run is **exempt** — no recording — when
-  it is a pure refactor or internal change with no user-facing behavior change,
-  a headless / non-UI change (no interactive surface to record), a harness run
-  (§4.4), or a backlog run (§4.5). An exempt run states it in the `### Demo`
-  section as `No demo — <reason>` rather than leaving it blank, so the absence is
-  deliberate and visible, never an oversight.
+Unit is the only test tier in this harness, so the block carries one
+`<details>` entry only. On terminal FAIL the summary state is `FAIL` and the
+unit table marks the failing rows.
 
 The harness path (§4.4) self-publishes like the backlog path: `coreflow-agent`
 commits its harness changes on a dedicated `harness/<slug>` branch, pushes, and
@@ -399,7 +313,7 @@ Phase 1  SPEC        spec-agent: ai/e<E>-<slug> branch in the run worktree
                                         │
 Phase 2+3 per task   ┌─► implement-agent (task, rule pack, last failure report)
 (in manifest order)  │            │
-                     │   validate-agent: run FULL unit + UI + integration suites
+                     │   validate-agent: run the FULL unit suite
                      │            │
                      │       PASS ─► task done → commit + push + PR update
                      │       FAIL ─► attempt < 4 ? ──yes──┐
@@ -459,8 +373,7 @@ everything in `docs/adrs/` to understand the project, then:
    `governs:` list with the code paths its tasks will create or shape,
 5. derives an ordered set of tasks for each ADR — each task small enough to
    implement and validate in one agent run, with acceptance criteria and
-   explicit test requirements (unit; UI where user-facing; integration where
-   external connectivity is involved),
+   explicit unit-test requirements (unit tests are the only test tier),
 6. commits the Phase 1 artifacts as the run's first commit, pushes the
    branch, and opens the run PR against `main` (§3 Git contract),
 7. returns a JSON manifest of ADRs and tasks, plus the run branch name and the
@@ -480,25 +393,17 @@ never in the primary working tree. For each task:
 
 1. Spawn `implement-agent` with the task ID, the Rule Pack, and — on retries —
    the previous validation report verbatim. It implements the task **and its
-   tests** (unit always; UI tests whenever the task touches user-facing
-   behavior; integration tests whenever the task involves external
-   connectivity, API calls, or proxy behavior), then sets the task to
+   unit tests** (unit tests are the only test tier), then sets the task to
    `validating`. Along the way it keeps traceability true (§3): new files get
    their `ADR:` comment, `governs:` lists are trued up, and an ADR whose last
    governed code was just removed is marked `deleted`.
-2. Spawn `validate-agent` with the task ID. It reads the canonical commands
-   from `docs/specs/project.md` and executes the **full** unit suite, the **full**
-   UI suite, and — if the integration-test command is present — the **full**
-   integration suite (full, not task-scoped — this is the regression gate).
-   Integration tests may be skipped when the command is absent from
-   `docs/specs/project.md`; the omission is noted in the report but is not itself
-   a FAIL. It returns PASS or FAIL with the failing tests and a suspected
-   cause. On PASS it also makes the task's commit, pushes the run branch,
-   updates the PR description, writes the task's collapsible Test Results
-   block into the PR, and — when this task is the one that exercises the run's
-   user-interactable behavior — commits the UI suite's demo recording and
-   writes the PR's `### Demo` reference (§3 Git contract, Test Results, Demo
-   recording); on FAIL nothing is
+2. Spawn `validate-agent` with the task ID. It reads the canonical command
+   from `docs/specs/project.md` and executes the **full** unit suite (full, not
+   task-scoped — this is the regression gate). It returns PASS or FAIL with the
+   failing tests and a suspected cause. On PASS it also makes the task's commit,
+   pushes the run branch, updates the PR description, and writes the task's
+   collapsible Test Results block into the PR (§3 Git contract, Test Results);
+   on FAIL nothing is
    committed and no Test Results block is written — the retry reworks the tree
    in place, and the block is written only at the task's terminal state.
 3. On FAIL: increment `attempts`. If `attempts < 4`, loop to step 1. After the
@@ -529,9 +434,7 @@ tasks have real code and real passing tests, ADR ↔ code traceability holds
    finalizes the PR description — final task statuses, outcome, rules earned,
    CHANGELOG reference (§3 Git contract), confirming every concluded task has
    its Test Results block (it audits, never regenerates — the terminal actor
-   wrote each block) and that the `### Demo` section carries a recording
-   reference for a user-interactable run or an explicit `No demo — <reason>`
-   for an exempt one (§3 Demo recording).
+   wrote each block).
 
 If review finds discrepancies that require code changes, the orchestrator
 dispatches **one remediation round** through the standard implement→validate

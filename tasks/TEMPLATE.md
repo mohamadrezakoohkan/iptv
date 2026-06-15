@@ -20,12 +20,8 @@ One paragraph: what exists when this task is done that doesn't exist now.
 
 ## Test requirements
 
-- **Unit:** what must be unit-tested.
-- **UI:** what must be UI-tested (required whenever the task touches
-  user-facing behavior; write "n/a — not user-facing" otherwise).
-- **Integration:** what must be integration-tested against live external
-  services (required whenever the task involves external connectivity, API
-  calls, or proxy behavior; write "n/a — no external connectivity" otherwise).
+- **Unit:** what must be unit-tested. Unit tests are the only test tier in
+  this harness.
 
 ## Implementation notes
 

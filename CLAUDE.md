@@ -74,9 +74,9 @@ change — the orchestrator decides whether to fix and retry or record a
 | Phase | Agent (`subagent_type`) | In | Out |
 |---|---|---|---|
 | 1 SPEC | `spec-agent` | user prompt, E, Rule Pack | run branch `ai/e<E>-<slug>` (inside the run's Claude Code worktree), specs + ADRs + tasks, first commit + PR opened, JSON manifest |
-| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit, UI, & integration tests, task → `validating` (no commits) |
-| 3 VALIDATE | `validate-agent` | task ID | full unit + UI suites executed (+ integration suite if command present); PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block + (for the task exercising user-interactable behavior) committed demo recording + PR `### Demo` reference |
-| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present; `### Demo` section confirmed — recording or `No demo — <reason>`) |
+| 2 IMPLEMENT | `implement-agent` | task ID, Rule Pack, last validation report | code + unit tests (the only test tier), task → `validating` (no commits) |
+| 3 VALIDATE | `validate-agent` | task ID | full unit suite executed; PASS/FAIL report; on PASS task commit + push + PR update + the task's collapsible Test Results block |
+| 4 REVIEW | `review-agent` | E, manifest, outcomes, Rule Pack | coherence verdict, CHANGELOG `#E`, README sync, final commit + PR finalized (every concluded task's Test Results block confirmed present) |
 | 4 RESEARCH (non-blocking, alongside REVIEW) | `research-agent` (opus) | E, run prompt, product context paths, Rule Pack | 3 candidate **product** features scored on demand / fit / differentiation (1–5 each, highest total wins), full research report content + structured winner returned to the orchestrator; commits nothing, spawns nothing |
 
 - Phases 2+3 loop per task, sequentially, budget **1 initial + 3 retries**;
@@ -120,17 +120,9 @@ change — the orchestrator decides whether to fix and retry or record a
   PR. Test Results blocks are written once, only at a task's terminal
   validation state (PASS or budget-exhausted FAIL) — never on a retried FAIL.
   Merging is the human's decision.
-- Demo recording (CORE_FLOW.md §3): a run that adds or changes
-  user-interactable product behavior must carry a screen recording of the
-  running product (committed run-artifact on the run branch, referenced from
-  the PR's `### Demo` section). The UI tier captures it during validation with
-  the arc boot → prepare → interact → revert runtime state → stop;
-  validate-agent commits and references it on the task that exercises that
-  behavior, review-agent confirms it. Like screenshots it is a clickable link
-  (raw URL on a public repo, blob link on a non-public one), never a broken
-  inline player. Exempt runs (pure refactor / no user-facing change, headless /
-  non-UI change, harness runs, backlog runs) state `No demo — <reason>` in the
-  `### Demo` section instead.
+- Test tier (CORE_FLOW.md §3): unit tests are the only required test tier; the
+  harness has no UI-test or integration-test tier, and no demo recording. Each
+  concluded task's Test Results block carries one `Unit` entry.
 - Finish every run with the Run Report (CORE_FLOW.md §6) — including the run
   branch and PR URL, plus the research outcome (winning feature + score +
   backlog PR URL, or a recorded research miss). RESEARCH is non-blocking, so do
