@@ -9,6 +9,7 @@ governs:
   - src/client/app.css
   - src/tests/unit/remui.test.js
   - src/tests/ui/reminders.test.js
+  - src/tests/ui/reminders-demo.test.js
 ---
 
 # ADR-0033 — Render the Remind toggle as a keyboard-focusable aria-pressed button on each upcoming EPG schedule row and on the NOW/NEXT line, reusing the existing EPG render

@@ -49,7 +49,9 @@ test('demo channel cards show a NOW/NEXT line with real program titles', async f
 test('the now/next line is decorative and the card stays clickable to play', async function ({ page }) {
   await connectDemo(page);
   const first = page.locator('.ch-card').first();
-  await expect(first.locator('.ch-nn')).toHaveAttribute('aria-hidden', 'true');
+  // The NOW/NEXT text rows stay decorative (aria-hidden) under the .ch-nn-text
+  // span; the Remind toggle (ADR-0033) lives outside it, keyboard/AT reachable.
+  await expect(first.locator('.ch-nn .ch-nn-text')).toHaveAttribute('aria-hidden', 'true');
 
   // Clicking the card body (over the now/next line) selects the channel: the
   // now-playing info bar updates to the channel name (onGridClick -> setCur).

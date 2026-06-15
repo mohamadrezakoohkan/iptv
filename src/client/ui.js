@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -141,16 +141,23 @@ function mkNnRow(opts) {
 
 /**
  * Build the now/next line HTML for a channel (ADR-0031), reading
- * window.IptvEpg.getNowNext(ch.id) at render time. Returns '' when the EPG
- * module is absent or no guide is loaded (caller guards with has()), and when
- * both now and next are absent. Decorative within the card — never a click
- * target (specs/epg.md §4, §7).
+ * window.IptvEpg.getNowNext(ch.id) at render time. The NOW/NEXT text rows stay
+ * decorative (aria-hidden) — never a click target (specs/epg.md §4, §7). A
+ * Remind toggle (ADR-0033, specs/reminders.md §3) is appended for the NEXT part
+ * only, and only when `next` is an upcoming program and IptvRem is present; the
+ * toggle is a real focusable button OUTSIDE the aria-hidden text so assistive
+ * tech reaches it. Returns '' when both now and next are absent.
  */
 function mkNowNext(ch) {
-  const nn  = window.IptvEpg.getNowNext(ch.id);
+  const now = Date.now();
+  const nn  = window.IptvEpg.getNowNext(ch.id, now);
   const row = mkNnRow({ kind: 'now', prg: nn.now }) + mkNnRow({ kind: 'nxt', prg: nn.next });
   if (!row) return '';
-  return '<div class="ch-nn" aria-hidden="true">' + row + '</div>';
+  const rem = mkRem({ chId: ch.id, prg: nn.next, now });
+  return '<div class="ch-nn">'
+    + '<span class="ch-nn-text" aria-hidden="true">' + row + '</span>'
+    + rem
+    + '</div>';
 }
 
 /**
@@ -165,10 +172,57 @@ function fmtPrgTime(ts) {
 }
 
 /**
+ * Build the state-flipping accessible label for a Remind toggle (ADR-0033,
+ * specs/reminders.md §3): a clear-reminder label when pressed, a set-reminder
+ * label when not. The program title is HTML-escaped (guide data).
+ * opts: { title, on }
+ */
+function getRemLabel(opts) {
+  const t = escHtml(opts.title || '');
+  return opts.on ? 'Clear reminder for ' + t : 'Remind me when ' + t + ' starts';
+}
+
+/**
+ * Build the Remind toggle <button> HTML for an upcoming program (ADR-0033,
+ * specs/reminders.md §3). A keyboard-focusable real button carrying
+ * data-rem="<chId>|<start>" (the ADR-0032 identity), aria-pressed PRESENT in
+ * the baseline (Rule R-0001: rendered "true" when a reminder is set, else
+ * "false" — the toggle mutates an attribute that exists in source, never adds
+ * one that was never present), and a state-flipping accessible label. The
+ * pressed state is read from window.IptvRem at render time; callers guard the
+ * IptvRem-absent case so the row renders exactly as before when the module is
+ * missing (test isolation). opts: { chId, prg }.
+ */
+function mkRemBtn(opts) {
+  const prg = opts.prg;
+  const on  = window.IptvRem.has(opts.chId, prg.start);
+  const lbl = getRemLabel({ title: prg.title, on });
+  return '<button type="button" class="ch-rem' + (on ? ' on' : '') + '"'
+    + ' data-rem="' + escHtml(String(opts.chId)) + '|' + escHtml(String(prg.start)) + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + lbl + '">'
+    + '<span class="ch-rem-ico" aria-hidden="true">&#9200;</span>'
+    + '</button>';
+}
+
+/**
+ * Build the Remind toggle for a program ONLY when it is upcoming (start in the
+ * future relative to `now`) AND the IptvRem module is present (ADR-0033,
+ * specs/reminders.md §3). A current/past program, or an absent IptvRem module,
+ * yields '' so no toggle is rendered. opts: { chId, prg, now }.
+ */
+function mkRem(opts) {
+  if (!window.IptvRem) return '';
+  if (!opts.prg || opts.prg.start <= opts.now) return '';
+  return mkRemBtn({ chId: opts.chId, prg: opts.prg });
+}
+
+/**
  * Build one schedule row HTML for a program (ADR-0031, specs/epg.md §5): a
  * local-time range (start–stop), the program title, and the optional category.
  * The currently-airing program (start <= now < stop) gets the ch-sched-cur
- * marker class. All program-derived text is HTML-escaped (guide data).
+ * marker class. An upcoming program (start in the future) gains a keyboard-
+ * focusable Remind toggle (ADR-0033, specs/reminders.md §3); a current/past
+ * program renders none. All program-derived text is HTML-escaped (guide data).
  * opts: { prg, now } where now is the reference time (unix ms).
  */
 function mkSchedRow(opts) {
@@ -176,12 +230,14 @@ function mkSchedRow(opts) {
   const cur = (prg.start <= opts.now && opts.now < prg.stop) ? ' ch-sched-cur' : '';
   const rng = escHtml(fmtPrgTime(prg.start)) + '–' + escHtml(fmtPrgTime(prg.stop));
   const cat = prg.cat ? '<span class="ch-sched-cat">' + escHtml(prg.cat) + '</span>' : '';
+  const rem = mkRem({ chId: prg.chId, prg, now: opts.now });
   return '<li class="ch-sched-row' + cur + '">'
     + '<span class="ch-sched-time">' + rng + '</span>'
     + '<span class="ch-sched-meta">'
     + '<span class="ch-sched-title">' + escHtml(prg.title) + '</span>'
     + cat
     + '</span>'
+    + rem
     + '</li>';
 }
 
@@ -329,6 +385,44 @@ function toggleFav(id) {
 }
 
 // ---------------------------------------------------------------------------
+// getRemPrg — pure: resolve the live Prg for a chId+start from the IptvEpg
+// store (ADR-0033). Matches by start within the channel's upcoming schedule
+// (getSched: programs whose stop is still in the future, which includes every
+// remindable upcoming program). Returns null when no guide / no match — so a
+// stale data-rem (guide changed) degrades to a no-op.
+// ---------------------------------------------------------------------------
+function getRemPrg(chId, start) {
+  if (!window.IptvEpg) return null;
+  const prgs = window.IptvEpg.getSched(chId, Date.now());
+  for (let i = 0; i < prgs.length; i += 1) {
+    if (String(prgs[i].start) === String(start)) return prgs[i];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// toggleRem — toggle a reminder from a Remind button's data-rem (ADR-0033,
+// specs/reminders.md §3–§4). Resolves chId+start (start is the segment after
+// the last '|'), resolves the live Prg, calls IptvRem.toggle, and updates the
+// button's aria-pressed + accessible label + on-class IN PLACE (mirroring
+// toggleFav), no full grid re-render, no ST phase. Guarded so an absent IptvRem
+// or a stale/unresolvable program is a silent no-op.
+// ---------------------------------------------------------------------------
+function toggleRem(btn) {
+  if (!window.IptvRem) return;
+  const key   = btn.getAttribute('data-rem') || '';
+  const cut   = key.lastIndexOf('|');
+  const chId  = cut === -1 ? key : key.slice(0, cut);
+  const start = cut === -1 ? '' : key.slice(cut + 1);
+  const prg   = getRemPrg(chId, start);
+  if (!prg) return;
+  const on  = window.IptvRem.toggle(chId, prg);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.setAttribute('aria-label', getRemLabel({ title: prg.title, on }));
+  btn.classList.toggle('on', on);
+}
+
+// ---------------------------------------------------------------------------
 // goClrSrch — empty-state "Clear search" action (ADR-0022): clear the search
 // input and re-run the existing debounced search path with an empty query so
 // the grid re-renders to the unfiltered (within current category) result.
@@ -386,6 +480,8 @@ function onGridClick(evt) {
   if (act) { onEmptyAct(act.getAttribute('data-empty-act')); return; }
   const exp  = evt.target.closest('[data-exp]');
   if (exp) { evt.stopPropagation(); toggleSched(exp); return; }
+  const rem  = evt.target.closest('[data-rem]');
+  if (rem) { evt.stopPropagation(); toggleRem(rem); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
   const card = evt.target.closest('[data-id]');
@@ -406,10 +502,12 @@ function onGridClick(evt) {
 // ---------------------------------------------------------------------------
 function onGridKey(evt) {
   if (evt.key !== 'Enter') return;
-  // The expand control is a real <button>: Enter/Space already fire a native
-  // click that toggleSched handles via onGridClick. Routing the keydown here
-  // too would double-toggle, so the button activates itself (ADR-0031).
+  // The expand control and the Remind toggle are real <button>s: Enter/Space
+  // already fire a native click that onGridClick handles (toggleSched /
+  // toggleRem). Routing the keydown here too would double-toggle, so the button
+  // activates itself (ADR-0031, ADR-0033).
   if (evt.target.closest('[data-exp]')) return;
+  if (evt.target.closest('[data-rem]')) return;
   onGridClick(evt);
 }
 
@@ -1397,4 +1495,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };

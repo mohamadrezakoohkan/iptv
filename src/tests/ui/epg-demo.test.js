@@ -120,7 +120,9 @@ test('interact: the first card shows a NOW/NEXT line with real program titles', 
   await card.scrollIntoViewIfNeeded();
   const nn = card.locator('.ch-nn');
   await expect(nn).toHaveCount(1);
-  await expect(nn).toHaveAttribute('aria-hidden', 'true');
+  // The NOW/NEXT text rows stay decorative (aria-hidden) under the .ch-nn-text
+  // span; the Remind toggle (ADR-0033) sits outside it, keyboard/AT reachable.
+  await expect(nn.locator('.ch-nn-text')).toHaveAttribute('aria-hidden', 'true');
 
   // The synthetic guide spans Date.now(): a NOW title and a NEXT title both show.
   await expect(nn.locator('.ch-nn-now .ch-nn-mark')).toHaveText('NOW');

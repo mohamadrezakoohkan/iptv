@@ -99,10 +99,13 @@ describe('mkCard — now/next line present when a guide is loaded', function () 
     expect(html).not.toContain('<b>X</b>');
   });
 
-  it('the now/next line is decorative (aria-hidden) — it carries no click target', function () {
+  it('the now/next text is decorative (aria-hidden) — it carries no click target', function () {
     const ui = loadUi({ epg: { 5: { now: { title: 'A' }, next: { title: 'B' } } } });
     const html = ui.mkCard(CH);
-    expect(html).toMatch(/<div class="ch-nn" aria-hidden="true">/);
+    // The NOW/NEXT text rows are wrapped in an aria-hidden span; the Remind
+    // toggle (ADR-0033) lives outside it so it stays keyboard/AT reachable. With
+    // no IptvRem module present (this loadUi has none) no toggle is rendered.
+    expect(html).toMatch(/<span class="ch-nn-text" aria-hidden="true">/);
     // The only data-id on the card is the card body itself (the click target).
     expect((html.match(/data-id=/g) || []).length).toBe(1);
   });
