@@ -2,8 +2,8 @@
 id: TASK-0078
 adr: ADR-0037
 evolution: 22
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0077]
 ---
 
@@ -63,4 +63,64 @@ store empty. After this task the data is available to the UI; no UI yet.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+**Files touched**
+
+- `src/client/api.js` — added the best-effort VOD fetch wiring inside the
+  existing `runApi` IIFE, mirroring the `loadEpg` block:
+  - `loadVod(opts)` — the connect-flow entry point. Guards `hasVod()`
+    (`window.IptvVod` present), `clear()`s the store, then dispatches by path:
+    demo → `runDemoVod` (one synthesized movie, no network, no series); M3U →
+    no-op (store empty); Xtream → `runXtVod`. Fires `opts.onDone` (re-render
+    hook). Never throws (try/catch returns a Result), never touches `ST.phase`.
+  - `runXtVod` → `runXtMovs` (`get_vod_categories` + `get_vod_streams` →
+    `window.IptvVod.setMovs(getMovs(...))`) and `runXtSers`
+    (`get_series_categories` + `get_series` → `setSers(getSers(...))`). All
+    through the **existing** `mkPxUrl` proxy + `loadJson` (15 s timeout) via the
+    `loadVodAct` helper, which returns `[]` on any per-call failure so an empty
+    portal degrades to an empty store.
+  - `loadSerInfo(opts)` — on-demand per-series episode loader:
+    `get_series_info&series_id=<id>` (new `mkSerInfUrl` builder, same proxy),
+    normalized via `getEpis`, stored via `setEpis`. **Idempotent** — returns
+    early when episodes for that id are already stored, so re-opening neither
+    refetches nor duplicates. Best-effort: a non-ok / rejected fetch is
+    swallowed (empty episodes for that id). Series display name comes from
+    `opts.name`, else `getSerName(id)` resolving the stored `Series` browse list.
+  - Demo VOD constants (`DEMO_VOD_CAT/_ID/_NAME`) + `mkDemoVod` build the single
+    offline-playable demo movie whose `url` is `DEMO_SRC1` (a public HLS test
+    stream the demo channels use).
+  - Extended the file's `ADR:` comment with `ADR-0037`; added `loadVod` +
+    `loadSerInfo` to the `window.IptvApi` export.
+- `src/tests/unit/vodfetch.test.js` — **new** unit suite (mirrors
+  `epgfetch.test.js`): loads `api.js` on a window carrying a real `IptvVod`
+  store (so normalizers run end-to-end) with mocked fetch. Covers the Xtream
+  movie+series populate, movie/series normalization (built URL, resolved grp,
+  no series `url`), store-clear, `onDone`, swallowed failure/empty/non-ok
+  (store stays empty, Result ok, no throw), missing-store no-op, demo single
+  movie, M3U empty store, and `loadSerInfo` fetch+normalize+store + idempotency
+  + name resolution + swallowed failure + missing-store no-op.
+- `src/tests/unit/api.test.js` — updated the export-surface assertion to include
+  `loadSerInfo` + `loadVod`; added `ADR-0037` to its comment.
+- `src/tests/int/vod.test.js` — **new** integration suite against the live
+  Xtream testing portal through the in-process proxy: asserts the connect Result
+  keeps its unchanged live shape (no `vod`/`movies`/`series` on it), the VOD
+  pass completes leaving only well-shaped `Vod`/`Series` items (≥ 0,
+  best-effort), built `/movie/` and `/series/` on-demand URL forms, and
+  on-demand `get_series_info` shape. Shape/connectivity assertions, not exact
+  content.
+- `docs/adrs/ADR-0037-...md` — `governs:` trued up with the new
+  `src/tests/unit/vodfetch.test.js` (traceability only, no decision content).
+
+**Non-obvious**
+
+- This task is `src/client/api.js` only (the data + fetch layer + export). The
+  `goVod`/`onOk` wiring in `ui.js` and the toggle/cards are ADR-0038, so the
+  connect flow does not yet call `loadVod` — it is exposed as the entry point
+  for ADR-0038, exactly as `loadEpg` was exposed before its `goEpg` wiring.
+- Integration tier is **environment-red** in this sandbox: no live outbound
+  network, so `connect` to `mymax.top` fails in `beforeAll`. The pre-existing
+  `src/tests/int/xtream.test.js` fails identically against the same portal —
+  this is the documented live-network red-environment tolerance, not a defect.
+  The unit suite (`npx vitest run`, 873 → 889 tests) is fully green and
+  network-free.
+- `getEpis` flattens season→episode with the `series` URL form and the
+  `"<series> · S<season>E<episode> <title>"` name (TASK-0077 helper, unchanged).

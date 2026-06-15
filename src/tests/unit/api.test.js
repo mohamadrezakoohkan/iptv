@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036, ADR-0037
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -604,8 +604,8 @@ describe('IptvApi export surface', function () {
     api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
   });
 
-  it('exposes the public surface (incl. ADR-0030 loadEpg/getTvgUrl) — no auto-detect heuristic', function () {
-    expect(Object.keys(api).sort()).toEqual(['connect', 'getTvgUrl', 'isDemo', 'loadEpg', 'loadM3u', 'parsM3u']);
+  it('exposes the public surface (incl. ADR-0030 loadEpg/getTvgUrl, ADR-0037 loadVod/loadSerInfo) — no auto-detect heuristic', function () {
+    expect(Object.keys(api).sort()).toEqual(['connect', 'getTvgUrl', 'isDemo', 'loadEpg', 'loadM3u', 'loadSerInfo', 'loadVod', 'parsM3u']);
   });
 
   it('the removed heuristic key is undefined on the export object', function () {

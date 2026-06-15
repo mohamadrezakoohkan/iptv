@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036, ADR-0037
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -34,6 +34,13 @@
 
   const DEMO_SRC1 = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
   const DEMO_SRC2 = 'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
+
+  // Demo VOD synthesis (ADR-0037, specs/vod-library.md §6): one offline-playable
+  // movie under a demo VOD category, so a Movies tab + a playable VOD item are
+  // demonstrable with no live Xtream portal. File-global invariants (RULE-ID-7).
+  const DEMO_VOD_CAT  = 'demo-movies';     // demo VOD category id
+  const DEMO_VOD_ID   = 'demo-vod-1';      // demo movie item id
+  const DEMO_VOD_NAME = 'Demo Movie';      // demo movie display name
 
   /** @param {string} src */
   function isDemo(src) {
@@ -382,6 +389,137 @@
     }
   }
 
+  // -------------------------------------------------------------------------
+  // VOD fetch wiring (ADR-0037, specs/vod-library.md §4) — best-effort,
+  // non-blocking, mirroring loadEpg. loadVod runs AFTER a successful Xtream
+  // connect (channels already rendered); it fetches movie VOD + series through
+  // the existing /api/xtream proxy via the existing loadJson (15 s timeout),
+  // normalizes via the TASK-0077 window.IptvVod helpers, and writes the store.
+  // It never throws, never changes ST.phase, never blocks browsing; any
+  // failure / empty / timeout is swallowed (empty VOD store). M3U/demo leave the
+  // store empty (the demo path synthesizes one offline-playable movie).
+  // -------------------------------------------------------------------------
+
+  /** True when the VOD store global is loaded (test isolation guards it). */
+  function hasVod() {
+    return Boolean(window.IptvVod);
+  }
+
+  /** Account credentials/base bundle for the on-demand URL builders. opts: {src, user, pass, ext} */
+  function vodAcct(opts) {
+    return { base: getBase(opts.src), user: opts.user, pass: opts.pass, ext: opts.ext };
+  }
+
+  /** Fetch one proxied Xtream VOD/series action, returning its raw value or [] on failure. opts: {src, user, pass, actn} */
+  async function loadVodAct(opts) {
+    const res = await loadJson(mkPxUrl(opts.src, { user: opts.user, pass: opts.pass, actn: opts.actn }));
+    return res.ok ? res.val : [];
+  }
+
+  /** Xtream movie VOD path: fetch categories + streams, normalize, store. opts: {src, user, pass, ext} */
+  async function runXtMovs(opts) {
+    const cats = getXtCats(await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_vod_categories' }));
+    const raw  = await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_vod_streams' });
+    const acct = vodAcct(opts);
+    window.IptvVod.setMovs(window.IptvVod.getMovs({ raw, cmap: mkCatMap(cats), base: acct.base, user: acct.user, pass: acct.pass, ext: acct.ext }));
+  }
+
+  /** Xtream series path: fetch categories + series, normalize browse entries, store. opts: {src, user, pass} */
+  async function runXtSers(opts) {
+    const cats = getXtCats(await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_series_categories' }));
+    const raw  = await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_series' });
+    window.IptvVod.setSers(window.IptvVod.getSers({ raw, cmap: mkCatMap(cats) }));
+  }
+
+  /** Xtream VOD path: best-effort movies + series fan-out (bounded to two calls each). opts: {src, user, pass, ext} */
+  async function runXtVod(opts) {
+    await runXtMovs(opts);
+    await runXtSers({ src: opts.src, user: opts.user, pass: opts.pass });
+  }
+
+  /** Build the single offline-playable demo Vod movie (specs/vod-library.md §6). */
+  function mkDemoVod() {
+    return {
+      id:   DEMO_VOD_ID,
+      name: DEMO_VOD_NAME,
+      grp:  'Demo Movies',
+      url:  DEMO_SRC1,
+      img:  '',
+      cat:  DEMO_VOD_CAT,
+      num:  1,
+      kind: 'movie',
+    };
+  }
+
+  /** Demo VOD path: synthesize one offline-playable movie, no network, no series. */
+  function runDemoVod() {
+    window.IptvVod.setMovs([mkDemoVod()]);
+    window.IptvVod.setSers([]);
+  }
+
+  /**
+   * Best-effort VOD fetch wired into the connect flow (ADR-0037). Populates
+   * window.IptvVod movies + series on the Xtream path, synthesizes one demo
+   * movie on the demo path, and leaves the store empty on M3U. Fires opts.onDone
+   * (a guarded re-render hook) on completion. Never throws, never blocks: any
+   * failure resolves quietly with an empty store. opts: { src, user, pass, m3u, ext, onDone }
+   */
+  async function loadVod(opts) {
+    if (!hasVod()) return { ok: false, err: 'VOD store unavailable' };
+    const o = opts || {};
+    try {
+      window.IptvVod.clear();
+      if (isDemo(o.src)) { runDemoVod(); }
+      else if (o.m3u !== true) { await runXtVod({ src: o.src, user: o.user, pass: o.pass, ext: o.ext }); }
+      if (typeof o.onDone === 'function') o.onDone();
+      return { ok: true, val: window.IptvVod.movies().length + window.IptvVod.series().length };
+    } catch (e) {
+      return { ok: false, err: 'VOD fetch failed' };
+    }
+  }
+
+  /** Build the proxied get_series_info URL for one series id. opts: {src, user, pass, id} */
+  function mkSerInfUrl(src, opts) {
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
+      + '&password=' + opts.pass + '&action=get_series_info&series_id=' + opts.id;
+    return '/api/xtream?url=' + encodeURIComponent(tmp);
+  }
+
+  /** Resolve a series' display name from the stored Series browse list; '' when unknown. */
+  function getSerName(id) {
+    const sers = window.IptvVod.series();
+    const sid = String(id);
+    for (let i = 0; i < sers.length; i += 1) {
+      if (sers[i].id === sid) return sers[i].name;
+    }
+    return '';
+  }
+
+  /**
+   * On-demand per-series episode loader (ADR-0037, specs/vod-library.md §5b).
+   * Best-effort + idempotent: fetches get_series_info&series_id=<id> through the
+   * proxy, normalizes its episodes map into Vod episode items, stores them keyed
+   * by series_id. Already-loaded series are not refetched; failure is swallowed.
+   * The series display name comes from opts.name, else the stored Series entry.
+   * opts: { src, user, pass, id, ext, name }
+   */
+  async function loadSerInfo(opts) {
+    if (!hasVod()) return { ok: false, err: 'VOD store unavailable' };
+    const o = opts || {};
+    if (window.IptvVod.episodes(o.id).length > 0) return { ok: true, val: 0 };
+    try {
+      const res = await loadJson(mkSerInfUrl(o.src, { user: o.user, pass: o.pass, id: o.id }));
+      if (!res.ok) return { ok: true, val: 0 };
+      const acct = vodAcct(o);
+      const name = o.name || getSerName(o.id);
+      const epis = window.IptvVod.getEpis({ raw: res.val, series: name, base: acct.base, user: acct.user, pass: acct.pass, ext: acct.ext });
+      window.IptvVod.setEpis(o.id, epis);
+      return { ok: true, val: epis.length };
+    } catch (e) {
+      return { ok: false, err: 'series info fetch failed' };
+    }
+  }
+
   /** Extract quoted attribute value from an #EXTINF line. Returns '' if absent. */
   function getM3uAttr(line, attr) {
     const re = new RegExp(attr + '="([^"]*)"');
@@ -500,5 +638,5 @@
     return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
   }
 
-  window.IptvApi = { connect, isDemo, parsM3u, loadM3u, loadEpg, getTvgUrl };
+  window.IptvApi = { connect, isDemo, parsM3u, loadM3u, loadEpg, getTvgUrl, loadVod, loadSerInfo };
 }());

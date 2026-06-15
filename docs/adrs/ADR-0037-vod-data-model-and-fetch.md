@@ -9,6 +9,7 @@ governs:
   - src/client/vod.js
   - src/tests/unit/api.test.js
   - src/tests/unit/vod.test.js
+  - src/tests/unit/vodfetch.test.js
   - src/tests/int/vod.test.js
 ---
 
