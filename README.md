@@ -29,7 +29,11 @@ fetched best-effort through the same proxy. On any upcoming program — on the
 NOW/NEXT line or in the expanded schedule — a **Remind** toggle marks it; a
 lightweight timer then fires an in-app toast (with a one-click jump to that
 channel) plus a best-effort browser notification when the program is about to
-start, and your reminders persist across reloads.
+start, and your reminders persist across reloads. On channels whose Xtream
+source advertises archive (catch-up) support, each **past** schedule row also
+carries a keyboard-focusable **Replay** control: activating it builds the Xtream
+timeshift archive URL for that program and plays it back through the same proxy
+and dual-engine player a live channel uses.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -131,6 +135,17 @@ command.
   only on your first reminder, never on load). Everything degrades silently when
   no guide is loaded, storage is unavailable, or notifications are
   denied/unsupported.
+- **Catch-up (archive) Replay** — on channels whose Xtream source advertises
+  archive/timeshift support (`tv_archive`), each **past** schedule row in the
+  expandable guide carries a keyboard-focusable **Replay** button. Activating it
+  builds the Xtream timeshift archive URL for that program (start + duration) and
+  plays it back through the **same** CORS proxy and dual-engine player a live
+  channel uses — no new player, no separate archive surface. Replay appears only
+  where it can work (a past, archive-capable program within the channel's
+  retention window); future rows, the currently-airing program, non-archive
+  channels, and the M3U path show nothing. Demo mode synthesizes an
+  archive-capable channel with a past program so the feature is demonstrable
+  offline.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).
