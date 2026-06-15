@@ -2,8 +2,8 @@
 id: TASK-0073
 adr: ADR-0036
 evolution: 21
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -47,4 +47,30 @@ proxies and engine-selects it unchanged.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+- `src/client/play.js`: added three pure helpers and exported `getArchUrl` on
+  `window.IptvPlay`:
+  - `pad2(n)` — zero-pads to two digits.
+  - `getStamp(ts)` — formats a unix-ms instant as the Xtream **local-time**
+    timeshift stamp `YYYY-MM-DD:HH-MM` (uses `Date` local getters, not UTC,
+    per spec §2).
+  - `getArchDur(start, stop)` — `Math.round((stop - start) / 60000)`, clamped
+    to a minimum of `1`.
+  - `getArchUrl({ ch, prg })` — parses the channel's live `url`
+    (`<base>/live/<user>/<pass>/<id>.<ext>`) by splitting on `/live/`, reuses
+    the exact base/user/pass/stream-id/ext, and rebuilds the timeshift form
+    `<base>/timeshift/<user>/<pass>/<dur>/<stamp>/<id>.<ext>`. Pure: no DOM, no
+    ST writes, no fetch. Because the ext is carried verbatim, `getEng` resolves
+    the same engine as for the live URL. No new dependency, engine, phase, or
+    route. The caller (TASK-0075) hands the result to the unchanged
+    `loadPlay`/`getPrx`.
+- `src/tests/unit/play.test.js`: added a `getArchUrl()` describe block (16
+  tests) covering TS + HLS URL shape, base/user/pass/id/ext preservation,
+  local-stamp format, duration rounding (30 → 30, 89s → 1, 91s → 2, sub-minute
+  → 1, zero-length → 1), `getEng(getArchUrl(...)) === getEng(ch.url)` for both
+  engines, and purity (no ST mutation, returns a string). The expected stamp is
+  computed the same way the builder does so the assertion is timezone-
+  independent.
+- Traceability: `ADR: ADR-0036` appended to both file headers; ADR-0036
+  `governs:` already listed both files, so no `governs:` change was needed.
+- No UI/integration tests — pure builder, no DOM or external connectivity
+  (matches the task's test requirements).
