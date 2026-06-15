@@ -2,8 +2,8 @@
 id: TASK-0085
 adr: ADR-0039
 evolution: 23
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0084]
 ---
 
@@ -66,5 +66,44 @@ later tasks; this is the pure-where-possible engine layer.)
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/ctrl.js` — NEW. `'use strict'` IIFE-style non-module client
+  script exposing `window.IptvCtrl`, carrying the `ADR: ADR-0039` comment.
+  Module-level refs use unique `_ctrl*` binding names to avoid the recurring
+  shared-`window`-scope "Identifier already declared" collision. Public API:
+  `mkCtrl(opts)`, `hasFs`, `hasPip`, `isFs`, `isPip`, `toggleFs`, `togglePip`,
+  `togglePlay`, `toggleMute`, `volUp`, `volDn`.
+- `src/tests/unit/ctrl.test.js` — NEW. 36 unit tests; loads cfg.js + st.js +
+  ctrl.js into a fabricated window with a mocked `document` (Fullscreen / PiP
+  surfaces), a fake `<video>`, and an `HTMLVideoElement.prototype` that can omit
+  `requestPictureInPicture` (iOS-Safari-like no-PiP shape).
+
+Non-obvious notes for reviewers / later tasks:
+
+- `mkCtrl` takes a single `opts` object `{ vid, card, rnd }` (CONVENTIONS §FN-3:
+  max 2 params, 3+ merged into one opts object) rather than the positional
+  `mkCtrl(videoEl, cardEl)` sketched in the task header — the third argument is
+  the render callback the state-sync subscription invokes.
+- `hasFs()` requires the `card` reference (set by `mkCtrl`); it returns `false`
+  before init and is reached via the element / `document` so it is mockable.
+- All native APIs (`requestFullscreen`/`webkitRequestFullscreen`,
+  `exitFullscreen`/`webkitExitFullscreen`, `requestPictureInPicture`,
+  `exitPictureInPicture`, `play`) are accessed through `window` / `document` /
+  the element, and every rejected request/exit promise is swallowed via the
+  shared `swallow()` helper — nothing throws when an API is absent.
+- Volume/mute changes call `IptvSt.setVol` / `IptvSt.setMuted` (TASK-0084), so
+  they persist to `iptv_vol` (ADR-0040); volume steps `S.volStp` and clamps to
+  `[0,1]`.
+- State sync reflects the ACTUAL browser fullscreen/PiP state via
+  `fullscreenchange` (+ webkit) and the `<video>`'s `enterpictureinpicture` /
+  `leavepictureinpicture` events, invoking the render callback — never an
+  optimistic toggle.
+- This module has no DOM surface of its own: markup/wiring is TASK-0086 and the
+  `onPlayKey` keyboard handler is TASK-0087. The ADR `governs:` already listed
+  both new files; both now exist with the `ADR: ADR-0039` comment, so
+  traceability is true with no ADR edit required.
+
+Full unit suite: 981 passed (42 files), including the 36 new `ctrl.test.js`
+tests. No UI/integration tests for this task (no DOM surface; no external
+connectivity).
