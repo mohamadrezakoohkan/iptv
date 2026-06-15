@@ -8,6 +8,16 @@ status: current
 > the product is and how to build and test it. `validate-agent` refuses to run
 > without the canonical commands below.
 
+## Product memory
+
+This project keeps a durable, authoritative product-project memory file at
+**`docs/MEMORY.md`** — the cross-cutting facts, conventions, and rationale that
+are NOT derivable from the source code or git history (domain vocabulary,
+product codename / deployment identity, durable project posture). Anyone (human
+or AI) working on the product should consult `docs/MEMORY.md` as durable memory.
+It complements — never replaces — this file, the ADRs, and the Evolution Log.
+See `product-memory.md` for the full contract.
+
 ## Overview
 
 **IPTV Broadcast Console** — a single-page web application that connects to
@@ -90,3 +100,4 @@ invariants the structure preserves.
 - `spacing-sizing.md` — 4px-grid spacing/sizing/radius token contract (UI alignment pass)
 - `playback-failure-log.md` — session failure log for channels that fail to play, surfaced via a log button beside the account button
 - `integration-testing.md` — live-network integration test tier
+- `product-memory.md` — durable product-project memory file (`docs/MEMORY.md`) and how it is referenced
