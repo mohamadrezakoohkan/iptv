@@ -96,6 +96,18 @@ const MODES = ['live', 'movies', 'series'];
 let mode = 'live';   // active content mode (mode = render-mode flag, §5a)
 
 // ---------------------------------------------------------------------------
+// Series drill-down state (ADR-0038, specs/vod-library.md §5b) — presentational
+// navigation within `series` mode, NOT a state-machine phase and NOT persisted
+// (CONVENTIONS §6, no localStorage key). `serCur` holds the open series id (the
+// drill-down view) or null (the series list view); `vodCtx` holds the connected
+// Xtream account context (src/user/pass/ext) captured at connect time so the
+// on-demand get_series_info loader (IptvApi.loadSerInfo, TASK-0078) can run when
+// a series is opened. Both reset on connect/switch/disconnect (resetMode).
+// ---------------------------------------------------------------------------
+let serCur = null;   // open series id (drill-down) or null (series list)
+let vodCtx = null;   // { src, user, pass, ext } connected account context
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -766,6 +778,15 @@ function onGridClick(evt) {
   if (rep) { evt.stopPropagation(); onReplay(rep); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
+  // Series drill-down navigation (ADR-0038, §5b): a series card opens its
+  // seasons/episodes drill-down; the back control returns to the series list.
+  // Both are routed BEFORE the [data-id] select+play branch so a series card
+  // (data-ser) never falls into the play path — episode entries (data-id) do
+  // (their actual play call is TASK-0082; today they no-op like a movie card).
+  const back = evt.target.closest('[data-back]');
+  if (back) { goSerBack(); return; }
+  const ser  = evt.target.closest('[data-ser]');
+  if (ser) { goSerOpen(ser.getAttribute('data-ser')); return; }
   const card = evt.target.closest('[data-id]');
   if (!card) return;
   const id = card.getAttribute('data-id');
@@ -791,6 +812,11 @@ function onGridKey(evt) {
   if (evt.target.closest('[data-exp]')) return;
   if (evt.target.closest('[data-rem]')) return;
   if (evt.target.closest('[data-replay]')) return;
+  // The drill-down back control is a real <button>: Enter fires a native click
+  // onGridClick already handles, so routing the keydown too would double-fire
+  // (ADR-0038, §5b). Series cards / episode entries are role="button" divs with
+  // no native activation, so they DO route here (Enter selects them).
+  if (evt.target.closest('[data-back]')) return;
   onGridClick(evt);
 }
 
@@ -1353,9 +1379,19 @@ function onPlayClick(evt) {
 // placeholder when the filtered list is empty (ADR-0022). The placeholder is
 // chosen by IptvEmpty.resolveContent from the live ST (total source count,
 // active filter, search query, favourites) — same opts other rnd* read.
+// In `series` mode (ADR-0038, §5b) the grid surface is reused for the series
+// browse list (series cards) and, when a series is open, its seasons/episodes
+// drill-down — both routed here so every existing caller (rndMode2, onCatClick,
+// goViewAll, fireSrch, onSort) renders the right series surface unchanged.
 // ---------------------------------------------------------------------------
 function rndGrid(chs) {
   if (!EL.list) return;
+  if (mode === 'series') {
+    if (serCur !== null) { rndDrill(); return; }
+    EL.list.classList.remove('is-drill');
+    rndSerList(chs);
+    return;
+  }
   if (!chs || chs.length === 0) {
     const st = window.IptvSt.ST;
     const es = window.IptvEmpty.resolveContent({
@@ -1530,6 +1566,7 @@ function setCMode(m) {
 // ---------------------------------------------------------------------------
 function resetMode() {
   mode = 'live';
+  serCur = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1584,6 +1621,189 @@ function mkModeCats(items) {
 function getModeCats() {
   if (mode === 'live') return window.IptvSt.ST.cats;
   return mkModeCats(getModeItems());
+}
+
+// ---------------------------------------------------------------------------
+// mkSerCard — pure: one Series browse-entry card HTML (ADR-0038, §5b). A
+// keyboard-focusable card mirroring mkCard's poster/title shape (poster from
+// img with a letter-tile fallback, title from name), but carrying data-ser
+// (the series id) instead of data-id so onGridClick routes it to the drill-down
+// OPEN path, not the select+play path (movies/episodes use data-id). A series is
+// a browse entry, never a Vod, so it has no num/fav/EPG affordances — one-shot
+// control, no toggled aria attribute (Rule R-0001). Series text is HTML-escaped.
+// ---------------------------------------------------------------------------
+function mkSerCard(ser) {
+  return '<div class="ch-card ser-card" role="button" tabindex="0" data-ser="' + escHtml(String(ser.id)) + '">'
+    + '<div class="ch-card-top">' + mkLogo(ser) + '</div>'
+    + '<span class="ch-name">' + escHtml(ser.name) + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEpiRow — pure: one selectable episode entry HTML inside a season group
+// (ADR-0038, §5b). The episode is a Vod item (kind:'episode'), so it carries
+// data-id (its episode id) and routes through the existing select+play path in
+// onGridClick exactly like a movie card — TASK-0082 adds the actual play call.
+// A one-shot selectable control: keyboard-focusable, no toggled aria attribute
+// (Rule R-0001). Episode text is HTML-escaped (external payload).
+// ---------------------------------------------------------------------------
+function mkEpiRow(epi) {
+  return '<div class="ch-card epi-row" role="button" tabindex="0" data-id="' + escHtml(String(epi.id)) + '">'
+    + '<span class="ch-name">' + escHtml(epi.name) + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkSerBack — pure: the drill-down back affordance HTML (ADR-0038, §5b). A real
+// keyboard-focusable <button> carrying data-back so onGridClick returns to the
+// series list. A one-shot control: its aria-label is present in the baseline and
+// never toggled at runtime (Rule R-0001).
+// ---------------------------------------------------------------------------
+function mkSerBack() {
+  return '<button type="button" class="ser-back" data-back="1" aria-label="Back to series list">'
+    + '<span class="ser-back-ico" aria-hidden="true">&#8592;</span>'
+    + '<span class="ser-back-label">Series</span>'
+    + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// getSerName — pure: resolve a series id to its display name from the stored
+// Series browse list (ADR-0038). '' when unknown (the drill-down still renders).
+// ---------------------------------------------------------------------------
+function getSerName(id) {
+  const sers = window.IptvVod ? window.IptvVod.series() : [];
+  const sid  = String(id);
+  for (let i = 0; i < sers.length; i += 1) {
+    if (String(sers[i].id) === sid) return sers[i].name;
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// groupBySeason — pure: group an episode Vod[] into [{ season, epis }] in
+// first-seen season order (ADR-0038, §5b). An episode's `cat` is its season key
+// (set by the vod.js normalizer); used for the season grouping headers.
+// ---------------------------------------------------------------------------
+function groupBySeason(epis) {
+  const seen = {};
+  const out  = [];
+  for (let i = 0; i < epis.length; i += 1) {
+    const s = String(epis[i].cat ?? '');
+    if (!seen[s]) { seen[s] = { season: s, epis: [] }; out.push(seen[s]); }
+    seen[s].epis.push(epis[i]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// mkSeason — pure: one season group's HTML (ADR-0038, §5b): a grouping header
+// ("Season <n>") plus its episode entries. Season label HTML-escaped.
+// ---------------------------------------------------------------------------
+function mkSeason(grp) {
+  let rows = '';
+  for (let i = 0; i < grp.epis.length; i += 1) rows += mkEpiRow(grp.epis[i]);
+  return '<div class="ser-season">'
+    + '<h3 class="ser-season-head">Season ' + escHtml(grp.season) + '</h3>'
+    + '<div class="ser-eps">' + rows + '</div>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkDrill — pure: the full seasons/episodes drill-down HTML for the open series
+// (ADR-0038, §5b): the back affordance + the series title header, then each
+// season group with its episode entries. When the series has no loaded episodes
+// (fetch failed / empty / not yet loaded), an empty "No episodes" state renders
+// instead of seasons — never an error or crash (silent degrade). opts: { id }.
+// ---------------------------------------------------------------------------
+function mkDrill(opts) {
+  const epis = window.IptvVod ? window.IptvVod.episodes(opts.id) : [];
+  const head = '<div class="ser-drill-head">' + mkSerBack()
+    + '<h2 class="ser-drill-title">' + escHtml(getSerName(opts.id)) + '</h2></div>';
+  if (epis.length === 0) {
+    return head + '<p class="ser-empty" role="status">No episodes available.</p>';
+  }
+  const groups = groupBySeason(epis);
+  let body = '';
+  for (let i = 0; i < groups.length; i += 1) body += mkSeason(groups[i]);
+  return head + '<div class="ser-seasons">' + body + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndSerList — render the series-mode browse list (ADR-0038, §5b): one Series
+// card per entry (mkSerCard), or the contextual empty-state placeholder when the
+// filtered list is empty (reusing the grid empty-state, like rndGrid). The list
+// is the filtered/sorted Series[] the caller passes (getChs output).
+// ---------------------------------------------------------------------------
+function rndSerList(sers) {
+  if (!EL.list) return;
+  if (!sers || sers.length === 0) {
+    const st = window.IptvSt.ST;
+    EL.list.innerHTML = mkEmptyBox(window.IptvEmpty.resolveContent({
+      total: getModeItems().length, shown: 0, flt: st.flt, srch: st.srch, favs: st.favs,
+    }));
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < sers.length; i += 1) html += mkSerCard(sers[i]);
+  EL.list.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// rndDrill — render the open series' seasons/episodes drill-down into the grid
+// (ADR-0038, §5b). Reuses the grid container (EL.list) so the drill-down lives
+// in the same browse surface; the drill-down markup carries its own back control
+// + season groups + episode entries (mkDrill).
+// ---------------------------------------------------------------------------
+function rndDrill() {
+  if (!EL.list || serCur === null) return;
+  EL.list.classList.add('is-drill');
+  EL.list.innerHTML = mkDrill({ id: serCur });
+}
+
+// ---------------------------------------------------------------------------
+// runSerInfo — async: best-effort on-demand fetch of the open series' seasons/
+// episodes (ADR-0038, §5b) through IptvApi.loadSerInfo (TASK-0078). Uses the
+// connected account context captured at connect time (vodCtx). On completion —
+// success OR failure — re-renders the drill-down so loaded episodes appear, or
+// the empty "no episodes" state shows (silent degrade, never throws/crashes).
+// A missing loader / missing context simply leaves the empty state.
+// ---------------------------------------------------------------------------
+async function runSerInfo(id) {
+  const api = window.IptvApi;
+  if (!api || typeof api.loadSerInfo !== 'function' || !vodCtx) { rndDrill(); return; }
+  await api.loadSerInfo({
+    src: vodCtx.src, user: vodCtx.user, pass: vodCtx.pass, ext: vodCtx.ext,
+    id, name: getSerName(id),
+  });
+  if (serCur === id) rndDrill();
+}
+
+// ---------------------------------------------------------------------------
+// goSerOpen — open a series' drill-down (ADR-0038, §5b). Presentational
+// navigation within `series` mode (no ST phase, no localStorage key): records
+// the open series id, renders the drill-down shell immediately (so the back
+// control + title appear at once), then kicks off the best-effort on-demand
+// episode fetch which re-renders when it completes. A no-op outside series mode.
+// Returns the in-flight fetch promise (settled / always-resolving) so callers
+// and tests can await the rendered result; failures degrade silently inside
+// runSerInfo (the drill-down keeps its empty state), never throwing.
+// ---------------------------------------------------------------------------
+function goSerOpen(id) {
+  if (mode !== 'series' || !id) return Promise.resolve();
+  serCur = String(id);
+  rndDrill();
+  return runSerInfo(serCur).catch(function onErr() { if (serCur !== null) rndDrill(); });
+}
+
+// ---------------------------------------------------------------------------
+// goSerBack — close the drill-down and return to the series list (ADR-0038,
+// §5b). Clears the open-series id and re-renders the series-mode browse surface
+// (sidebar + series cards) via rndMode2. Presentational navigation only.
+// ---------------------------------------------------------------------------
+function goSerBack() {
+  serCur = null;
+  if (EL.list) EL.list.classList.remove('is-drill');
+  rndMode2();
 }
 
 // ---------------------------------------------------------------------------
@@ -1651,6 +1871,8 @@ function rndToggle() {
 function goMode(next) {
   if (next === mode || MODES.indexOf(next) === -1) return;
   setCMode(next);
+  serCur = null;   // leaving/entering a mode starts at the list, never a stale drill-down (ADR-0038, §5b)
+  if (EL.list) EL.list.classList.remove('is-drill');
   window.IptvSt.setFlt('all');
   rndToggle();
   rndMode2();
@@ -1689,6 +1911,7 @@ function rndVod() {
 // ---------------------------------------------------------------------------
 function goVod(opts) {
   const api = window.IptvApi;
+  vodCtx = { src: opts.src, user: opts.user, pass: opts.pass, ext: opts.ext, m3u: opts.m3u };
   if (!api || typeof api.loadVod !== 'function') return;
   api.loadVod({
     src:    opts.src,
@@ -1987,4 +2210,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName };

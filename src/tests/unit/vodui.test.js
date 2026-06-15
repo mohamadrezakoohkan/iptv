@@ -40,6 +40,7 @@ function mkStub() {
 function mkVodStub(movs, sers) {
   let m = movs || [];
   let s = sers || [];
+  const ep = new Map();
   return {
     movies() { return m.slice(); },
     series() { return s.slice(); },
@@ -47,12 +48,14 @@ function mkVodStub(movs, sers) {
     hasSeries() { return s.length > 0; },
     setMovs(x) { m = x || []; },
     setSers(x) { s = x || []; },
-    clear() { m = []; s = []; },
+    episodes(id) { const l = ep.get(String(id)); return l ? l.slice() : []; },
+    setEpis(id, x) { ep.set(String(id), x || []); },
+    clear() { m = []; s = []; ep.clear(); },
   };
 }
 
 /** Load client/ui.js against a synthetic window/document, return { ui, els, win }. */
-function loadUi(vod) {
+function loadUi(vod, api) {
   const els = {};
   const doc = {
     getElementById: function getEl(id) {
@@ -75,7 +78,7 @@ function loadUi(vod) {
     IptvVod: vod || null,
     S: {},
     IptvPlay: null,
-    IptvApi: null,
+    IptvApi: api || null,
     document: doc,
     clearTimeout() {},
     setTimeout(fn) { return fn; },
@@ -343,5 +346,218 @@ describe('movies browse — category filter + search operate within the movie se
     // The searched set is the movie set, not the live ST.chs.
     expect(seen).not.toBe(win.IptvSt.ST.chs);
     expect(seen.length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-0081 — Series browse + seasons/episodes drill-down (ADR-0038,
+// specs/vod-library.md §5b). Cover: series mode renders series categories +
+// series poster cards (reusing the sidebar/grid surface); opening a series
+// triggers the on-demand loadSerInfo loader and renders its seasons/episodes;
+// the back control returns to the series list; an empty/failed series-info shows
+// the empty state without throwing; episode entries route distinctly from series
+// cards in onGridClick. R-0001: the back control's aria-label is present in the
+// baseline markup and never toggled; series cards / episode entries carry NO
+// toggled aria attribute (one-shot controls), asserted on the emitted markup.
+// ---------------------------------------------------------------------------
+
+const SERS = [
+  { id: 's1', name: 'My Show',  grp: 'Drama',  img: 'http://x/s1.png', cat: '3' },
+  { id: 's2', name: 'Doc Life', grp: 'Docs',   img: '',                cat: '5' },
+];
+
+const EPIS = [
+  { id: 'e1', name: 'My Show · S1E1 Pilot',  grp: 'S1', url: 'u1', img: '', cat: '1', num: 1, kind: 'episode' },
+  { id: 'e2', name: 'My Show · S1E2 Second', grp: 'S1', url: 'u2', img: '', cat: '1', num: 2, kind: 'episode' },
+  { id: 'e3', name: 'My Show · S2E1 Return', grp: 'S2', url: 'u3', img: '', cat: '2', num: 1, kind: 'episode' },
+];
+
+/** A loadSerInfo-bearing IptvApi stub: records the call and fills the store. */
+function mkApiStub(vod, opts) {
+  const o = opts || {};
+  return {
+    calls: [],
+    async loadSerInfo(arg) {
+      this.calls.push(arg);
+      if (o.fail) return { ok: false, err: 'series info fetch failed' };
+      vod.setEpis(arg.id, (o.epis || []).slice());
+      return { ok: true, val: (o.epis || []).length };
+    },
+  };
+}
+
+/** Set the connected account context the drill-down needs (mirrors goVod). */
+function connectVod(ui) {
+  ui.goVod({ src: 'http://h', user: 'u', pass: 'p', ext: 'ts', m3u: false });
+}
+
+describe('series browse — rndSide lists series categories, rndGrid renders series cards', function () {
+  it('series mode renders one series category button per distinct category', function () {
+    const { ui, els } = loadUi(mkVodStub([], SERS.slice()));
+    ui.goMode('series');
+    const side = els['grp-nav'].innerHTML;
+    expect(side).toContain('data-cat="all"');
+    expect(side).toContain('data-cat="3"');
+    expect(side).toContain('data-cat="5"');
+    expect(side).toContain('>Drama<');
+    expect(side).toContain('>Docs<');
+  });
+
+  it('series mode renders a Series card (data-ser, NOT data-id) per series', function () {
+    const { ui, els } = loadUi(mkVodStub([], SERS.slice()));
+    ui.goMode('series');
+    const html = els['ch-list'].innerHTML;
+    // One card per series, keyed by data-ser so onGridClick opens (not plays).
+    const cards = html.match(/data-ser="/g) || [];
+    expect(cards.length).toBe(2);
+    expect(html).toContain('data-ser="s1"');
+    expect(html).toContain('data-ser="s2"');
+    // A series browse entry is never playable: no data-id select+play target.
+    expect(html).not.toContain('data-id=');
+  });
+
+  it('series card shows poster from img with letter-tile fallback, title from name', function () {
+    const { ui, els } = loadUi(mkVodStub([], SERS.slice()));
+    ui.goMode('series');
+    const html = els['ch-list'].innerHTML;
+    expect(html).toContain('>My Show<');
+    expect(html).toContain('>Doc Life<');
+    expect(html).toContain('src="http://x/s1.png"');   // s1 has a poster
+    expect(html).toContain('ch-logo-fb');               // s2 falls back to letter tile
+  });
+});
+
+describe('series drill-down — opening a series fetches + renders seasons/episodes', function () {
+  it('opening a series triggers the on-demand loadSerInfo loader with the account context', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: EPIS.slice() });
+    const { ui } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    // loadSerInfo was invoked once with the opened series id + connected context.
+    expect(api.calls.length).toBe(1);
+    expect(api.calls[0].id).toBe('s1');
+    expect(api.calls[0].src).toBe('http://h');
+    expect(api.calls[0].user).toBe('u');
+    expect(api.calls[0].pass).toBe('p');
+  });
+
+  it('renders the seasons + selectable episode entries grouped by season', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: EPIS.slice() });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    const html = els['ch-list'].innerHTML;
+    // Two season groups (cat '1' and '2'), three episode entries.
+    expect(html).toContain('Season 1');
+    expect(html).toContain('Season 2');
+    const eps = html.match(/data-id="/g) || [];
+    expect(eps.length).toBe(3);
+    expect(html).toContain('data-id="e1"');
+    expect(html).toContain('data-id="e3"');
+    // Episode titles render from the normalized name.
+    expect(html).toContain('My Show · S1E1 Pilot');
+  });
+
+  it('groupBySeason groups episodes in first-seen season order', function () {
+    const { ui } = loadUi(mkVodStub([], []));
+    const groups = ui.groupBySeason(EPIS.slice());
+    expect(groups.length).toBe(2);
+    expect(groups[0].season).toBe('1');
+    expect(groups[0].epis.length).toBe(2);
+    expect(groups[1].season).toBe('2');
+    expect(groups[1].epis.length).toBe(1);
+  });
+});
+
+describe('series drill-down — back affordance returns to the series list', function () {
+  it('the drill-down emits a keyboard-focusable back control with a baseline aria-label (R-0001)', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: EPIS.slice() });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    const html = els['ch-list'].innerHTML;
+    // Back is a real <button> carrying data-back, with aria-label PRESENT in the
+    // emitted baseline markup (never toggled / added at runtime — Rule R-0001).
+    expect(html).toContain('data-back="1"');
+    expect(html).toMatch(/<button[^>]*class="ser-back"[^>]*aria-label="Back to series list"/);
+  });
+
+  it('goSerBack clears the drill-down and re-renders the series list', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: EPIS.slice() });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    expect(els['ch-list'].innerHTML).toContain('data-back="1"');
+    ui.goSerBack();
+    const html = els['ch-list'].innerHTML;
+    // Back to the series list: series cards again, no drill-down back control.
+    expect(html).not.toContain('data-back=');
+    expect(html).toContain('data-ser="s1"');
+    expect(html).toContain('data-ser="s2"');
+  });
+
+  it('onGridClick routes a series card click to open the drill-down (not select+play)', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: EPIS.slice() });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    // A delegated grid click whose target resolves only [data-ser]="s1" must
+    // route to the drill-down OPEN path, never the [data-id] select+play path.
+    const evt = { target: { closest(sel) {
+      return sel === '[data-ser]' ? { getAttribute() { return 's1'; } } : null;
+    } } };
+    ui.onGridClick(evt);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(api.calls.length).toBe(1);
+    expect(api.calls[0].id).toBe('s1');
+    expect(els['ch-list'].innerHTML).toContain('data-back="1"');
+  });
+});
+
+describe('series drill-down — empty / failed series-info degrades silently', function () {
+  it('an empty episode set shows the empty state, never throwing', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: [] });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    const html = els['ch-list'].innerHTML;
+    expect(html).toContain('No episodes available');
+    expect(html).not.toContain('data-id=');   // no episode entries
+    expect(html).toContain('data-back="1"');   // back is still present
+  });
+
+  it('a failed series-info fetch still shows the empty drill-down without crashing', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { fail: true });
+    const { ui, els } = loadUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    const html = els['ch-list'].innerHTML;
+    expect(html).toContain('No episodes available');
+    expect(html).toContain('data-back="1"');
+  });
+
+  it('opening a series with no IptvApi loader present is a silent no-op (empty drill-down)', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const { ui, els } = loadUi(vod, null);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    const html = els['ch-list'].innerHTML;
+    expect(html).toContain('No episodes available');
+    expect(html).toContain('data-back="1"');
   });
 });

@@ -133,6 +133,21 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ct-opt:hover { color: var(--tx); }
 .ct-opt.active { background: var(--sur); color: var(--acc); }
 .ct-opt[hidden] { display: none; }
+/* Series seasons/episodes drill-down (ADR-0038, §5b) — the series-mode grid is
+   reused for the browse list (series cards) and, once a series is opened, its
+   drill-down. is-drill flips the grid to a block flow so the back control +
+   season group headers + episode entries stack full-width. */
+.ch-grid.is-drill { display: block; }
+.ser-drill-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0 var(--s4); }
+.ser-drill-title { font: 700 16px/1.2 var(--font-ui); color: var(--tx); margin: 0; }
+.ser-back { display: inline-flex; align-items: center; gap: var(--s1); height: calc(var(--s6) + var(--s1)); padding: 0 var(--s3); background: var(--sur2); border: 1px solid var(--ln); border-radius: var(--r1); color: var(--tx); font: 600 12px/1 var(--font-ui); cursor: pointer; flex: none; }
+.ser-back:hover { border-color: var(--dim); }
+.ser-back-ico { font-size: 14px; line-height: 1; }
+.ser-seasons { display: flex; flex-direction: column; gap: var(--s5); }
+.ser-season-head { font: 700 12px/1 var(--font-mono); color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 var(--s3); }
+.ser-eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: var(--s3); }
+.epi-row { gap: 0; }
+.ser-empty { padding: var(--s6) 0; color: var(--dim); font: 500 13px/1.4 var(--font-ui); text-align: center; }
 /* Sort control — channel-grid toolbar (ADR-0017) */
 .ch-bar-sort { display: flex; align-items: center; gap: 7px; }
 .ch-sort-label { font: 600 11px/1 var(--font-mono); color: var(--dim); }

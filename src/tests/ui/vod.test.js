@@ -180,3 +180,93 @@ test('contextual presence with a stubbed store: Series appears only with series'
   await expect(page.locator('#content-toggle [data-mode="series"]')).toHaveClass(/active/);
   await expect(page.locator('.ch-card')).toHaveCount(1);
 });
+
+// ---------------------------------------------------------------------------
+// TASK-0081 — Series browse + seasons/episodes drill-down. Driven against the
+// offline demo connect plus a directly-stubbed series store and a stubbed
+// loadSerInfo (no live network): switching to Series shows series cards; opening
+// a series shows its seasons/episodes; the back control returns to the series
+// list. R-0001: the back control's aria-label is present in the baseline markup.
+// ---------------------------------------------------------------------------
+
+/**
+ * Connect to the demo, inject a series store + a stubbed on-demand episode
+ * loader (so the drill-down fills offline), and switch to Series mode.
+ */
+async function browseSeries(page) {
+  await page.goto(BASE_URL);
+  await page.fill('#f-url', 'demo');
+  await page.click('#btn-conn');
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
+  await page.evaluate(function stub() {
+    window.IptvVod.clear();
+    window.IptvVod.setMovs([]);
+    window.IptvVod.setSers([
+      { id: 'ser-1', name: 'Mystery Manor', grp: 'Drama', img: '', cat: '3' },
+      { id: 'ser-2', name: 'Wild Planet',   grp: 'Docs',  img: '', cat: '5' },
+    ]);
+    // Stub the on-demand series-info loader so opening a series fills episodes
+    // with NO live network (mirrors how loadVod synthesizes the demo movie).
+    window.IptvApi.loadSerInfo = function loadSerInfo(opts) {
+      window.IptvVod.setEpis(opts.id, [
+        { id: 'ep-1', name: 'Mystery Manor · S1E1 Arrival', grp: 'S1', url: 'u1', img: '', cat: '1', num: 1, kind: 'episode' },
+        { id: 'ep-2', name: 'Mystery Manor · S1E2 The Key',  grp: 'S1', url: 'u2', img: '', cat: '1', num: 2, kind: 'episode' },
+        { id: 'ep-3', name: 'Mystery Manor · S2E1 Return',   grp: 'S2', url: 'u3', img: '', cat: '2', num: 1, kind: 'episode' },
+      ]);
+      return Promise.resolve({ ok: true, val: 3 });
+    };
+    window.IptvUi.rndToggle();
+  });
+  await page.locator('#content-toggle [data-mode="series"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('#content-toggle [data-mode="series"]');
+}
+
+test('Series mode shows series categories in the sidebar and series cards in the grid', async function ({ page }) {
+  await browseSeries(page);
+  // One card per series, each a drill-down opener (data-ser, never data-id).
+  await expect(page.locator('.ch-card[data-ser]')).toHaveCount(2);
+  await expect(page.locator('.ch-card[data-id]')).toHaveCount(0);
+  await expect(page.locator('.ch-card .ch-name', { hasText: 'Mystery Manor' })).toBeVisible();
+  await expect(page.locator('.ch-card .ch-name', { hasText: 'Wild Planet' })).toBeVisible();
+  // The sidebar lists the series categories (Drama, Docs) plus All.
+  await expect(page.locator('#grp-nav [data-cat="3"]')).toBeVisible();
+  await expect(page.locator('#grp-nav [data-cat="5"]')).toBeVisible();
+  await expect(page.locator('#grp-nav [data-cat="all"]')).toBeVisible();
+});
+
+test('opening a series shows its seasons and selectable episode entries', async function ({ page }) {
+  await browseSeries(page);
+  await page.click('.ch-card[data-ser="ser-1"]');
+  // The drill-down renders the back control + season headers + episode entries.
+  const back = page.locator('.ser-back[data-back]');
+  await back.waitFor({ state: 'visible', timeout: 5000 });
+  // R-0001: aria-label present in the baseline markup (never added at runtime).
+  await expect(back).toHaveAttribute('aria-label', 'Back to series list');
+  await expect(page.locator('.ser-season-head', { hasText: 'Season 1' })).toBeVisible();
+  await expect(page.locator('.ser-season-head', { hasText: 'Season 2' })).toBeVisible();
+  // Three selectable episode entries (Vod episode items via data-id).
+  await expect(page.locator('.ch-card.epi-row[data-id]')).toHaveCount(3);
+  await expect(page.locator('.epi-row .ch-name', { hasText: 'Arrival' })).toBeVisible();
+});
+
+test('the back control returns to the series list', async function ({ page }) {
+  await browseSeries(page);
+  await page.click('.ch-card[data-ser="ser-1"]');
+  await page.locator('.ser-back[data-back]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('.ser-back[data-back]');
+  // Back to the series list: both series cards again, no drill-down back control.
+  await expect(page.locator('.ch-card[data-ser]')).toHaveCount(2);
+  await expect(page.locator('.ser-back')).toHaveCount(0);
+});
+
+test('the back control is keyboard-operable (focus + Enter returns to the list)', async function ({ page }) {
+  await browseSeries(page);
+  await page.click('.ch-card[data-ser="ser-1"]');
+  const back = page.locator('.ser-back[data-back]');
+  await back.waitFor({ state: 'visible', timeout: 5000 });
+  await back.focus();
+  await expect(back).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.ch-card[data-ser]')).toHaveCount(2);
+  await expect(page.locator('.ser-back')).toHaveCount(0);
+});
