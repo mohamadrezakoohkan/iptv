@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023, ADR-0027, ADR-0028, ADR-0030 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023, ADR-0027, ADR-0028, ADR-0030, ADR-0034 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,6 +146,11 @@
       </div>
       <div class="log-list" id="log-list"></div>
     </aside>
+    <!-- reminder firing toast stack (ADR-0034) — transient, dismissible toasts
+         announcing a fired reminder, with a Watch/Jump action. The container is
+         an aria-live region so a fired toast is announced to assistive tech
+         (specs/reminders.md §5, §8); each toast is built on demand by ui.js. -->
+    <div class="rem-toasts" id="rem-toasts" role="region" aria-live="polite" aria-label="Reminders"></div>
     <div class="acct-scrim" id="acct-scrim"></div>
     <aside class="acct-panel" id="acct-panel" role="dialog" aria-label="Accounts" aria-hidden="true">
       <div class="acct-head">

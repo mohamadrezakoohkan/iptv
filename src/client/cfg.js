@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015, ADR-0017, ADR-0019, ADR-0032
+// ADR: ADR-0001, ADR-0003, ADR-0013, ADR-0015, ADR-0017, ADR-0019, ADR-0032, ADR-0034
 /* global window */
 
 'use strict';
@@ -31,6 +31,7 @@ const S = {
   selKey:   'iptv_sel',
   favsKey:  'iptv_favs',
   remsKey:  'iptv_rems',   // program reminders store (ADR-0032)
+  toastMs:  8000,          // reminder firing toast auto-dismiss ms (ADR-0034)
   sortKey:  'iptv_sort',
   themeKey: 'iptv_theme',   // light/dark theme choice (ADR-0019)
   psts:     PSTS,

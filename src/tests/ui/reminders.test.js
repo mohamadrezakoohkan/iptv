@@ -1,4 +1,4 @@
-// ADR: ADR-0033
+// ADR: ADR-0033, ADR-0034
 // UI tests — the Remind toggle on the EPG (TASK-0068, specs/reminders.md §3–§4).
 // Boots demo mode through the real footer login (the demo connect flow generates
 // a synthetic in-memory guide spanning Date.now(), so each expanded schedule
@@ -130,4 +130,101 @@ test('the currently-airing schedule row carries no Remind toggle', async functio
   const curRow = card.locator('.ch-sched-row.ch-sched-cur');
   await expect(curRow).toHaveCount(1);
   await expect(curRow.locator('.ch-rem')).toHaveCount(0);
+});
+
+// ===========================================================================
+// TASK-0069 — the reminder FIRING surface (ADR-0034, specs/reminders.md §5–§6,
+// §8): firing a reminder shows the in-app toast (with a Watch/Jump action and a
+// dismiss control); the Watch action selects + plays the reminded channel via
+// the EXISTING select+play path; a best-effort, permission-gated Notification is
+// fired (mocked granted in the harness so the granted branch is exercised
+// without a real OS prompt). The periodic timer that detects due reminders is
+// TASK-0070; here we invoke the exposed firing entry point (window.IptvUi.fireRem)
+// for a reminder set on a real demo program, keeping timer and surface separable.
+// ===========================================================================
+
+// Install a granted Notification stub before the page scripts load, capturing
+// every construction on window.__notes so the granted branch is observable
+// without a real OS prompt. Returns the chId+start of the first card's NEXT
+// program (the one the Remind toggle marks) so the test can fire that reminder.
+async function connectDemoNoted(page) {
+  await page.addInitScript(function stubNote() {
+    window.__notes = [];
+    function StubNote(title, opts) { window.__notes.push({ title, opts }); }
+    StubNote.permission = 'granted';
+    StubNote.requestPermission = function requestPermission() { return Promise.resolve('granted'); };
+    window.Notification = StubNote;
+  });
+  await connectDemo(page);
+}
+
+test('firing a reminder shows a toast with a Watch action and fires a granted Notification', async function ({ page }) {
+  await connectDemoNoted(page);
+  // Read the first card's chId + the NEXT program's start from its Remind toggle.
+  const card = page.locator('.ch-card').first();
+  const rem  = card.locator('.ch-nn .ch-rem');
+  const key  = await rem.getAttribute('data-rem');
+  const cut  = key.lastIndexOf('|');
+  const chId = key.slice(0, cut);
+  const start = Number(key.slice(cut + 1));
+
+  // Fire the reminder through the exposed firing entry point (what TASK-0070's
+  // timer will call). A toast appears in the aria-live region with a Watch action.
+  await page.evaluate(function fire(r) {
+    window.IptvUi.fireRem({ chId: r.chId, start: r.start, title: 'Reminded Program' });
+  }, { chId, start });
+
+  const toast = page.locator('#rem-toasts .rem-toast');
+  await expect(toast).toHaveCount(1);
+  await expect(toast.locator('.rem-toast-title')).toHaveText('Reminded Program');
+  await expect(toast.locator('.rem-toast-watch')).toHaveCount(1);
+  await expect(toast.locator('.rem-toast-close')).toHaveCount(1);
+  // The aria-live region announces it.
+  await expect(page.locator('#rem-toasts')).toHaveAttribute('aria-live', 'polite');
+
+  // The granted Notification branch was exercised (mocked, no OS prompt).
+  const noteCount = await page.evaluate(function notes() { return window.__notes.length; });
+  expect(noteCount).toBe(1);
+});
+
+test('the toast Watch action plays the reminded channel and dismisses the toast', async function ({ page }) {
+  await connectDemoNoted(page);
+  const card = page.locator('.ch-card').first();
+  const key  = await card.locator('.ch-nn .ch-rem').getAttribute('data-rem');
+  const cut  = key.lastIndexOf('|');
+  const chId = key.slice(0, cut);
+  const start = Number(key.slice(cut + 1));
+  const chName = await card.locator('.ch-name').textContent();
+
+  await page.evaluate(function fire(r) {
+    window.IptvUi.fireRem({ chId: r.chId, start: r.start, title: 'Reminded Program' });
+  }, { chId, start });
+
+  const toast = page.locator('#rem-toasts .rem-toast');
+  await expect(toast).toHaveCount(1);
+
+  // Activate Watch: the reminded channel becomes current + plays (READY→PLAY),
+  // and the toast dismisses.
+  await toast.locator('.rem-toast-watch').click();
+  await expect(page.locator('body')).toHaveClass(/is-play/);
+  await expect(page.locator('#now-info')).toHaveText(chName);
+  await expect(page.locator('#rem-toasts .rem-toast')).toHaveCount(0);
+});
+
+test('the toast dismiss control removes the toast without playing', async function ({ page }) {
+  await connectDemoNoted(page);
+  const card = page.locator('.ch-card').first();
+  const key  = await card.locator('.ch-nn .ch-rem').getAttribute('data-rem');
+  const cut  = key.lastIndexOf('|');
+
+  await page.evaluate(function fire(r) {
+    window.IptvUi.fireRem({ chId: r.chId, start: r.start, title: 'Reminded Program' });
+  }, { chId: key.slice(0, cut), start: Number(key.slice(cut + 1)) });
+
+  const toast = page.locator('#rem-toasts .rem-toast');
+  await expect(toast).toHaveCount(1);
+  await toast.locator('.rem-toast-close').click();
+  await expect(page.locator('#rem-toasts .rem-toast')).toHaveCount(0);
+  await expect(page.locator('body')).not.toHaveClass(/is-play/);
+  await expect(page.locator('#now-info')).toHaveText('');
 });

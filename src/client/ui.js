@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -49,6 +49,7 @@ const EL = {
   lcls: null,   // #log-close button (ADR-0028)
   lclr: null,   // #log-clear button (ADR-0028)
   llst: null,   // #log-list container (ADR-0028)
+  rtst: null,   // #rem-toasts reminder firing toast stack (ADR-0034)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -420,6 +421,135 @@ function toggleRem(btn) {
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   btn.setAttribute('aria-label', getRemLabel({ title: prg.title, on }));
   btn.classList.toggle('on', on);
+  if (on) askRemPerm();
+}
+
+// ---------------------------------------------------------------------------
+// askRemPerm — best-effort, permission-gated request for the browser
+// Notification permission (ADR-0034, specs/reminders.md §5). Called ONLY from a
+// user gesture (the Remind toggle's set branch above) — never on load. It is a
+// no-op unless window.Notification exists and its permission is still 'default'
+// (so it requests at most once: after a grant/deny the permission is no longer
+// 'default'). A denied/unsupported result simply leaves notifications skipped;
+// the request is fired-and-forgotten and never throws.
+// ---------------------------------------------------------------------------
+function askRemPerm() {
+  const N = window.Notification;
+  if (!N || typeof N.requestPermission !== 'function') return;
+  if (N.permission !== 'default') return;
+  try {
+    const p = N.requestPermission();
+    if (p && typeof p.then === 'function') p.then(noop, noop);
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// noop — shared no-op for fire-and-forget promise handlers (CONVENTIONS §9
+// forbids anonymous functions assigned to variables; a named declaration kept
+// at module scope satisfies the .then(noop, noop) calls without inlining).
+// ---------------------------------------------------------------------------
+function noop() {}
+
+// ---------------------------------------------------------------------------
+// rmToast — remove one toast element from the DOM (ADR-0034). Guarded so a
+// double dismiss (manual click + auto-timeout) is harmless.
+// ---------------------------------------------------------------------------
+function rmToast(el) {
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+// ---------------------------------------------------------------------------
+// goRemWatch — the toast Watch/Jump action (ADR-0034, specs/reminders.md §6):
+// resolve the Ch from ST.chs by chId and reuse the EXISTING select+play path
+// (setCur + saveSt('sel') + go('PLAY') when READY), exactly like a card click
+// (onGridClick). A channel no longer in the loaded list degrades silently
+// (nothing plays). The caller dismisses the toast regardless.
+// ---------------------------------------------------------------------------
+function goRemWatch(chId) {
+  const st = window.IptvSt.ST;
+  const ch = st.chs.find(function byId(c) { return String(c.id) === String(chId); });
+  if (!ch) return;
+  window.IptvSt.setCur(ch);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
+  if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  rndHead();
+  if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
+}
+
+// ---------------------------------------------------------------------------
+// mkToast — build the toast element for a fired Rem (ADR-0034): a program-copy
+// line (NOW marker + escaped title + local start time via fmtPrgTime), a
+// Watch/Jump action carrying data-watch="<chId>", and a dismiss control. role
+// is built into the aria-live container (#rem-toasts); the toast itself is the
+// transient child. Returns a detached element the caller appends.
+// ---------------------------------------------------------------------------
+function mkToast(rem) {
+  const el  = document.createElement('div');
+  el.className = 'rem-toast';
+  el.innerHTML = '<div class="rem-toast-head">'
+    + '<span class="rem-toast-mark">Starting now</span>'
+    + '<span class="rem-toast-time">' + escHtml(fmtPrgTime(rem.start)) + '</span>'
+    + '</div>'
+    + '<span class="rem-toast-title">' + escHtml(rem.title || '') + '</span>'
+    + '<div class="rem-toast-acts">'
+    + '<button type="button" class="rem-toast-watch" data-watch="' + escHtml(String(rem.chId)) + '">Watch</button>'
+    + '<button type="button" class="rem-toast-close" aria-label="Dismiss reminder">&#10005;</button>'
+    + '</div>';
+  return el;
+}
+
+// ---------------------------------------------------------------------------
+// onToastClick — delegated click on the toast stack (ADR-0034): a Watch button
+// jumps to the channel (goRemWatch) then dismisses its toast; a close button
+// dismisses its toast. Both resolve the owning .rem-toast via closest.
+// ---------------------------------------------------------------------------
+function onToastClick(evt) {
+  const toast = evt.target.closest('.rem-toast');
+  if (!toast) return;
+  const watch = evt.target.closest('[data-watch]');
+  if (watch) { goRemWatch(watch.getAttribute('data-watch')); rmToast(toast); return; }
+  if (evt.target.closest('.rem-toast-close')) rmToast(toast);
+}
+
+// ---------------------------------------------------------------------------
+// fireNote — best-effort, permission-gated browser Notification for a fired Rem
+// (ADR-0034, specs/reminders.md §5): created ONLY when window.Notification
+// exists AND permission is already 'granted'; otherwise skipped silently. Never
+// auto-requests permission (that is askRemPerm, gated to the toggle gesture) and
+// never throws — the toast still fires when this is skipped.
+// ---------------------------------------------------------------------------
+function fireNote(rem) {
+  const N = window.Notification;
+  if (!N || N.permission !== 'granted') return;
+  try { mkNote(N, rem); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// mkNote — construct the browser Notification (ADR-0034). Isolated so the only
+// `new Notification()` call sits behind fireNote's permission guard and its
+// try/catch (CONVENTIONS §13 permits built-in constructors; the Web
+// Notifications API is treated as a host built-in here).
+// ---------------------------------------------------------------------------
+function mkNote(N, rem) {
+  // eslint-disable-next-line no-new
+  new N(rem.title || 'Reminder', { body: 'Starting now', tag: String(rem.chId) + '|' + String(rem.start) });
+}
+
+// ---------------------------------------------------------------------------
+// fireRem — the public firing entry point the reminder timer (TASK-0070, ADR-
+// 0034) calls for each newly-due reminder. Shows the in-app toast (auto-
+// dismissing after S.toastMs) and fires the best-effort permission-gated
+// notification. Guarded so a missing toast container / missing globals is a
+// silent no-op — nothing throws, nothing blocks browsing (specs/reminders.md
+// §5). Returns the toast element (or null) for the caller / tests.
+// ---------------------------------------------------------------------------
+function fireRem(rem) {
+  if (!EL.rtst || !rem) return null;
+  const el = mkToast(rem);
+  EL.rtst.appendChild(el);
+  setTimeout(function autoDismiss() { rmToast(el); }, window.S ? window.S.toastMs : 8000);
+  fireNote(rem);
+  return el;
 }
 
 // ---------------------------------------------------------------------------
@@ -926,6 +1056,7 @@ function mkEL() {
   EL.lcls  = document.getElementById('log-close');
   EL.lclr  = document.getElementById('log-clear');
   EL.llst  = document.getElementById('log-list');
+  EL.rtst  = document.getElementById('rem-toasts');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
@@ -950,6 +1081,7 @@ function mkEL() {
   if (EL.lcls) EL.lcls.addEventListener('click', onLogClose);
   if (EL.lscr) EL.lscr.addEventListener('click', onLogClose);
   if (EL.lclr) EL.lclr.addEventListener('click', onLogClear);
+  if (EL.rtst) EL.rtst.addEventListener('click', onToastClick);
   rndLog();
 }
 
@@ -1495,4 +1627,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };

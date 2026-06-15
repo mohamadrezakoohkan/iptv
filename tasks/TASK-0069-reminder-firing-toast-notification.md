@@ -2,8 +2,8 @@
 id: TASK-0069
 adr: ADR-0034
 evolution: 20
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0067, TASK-0068]
 ---
 
@@ -63,5 +63,61 @@ surfaced and the user can jump to the channel; everything degrades silently.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Implemented the reminder firing surface (ADR-0034) — the timer that detects due
+reminders is left to TASK-0070; this task exposes the entry point it will call.
+
+Files touched:
+- `src/index.html` — added the toast stack container `#rem-toasts`
+  (`role="region" aria-live="polite"`), placed before `#acct-scrim`; added
+  ADR-0034 to the file's HTML ADR comment.
+- `src/client/app.css` — added the `.rem-toasts` / `.rem-toast*` styles (bottom-
+  right transient stack, log/error UI posture: surface tokens, `--ln` border,
+  `--r1` radius), plus a mobile full-width tweak inside the existing media query;
+  added ADR-0034 to the file ADR comment.
+- `src/client/cfg.js` — added `S.toastMs: 8000` (the toast auto-dismiss timeout,
+  an implementation detail per the spec); added ADR-0034 to the ADR comment and
+  to ADR-0034's `governs:`.
+- `src/client/ui.js` — the firing surface:
+  - `fireRem(rem)` — PUBLIC entry point (the TASK-0070 timer will call it per
+    due reminder): builds + appends a toast, arms an auto-dismiss `setTimeout`
+    (S.toastMs), and fires the best-effort permission-gated notification.
+    Guarded: a null rem / missing `#rem-toasts` is a silent no-op returning null.
+  - `mkToast` / `onToastClick` / `rmToast` — the toast markup, the delegated
+    click handler (Watch jumps then dismisses; close dismisses), and removal.
+  - `goRemWatch(chId)` — PUBLIC: resolves the `Ch` from `ST.chs` and reuses the
+    EXACT select+play path (`setCur` + `saveSt('sel')` + `go('PLAY')` when READY,
+    then `loadPlay`), exactly like `onGridClick`. Unknown channel ⇒ silent no-op.
+  - `fireNote` / `mkNote` — the Notification, created ONLY when
+    `window.Notification` exists and `permission === 'granted'`; otherwise skipped
+    silently. The only `new N()` is isolated in `mkNote`, behind fireNote's guard
+    and try/catch.
+  - `askRemPerm` — the first-reminder permission request, called ONLY from the
+    SET branch of `toggleRem` (a user gesture). It requests at most once by gating
+    on `Notification.permission === 'default'` (after a grant/deny it is no longer
+    default), so no separate boolean control flag is introduced (CONVENTIONS §6).
+    Never called on load.
+  - Registered `EL.rtst` + the toast click listener in `mkEL`; exported `fireRem`
+    + `goRemWatch`; added ADR-0034 to the file ADR comment.
+
+Tests:
+- Unit `src/tests/unit/remfire.test.js` (17 tests, node env, synthetic
+  window + minimal fake DOM): toast build/show + escaping + auto-dismiss (Vitest
+  fake timers, since ui.js uses a bare `setTimeout`); goRemWatch select+play
+  routing (READY→PLAY, no transition from PLAY, unknown-channel no-op) and the
+  Watch/close click delegation; Notification granted-only / denied / absent /
+  default branches; the first-reminder request fires once via the toggle SET
+  gesture, never on clear, never when already granted/denied, never on load.
+- UI `src/tests/ui/reminders.test.js` (+3 firing tests): on the demo fixture,
+  invoke `fireRem` for a real NEXT program (Notification stubbed granted via
+  addInitScript — no OS prompt) and assert the toast appears with a Watch action
+  and the granted branch ran; Watch plays the reminded channel (is-play, now-info
+  = channel name) and dismisses the toast; the dismiss control removes it without
+  playing.
+
+Non-obvious notes:
+- ui.js reads `setTimeout` as a bare global (per its `/* global */` line), so the
+  unit test exercises auto-dismiss via `vi.useFakeTimers()` rather than a window
+  stub.
+- `main.js` stays untouched: it is in ADR-0034's `governs:` for TASK-0070 (the
+  timer wiring), keeping firing surface and timer cleanly separable as the task
+  requires. main.js will gain its `ADR: ADR-0034` reference in TASK-0070.

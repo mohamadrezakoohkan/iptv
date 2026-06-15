@@ -7,6 +7,7 @@ status: accepted
 governs:
   - src/client/ui.js
   - src/client/app.css
+  - src/client/cfg.js
   - src/client/main.js
   - src/index.html
   - src/tests/unit/remfire.test.js
