@@ -35,6 +35,15 @@ carries a keyboard-focusable **Replay** control: activating it builds the Xtream
 timeshift archive URL for that program and plays it back through the same proxy
 and dual-engine player a live channel uses.
 
+On Xtream portals that serve on-demand content, a **Live | Movies | Series**
+toggle above the channel grid opens a built-in **VOD library**: switch to
+**Movies** to browse VOD movie categories and poster cards, or **Series** to
+browse series and drill into their seasons and episodes. Selecting a movie — or
+a series episode — plays it through the same dual-engine player and select+play
+path a live channel uses. The VOD data is fetched best-effort after connect
+through the same proxy; the Movies/Series tabs appear only when the source
+actually serves them (M3U playlists and VOD-less portals show only Live).
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
@@ -146,6 +155,21 @@ command.
   channels, and the M3U path show nothing. Demo mode synthesizes an
   archive-capable channel with a past program so the feature is demonstrable
   offline.
+- **VOD library (Movies & Series)** — on Xtream portals that serve on-demand
+  content, a keyboard-accessible **Live | Movies | Series** segmented toggle
+  above the channel grid switches the browse surface between live channels, VOD
+  movies, and TV series. **Movies** lists VOD movie categories in the sidebar
+  and movie poster cards in the grid; **Series** lists series cards that drill
+  into a seasons/episodes view (fetched on demand) with a back affordance.
+  Selecting a movie or a series episode plays it through the **same** dual-engine
+  player and select+play path a live channel uses — the on-demand stream URL
+  preserves the source container extension, so engine resolution is unchanged
+  (no new player, no separate VOD surface). VOD is fetched best-effort after
+  connect through the same proxy and kept in memory (not persisted); the
+  Movies/Series tabs appear **only** when the source actually has them (M3U,
+  demo beyond its one synthesized movie, and VOD-less Xtream portals show only
+  Live). Demo mode synthesizes one offline-playable movie so the feature is
+  demonstrable without a live portal.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).
