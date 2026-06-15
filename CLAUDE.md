@@ -160,8 +160,9 @@ front-matter · `failures/` failure records + `failures/NEAR-MISSES.md`
 (append-only persistent-recovered near-miss ledger) · `src/` product source and tests ·
 `CHANGELOG.md` numbered Evolution
 Log · `BACKLOG.md` parked ideas (backlog-agent, append-only, optional) ·
-`README.md` product doc · `.claude/agents/` the seven subagents ·
-`.claude/skills/` invocation interfaces + the validate-ai-instructions
+`README.md` product doc · `.claude/agents/` the seven subagent definitions plus
+the `autonomous-loop` orchestrator runbook (a non-spawnable procedure doc, not a
+subagent) · `.claude/skills/` invocation interfaces + the validate-ai-instructions
 checklist · `.claude/workflows/` saved Claude Code workflows the orchestrator
 invokes (e.g. the post-VALIDATE review+research fan-out).
 
@@ -169,7 +170,8 @@ invokes (e.g. the post-VALIDATE review+research fan-out).
 
 Each subagent has a corresponding skill in `.claude/skills/` that exposes its
 invocation interface. Use these when driving the pipeline manually or when
-referring to a phase by name:
+referring to a phase by name. The last row, `/autonomous-loop`, is not a subagent
+— it is the orchestrator's own continuous-build-loop runbook:
 
 | Skill | Phase | Invoke for |
 |---|---|---|
@@ -180,9 +182,32 @@ referring to a phase by name:
 | `/research` | 4 RESEARCH | non-blocking next-feature research, alongside REVIEW (auto-run every build run) |
 | `/coreflow` | harness | harness change instructions |
 | `/backlog-agent` | backlog | parking an idea for later in `BACKLOG.md` |
+| `/autonomous-loop` | orchestrator loop | autonomously chaining build runs (one Evolution/PR each) until the human stops or a stop condition is met |
 
-The full agent procedure lives in `.claude/agents/<name>.md`. The skill is the
-caller-facing contract only — trigger, inputs, outputs, failure signal.
+The full subagent procedure lives in `.claude/agents/<name>.md`; the
+orchestrator loop's full procedure lives in `.claude/agents/autonomous-loop.md`
+(a runbook, not a subagent). The skill is the caller-facing contract only —
+trigger, inputs, outputs, failure signal.
+
+## Autonomous build loop
+
+When the human asks to build features autonomously in a continuous loop ("keep
+building until I stop you", "ship the next feature until you finish e23"), you —
+the orchestrator — run the **autonomous build loop**: chain full CORE_FLOW build
+runs back-to-back, one Evolution and one PR per iteration, draining `BACKLOG.md`
+and then shipping each Phase 4 RESEARCH winner, until the human interrupts or a
+stated stop condition is met. The full step-by-step is
+`.claude/agents/autonomous-loop.md` (`/autonomous-loop`). Each iteration is a
+normal build run (CORE_FLOW.md §4.2) — no new phase, no new agent — with two
+loop-specific points: (1) within one session build and backlog PRs are
+human-merge-gated, so `main` does not advance between iterations and each run
+**stacks** its `ai/e<E>-<slug>` branch on the prior run's branch HEAD (iteration
+1 still branches fresh from `main` per the default `worktree.baseRef: "fresh"`
+posture); (2) the next iteration's build prompt is the prior iteration's carried
+RESEARCH winner when `BACKLOG.md` has no unbuilt item. The Rule Pack is injected
+into every spawned agent every iteration, the orchestrator never writes product
+artifacts, no actor touches `main`, and one Run Report (CORE_FLOW.md §6) is
+emitted per iteration.
 
 ## Learned Rules
 
@@ -194,4 +219,5 @@ proposal the orchestrator accepts.
 
 <!-- LEARNED-RULES:START -->
 - **R-0001** (FAIL-0001, E2): Before writing unit tests that assert DOM attribute mutations (`setAttribute` / `removeAttribute`), check the baseline HTML to confirm which attributes are actually present on the element — never assert that an attribute is added back if it was never in the source HTML.
+- **R-0002** (FAIL-0002, E22): When concluding a task as `status: done` on a passing validation, set its `attempts` front-matter to the actual attempt number — a clean first-attempt pass is `attempts: 1`, never `attempts: 0`. The actor making the terminal-success commit (validate-agent on PASS) must true up `attempts` so the task file matches reality before committing.
 <!-- LEARNED-RULES:END -->

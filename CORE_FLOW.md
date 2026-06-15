@@ -90,9 +90,10 @@ agents and never talk to the human.
 │   ├── TEMPLATE.md
 │   └── NEAR-MISSES.md    Append-only ledger of persistent recovered near-misses (orchestrator; created on first use)
 ├── src/                 Product source and tests (implement-agent writes)
-├── .claude/agents/      The seven subagent definitions
-├── .claude/skills/      Invocation interfaces (one per subagent) + the
-│                        validate-ai-instructions checklist
+├── .claude/agents/      The seven subagent definitions + the autonomous-loop
+│                        orchestrator runbook (a procedure doc, not a subagent — §4.7)
+├── .claude/skills/      Invocation interfaces (one per subagent, plus the
+│                        autonomous-loop runbook) + the validate-ai-instructions checklist
 └── .claude/workflows/   Saved Claude Code workflows the orchestrator invokes
                          (e.g. the post-VALIDATE review+research fan-out — §4.6)
 ```
@@ -378,6 +379,11 @@ Every human prompt takes exactly one of four routes:
 
 When a prompt mixes routes, split it and say so in the Run Report; when the
 intent is ambiguous, ask the human rather than guess.
+
+A request to **build features autonomously in a continuous loop** is not a fifth
+route: it is the build route run repeatedly by the orchestrator. The orchestrator
+follows the autonomous-loop runbook (§4.7), and each iteration is one ordinary
+build run.
 
 ### 4.2 Run sequence
 
@@ -721,6 +727,51 @@ dedicated **Research misses** section of `failures/NEAR-MISSES.md` that is
 failure earns no rule and never blocks the run: REVIEW still finalizes the PR
 and the run completes green. The harness deliberately keeps transient external
 research failures out of the learning machinery (§5).
+
+### 4.7 The autonomous build loop (orchestrator runbook, no new route)
+
+The autonomous build loop lets the human ask the orchestrator to keep shipping
+features without a prompt between Evolutions — e.g. "keep building features
+forever until I stop you" or "ship the next feature until you finish e23". It is
+**orchestrator control flow, not a new route and not a new agent**: each
+iteration is one ordinary build run (§4.2), and §1's separation of powers still
+holds — the orchestrator (the main session) runs the loop and spawns the
+pipeline agents; no agent runs the loop or spawns agents (§2). The loop's
+step-by-step runbook lives at `.claude/agents/autonomous-loop.md` with a
+caller-facing skill at `.claude/skills/autonomous-loop/SKILL.md`; that runbook is
+a **non-spawnable procedure document**, not a `subagent_type`, so the
+eight-actor count in §2 is unchanged.
+
+**One iteration = one full build run = one Evolution = one PR** (§4.2): SPEC →
+IMPLEMENT+VALIDATE per task → REVIEW + RESEARCH via the saved workflow (§4.6),
+Rule Pack injected into every spawned agent (§4.2). The loop adds two
+loop-specific mechanics on top of an unchanged §4.2:
+
+1. **Next-feature selection.** Each iteration's build prompt is the top unbuilt
+   item of `BACKLOG.md` if present, otherwise the **carried-forward winner** of
+   the prior iteration's Phase 4 RESEARCH (§4.6). Within one session, build and
+   backlog PRs are human-merge-gated, so `main`'s `BACKLOG.md` does not grow
+   between iterations — the carry-forward winner is the source when the backlog
+   is empty.
+2. **Run-branch stacking.** Because build PRs and backlog PRs are not
+   auto-merged, `main` does not advance during the loop. So iteration N (N≥2)
+   creates `ai/e<E>-<slug>` from the **prior run-branch HEAD**
+   (`ai/e<E-1>-<slug>`), not fresh from `main`, so consumed-backlog state, prior
+   features, and contiguous Evolution/ADR/TASK numbering carry forward. This is
+   the documented "draining several unmerged evolutions in one session" override
+   of the default fresh-from-`main` posture; iteration 1 still branches fresh
+   from `main` and `.claude/settings.json` still pins `worktree.baseRef:
+   "fresh"` (§3) — the default single-run posture is unchanged. Each run's PR
+   notes its stacking lineage and its merge-together dependency on the prior PR.
+
+After each iteration's backlog handoff (§4.6) the orchestrator emits that
+iteration's Run Report (§6) and immediately begins the next iteration, repeating
+until the human interrupts or a stated stop condition is met (a named evolution
+shipped, a count reached, or the backlog drained with no carried winner). All
+loop non-negotiables are §4.2's: the orchestrator writes no product artifact, no
+actor touches `main` or force-pushes (§3), and a prompt that mixes routes is
+split per §4.1. RESEARCH stays non-blocking (§4.6) — it never delays the next
+iteration or any iteration's Run Report.
 
 ## 5. Failure → Rule protocol
 
