@@ -1,4 +1,4 @@
-// ADR: ADR-0030
+// ADR: ADR-0030, ADR-0036
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -206,6 +206,21 @@ describe('loadEpg — demo path', function () {
     const nn = epg.getNowNext('d1', Date.now());
     expect(nn.now).not.toBeNull();
     expect(epg.getSched('d1', Date.now()).length).toBeGreaterThan(0);
+  });
+
+  // ADR-0036 §6: so the catch-up Replay affordance is demonstrable offline, the
+  // synthetic demo guide must include at least one PAST program (stop <= now) for
+  // an archive-capable channel — a past archive row is what carries Replay.
+  it('synthesizes ≥1 past program (stop <= now) so a Replay row renders offline', async function () {
+    const { api, epg } = mkApi(shims(vi.fn()));
+    const now = Date.now();
+    await api.loadEpg({ src: 'demo', chs: [{ id: 'arch1', name: 'Arch Demo', grp: 'News' }] });
+    const all  = epg.get('arch1');
+    const past = all.filter(function isPast(p) { return p.stop <= now; });
+    expect(past.length).toBeGreaterThanOrEqual(1);
+    // The past program's identity (chId + start) is what data-replay encodes.
+    expect(String(past[0].chId)).toBe('arch1');
+    expect(typeof past[0].start).toBe('number');
   });
 });
 

@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -15,6 +15,8 @@
   const DEMO_PRGS = 4;          // synthetic programs generated per demo channel
   const DEMO_DUR  = 1800000;    // synthetic program length, ms (30 min)
   const HR_MS     = 3600000;    // one hour in ms (demo guide spans Date.now())
+  const DEMO_ARCH = 4;          // every Nth demo channel is archive-capable (ADR-0036, §6)
+  const ARCH_DUR  = 7;          // synthetic archive retention window, days
 
   /**
    * DEMO_DATA: [category-name, [channel-names]][]
@@ -58,8 +60,12 @@
    * cat is the category id (slug of grp) so it matches getDemoCats()'s id —
    * the id-based grid filter (getChs flt, ADR-0009) keys on ch.cat === cat.id;
    * grp stays the human-readable category/genre name (Ch schema, §5a chip).
+   * Every DEMO_ARCHth channel is flagged archive-capable (arch:true, non-zero
+   * archDur) so the catch-up Replay affordance is demonstrable offline (ADR-0036,
+   * specs/catchup-archive.md §6); the rest stay arch:false as before.
    */
   function mkDemoCh(opts) {
+    const arch = opts.cnt % DEMO_ARCH === 1;
     return {
       id:      String(opts.cnt),
       name:    opts.name,
@@ -68,8 +74,8 @@
       img:     '',
       cat:     catSlug(opts.grp),
       num:     opts.cnt,
-      arch:    false,
-      archDur: 0,
+      arch:    arch,
+      archDur: arch ? ARCH_DUR : 0,
     };
   }
 

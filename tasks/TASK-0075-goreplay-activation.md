@@ -2,8 +2,8 @@
 id: TASK-0075
 adr: ADR-0036
 evolution: 21
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0073, TASK-0074]
 ---
 
@@ -59,4 +59,69 @@ program so the flow is demonstrable offline.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+### Activation wiring (`src/client/ui.js`)
+- `onGridClick` gains a `[data-replay]` branch placed **after** `[data-rem]` and
+  **before** the `[data-fav]` / card-select branches: `evt.stopPropagation()`
+  then `onReplay(rep)`. So activating Replay never selects/plays the live stream
+  and never toggles schedule expansion (mirrors `[data-exp]`/`[data-rem]`).
+- `onGridKey` now also early-returns on `[data-replay]` so the real `<button>`
+  activates itself once (no double-fire), exactly like `[data-exp]`/`[data-rem]`.
+- `onReplay(btn)` splits `data-replay="<chId>|<start>"` at the last `|` (mirrors
+  `toggleRem`'s key parse) and calls `goReplay`.
+- `getReplayPrg(chId, start)` resolves the PAST program from the FULL stored
+  guide via `IptvEpg.get(chId)` (not the upcoming-only `getSched` `getRemPrg`
+  uses), matching by `start`; null when no guide/match (stale `data-replay` →
+  no-op).
+- `goReplay(chId, start)` is the new `go*` action: resolves the `Ch` from
+  `ST.chs` (no-op when gone or `arch !== true`), resolves the `Prg` (no-op when
+  absent), builds the archive URL via `IptvPlay.getArchUrl`, then runs the same
+  arc as `goRemWatch`: `setCur(ch)` → `saveSt('sel')` → `go('PLAY')` when READY →
+  `rndHead()` → `loadPlay(archUrl)`. The played URL is the archive URL, the
+  active-channel marker reflects the channel. Exported on `window.IptvUi`.
+
+### Archive-URL builder fallback (`src/client/play.js`)
+- `getArchUrl` now returns `ch.url` unchanged when the url has no `/live/`
+  segment (the offline demo path — a public HLS test stream, not an Xtream live
+  url, has no timeshift form). Purely additive: all existing `/live/`-form tests
+  (TASK-0073) are unaffected; this lets demo Replay play the demo test stream
+  through the normal engine path (spec §6).
+
+### Demo demonstrability (`src/client/api.js`)
+- `mkDemoCh` flags every `DEMO_ARCH`th (4th, `cnt % 4 === 1`) demo channel
+  `arch:true` with `archDur: ARCH_DUR` (7 days); the rest stay `arch:false`,
+  `archDur:0`. The existing uniform demo guide (`getDemoPrgs`, base = now − 1h)
+  already includes a clearly-PAST program (slot 0: now−60m..now−30m), so an
+  arch-capable channel surfaces a past Replay row offline. Two new file-global
+  constants `DEMO_ARCH` / `ARCH_DUR` (RULE-ID-7). Channel `url`s are unchanged.
+
+### Tests
+- Unit (`src/tests/unit/epgui.test.js`): a `goReplay` describe block with a
+  dedicated `loadGoReplay` harness recording the select+play arc — asserts the
+  archive URL (not the live url) is played, the full READY arc runs, no `go()`
+  from a non-READY phase, and no-ops for unknown / non-archive / missing-program
+  / no-`arch`-field channels.
+- Unit (`src/tests/unit/api.test.js`): replaced the now-false "every demo
+  channel arch:false" test with "synthesizes ≥1 archive-capable channel" +
+  "every demo channel well-formed (boolean arch; non-arch keeps archDur:0)".
+- Unit (`src/tests/unit/epgfetch.test.js`): demo guide synthesizes ≥1 PAST
+  program (`stop <= now`) so a Replay row renders offline (ADR-0036 §6).
+- UI (`src/tests/ui/catchup-demo.test.js`, new): boots demo, seeds two channels
+  (`/live/`-form urls) + a guide, spies `loadPlay`, clicks the past row's Replay,
+  and asserts PLAY for that channel (`#now-info`), the played URL is the
+  timeshift form (not the live url), the guide stays expanded (stopPropagation),
+  and a non-archive channel surfaces no Replay.
+
+### Traceability
+- `src/client/api.js`, `src/tests/unit/api.test.js`, `src/tests/unit/epgfetch.test.js`
+  added to ADR-0036 `governs:` and each carries the `ADR: ADR-0036` comment
+  (`epgui.test.js`/`epgfetch.test.js` carry it alongside their prior ADR).
+
+### Out of scope / notes for validation
+- Three full-suite UI failures are environment-class, NOT this change:
+  `live.test.js` ×2 (live-network tier — needs a real portal, environment-red in
+  this sandbox), and `log-demo.test.js` (HLS CDN/headless: detail line is
+  `levelLoadError` vs expected `HLS not supported`). The `log-demo` failure was
+  reproduced on a clean checkout with these changes stashed, confirming it is
+  pre-existing. `fmtchip-demo.test.js:150` flaked once under full-suite
+  parallelism (documented "stray headless media-error re-render") and passes in
+  isolation. Unit suite: 833/833 pass; catchup + catchup-demo UI: 6/6 pass.

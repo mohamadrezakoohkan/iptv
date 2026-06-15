@@ -78,7 +78,10 @@ function getArchDur(start, stop) {
 // an archive-capable channel, mirroring the live form mkXtCh built
 // (<base>/live/<user>/<pass>/<id>.<ext>) → the timeshift form
 // <base>/timeshift/<user>/<pass>/<dur>/<YYYY-MM-DD:HH-MM>/<id>.<ext>
-// (ADR-0036, specs/catchup-archive.md §2). No DOM, no ST, no fetch.
+// (ADR-0036, specs/catchup-archive.md §2). No DOM, no ST, no fetch. A url
+// without a /live/ segment (the offline demo path, §6 — a public HLS test
+// stream rather than an Xtream live url) has no timeshift form, so the channel
+// url is returned unchanged and Replay plays the demo stream as-is.
 // opts: { ch:Ch, prg:Prg }
 // ---------------------------------------------------------------------------
 function getArchUrl(opts) {
@@ -86,6 +89,7 @@ function getArchUrl(opts) {
   const prg = opts.prg;
   const live = String(ch.url);
   const i = live.indexOf('/live/');
+  if (i === -1) return live;     // non-Xtream url (e.g. demo test stream): play as-is
   const base = live.slice(0, i);
   const tail = live.slice(i + 6).split('/');     // [user, pass, id.ext]
   const dot = tail[2].lastIndexOf('.');

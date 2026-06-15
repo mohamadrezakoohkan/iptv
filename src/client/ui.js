@@ -546,6 +546,61 @@ function goRemWatch(chId) {
 }
 
 // ---------------------------------------------------------------------------
+// getReplayPrg — pure: resolve the stored Prg for a chId+start from the IptvEpg
+// store (ADR-0036, specs/catchup-archive.md §4). Unlike getRemPrg (upcoming
+// only), Replay targets a PAST program, so it scans the channel's FULL stored
+// guide (IptvEpg.get) and matches by start. Returns null when no guide / no
+// match — so a stale data-replay (guide changed) degrades to a no-op.
+// ---------------------------------------------------------------------------
+function getReplayPrg(chId, start) {
+  if (!window.IptvEpg) return null;
+  const prgs = window.IptvEpg.get(chId);
+  for (let i = 0; i < prgs.length; i += 1) {
+    if (String(prgs[i].start) === String(start)) return prgs[i];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// goReplay — activate a past archive-capable program through the EXISTING
+// select+play path (ADR-0036, specs/catchup-archive.md §4), mirroring goRemWatch
+// / a card click. Resolves the Ch from ST.chs (no-op when gone or not arch),
+// resolves the Prg by start from the stored guide (no-op when absent), builds the
+// timeshift archive URL via IptvPlay.getArchUrl, then runs the same transition:
+// setCur → saveSt('sel') → go('PLAY') when READY → rndHead → loadPlay(archUrl).
+// The played URL is the archive URL, not the live URL; the active-channel marker
+// reflects the channel. Non-archive / missing channels degrade silently.
+// ---------------------------------------------------------------------------
+function goReplay(chId, start) {
+  const st = window.IptvSt.ST;
+  const ch = st.chs.find(function byId(c) { return String(c.id) === String(chId); });
+  if (!ch || ch.arch !== true) return;
+  const prg = getReplayPrg(chId, start);
+  if (!prg) return;
+  if (!window.IptvPlay) return;
+  const url = window.IptvPlay.getArchUrl({ ch, prg });
+  window.IptvSt.setCur(ch);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
+  if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  rndHead();
+  window.IptvPlay.loadPlay(url);
+}
+
+// ---------------------------------------------------------------------------
+// onReplay — read a Replay button's data-replay="<chId>|<start>" (the program
+// identity, mirroring the Remind toggle's data-rem form), split chId/start at
+// the last '|', and route to goReplay (ADR-0036). A malformed/absent key
+// degrades to a no-op inside goReplay.
+// ---------------------------------------------------------------------------
+function onReplay(btn) {
+  const key   = btn.getAttribute('data-replay') || '';
+  const cut   = key.lastIndexOf('|');
+  const chId  = cut === -1 ? key : key.slice(0, cut);
+  const start = cut === -1 ? '' : key.slice(cut + 1);
+  goReplay(chId, start);
+}
+
+// ---------------------------------------------------------------------------
 // mkToast — build the toast element for a fired Rem (ADR-0034): a program-copy
 // line (NOW marker + escaped title + local start time via fmtPrgTime), a
 // Watch/Jump action carrying data-watch="<chId>", and a dismiss control. role
@@ -681,6 +736,8 @@ function onGridClick(evt) {
   if (exp) { evt.stopPropagation(); toggleSched(exp); return; }
   const rem  = evt.target.closest('[data-rem]');
   if (rem) { evt.stopPropagation(); toggleRem(rem); return; }
+  const rep  = evt.target.closest('[data-replay]');
+  if (rep) { evt.stopPropagation(); onReplay(rep); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
   const card = evt.target.closest('[data-id]');
@@ -701,12 +758,13 @@ function onGridClick(evt) {
 // ---------------------------------------------------------------------------
 function onGridKey(evt) {
   if (evt.key !== 'Enter') return;
-  // The expand control and the Remind toggle are real <button>s: Enter/Space
-  // already fire a native click that onGridClick handles (toggleSched /
-  // toggleRem). Routing the keydown here too would double-toggle, so the button
-  // activates itself (ADR-0031, ADR-0033).
+  // The expand control, the Remind toggle, and the Replay control are real
+  // <button>s: Enter/Space already fire a native click that onGridClick handles
+  // (toggleSched / toggleRem / onReplay). Routing the keydown here too would
+  // double-fire, so the button activates itself (ADR-0031, ADR-0033, ADR-0036).
   if (evt.target.closest('[data-exp]')) return;
   if (evt.target.closest('[data-rem]')) return;
+  if (evt.target.closest('[data-replay]')) return;
   onGridClick(evt);
 }
 
@@ -1696,4 +1754,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };

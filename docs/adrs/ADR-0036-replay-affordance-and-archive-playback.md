@@ -7,9 +7,12 @@ status: accepted
 governs:
   - src/client/play.js
   - src/client/ui.js
+  - src/client/api.js
   - src/client/app.css
   - src/tests/unit/play.test.js
   - src/tests/unit/epgui.test.js
+  - src/tests/unit/api.test.js
+  - src/tests/unit/epgfetch.test.js
   - src/tests/ui/catchup.test.js
   - src/tests/ui/catchup-demo.test.js
 ---

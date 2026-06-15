@@ -1,4 +1,4 @@
-// ADR: ADR-0031
+// ADR: ADR-0031, ADR-0036
 // Unit tests — mkCard now/next line + expandable per-channel schedule on the
 // channel card (TASK-0064, TASK-0065, specs/epg.md §4–§5). mkCard appends a
 // now/next line AND an expand control + schedule list ONLY when a guide is
@@ -413,5 +413,118 @@ describe('mkSchedRow — Replay control gating (ADR-0036)', function () {
     expect((html.match(/data-replay=/g) || []).length).toBe(1);
     expect(html).toContain('>Old Show<');
     expect(html).toContain('>Future Show<');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// goReplay — activate a past archive-capable program through the EXISTING
+// select+play path (TASK-0075, ADR-0036, specs/catchup-archive.md §4). Loads
+// ui.js against a window that records the select+play arc (setCur, saveSt, go,
+// loadPlay) and a getArchUrl stub, so the test asserts goReplay builds the
+// archive URL and drives the live select+play path with it, and no-ops for an
+// unknown / non-archive channel or a program absent from the guide.
+// ---------------------------------------------------------------------------
+
+// Build a window whose IptvSt records the transition and whose IptvPlay records
+// the played URL. opts: { chs, phase, epg } where epg is { [chId]: Prg[] } (the
+// full stored list IptvEpg.get returns). getArchUrl returns a fixed sentinel so
+// the test can assert it was the archive URL (not the live url) that was played.
+function loadGoReplay(opts) {
+  const o    = opts || {};
+  const log  = { cur: null, saved: [], went: [], played: [] };
+  const ARCH = 'http://portal.test/timeshift/u/p/30/STAMP/5.ts';
+  const win  = {
+    IptvSt: {
+      ST: { chs: o.chs || [], cur: null, phase: o.phase || 'READY', favs: [], flt: 'all', srch: '', cats: [] },
+      setCur:  function setCur(ch) { log.cur = ch; win.IptvSt.ST.cur = ch; },
+      saveSt:  function saveSt(k)  { log.saved.push(k); },
+      go:      function go(p)      { log.went.push(p); win.IptvSt.ST.phase = p; },
+    },
+    IptvPlay: {
+      getArchUrl: function getArchUrl(a) { log.archArgs = a; return ARCH; },
+      loadPlay:   function loadPlay(u)   { log.played.push(u); },
+    },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    document: {
+      getElementById: function getEl() { return null; },
+      querySelector:  function qSel()  { return null; },
+      body: { classList: { add: function add() {}, remove: function rem() {} } },
+    },
+    clearTimeout: function clearTout() {},
+    setTimeout:   function setTout(fn) { return fn; },
+  };
+  win.IptvEpg = {
+    get: function get(id) { const e = (o.epg || {})[String(id)]; return e ? e.slice() : []; },
+    getSched: function getSched() { return []; },
+    has: function has() { return false; },
+    getNowNext: function getNowNext() { return { now: null, next: null }; },
+  };
+  const emptySrc = readFileSync(EMPTY_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', '"use strict";\n' + emptySrc)(win);
+  const src = readFileSync(UI_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'document', '"use strict";\n' + src)(win, win.document);
+  return { ui: win.IptvUi, log, ARCH };
+}
+
+const ARCH_CH = { id: '5', name: 'Arch', num: 5, img: '', cat: '', url: 'http://portal.test/live/u/p/5.ts', arch: true, archDur: 7 };
+const PAST_PRG = { chId: '5', title: 'Old Show', start: 1_700_000_000_000, stop: 1_700_001_800_000, desc: '', cat: '' };
+
+describe('goReplay — archive activation through the select+play path (ADR-0036)', function () {
+  it('builds the archive URL via getArchUrl and plays IT (not the live url) through loadPlay', function () {
+    const { ui, log, ARCH } = loadGoReplay({ chs: [ARCH_CH], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('5', String(PAST_PRG.start));
+    // getArchUrl was handed the resolved Ch + Prg.
+    expect(log.archArgs.ch).toBe(ARCH_CH);
+    expect(log.archArgs.prg.start).toBe(PAST_PRG.start);
+    // The archive URL — not the live url — was played.
+    expect(log.played).toEqual([ARCH]);
+    expect(log.played[0]).not.toBe(ARCH_CH.url);
+  });
+
+  it('drives the full live select+play arc (setCur → saveSt(sel) → go(PLAY)) when READY', function () {
+    const { ui, log } = loadGoReplay({ chs: [ARCH_CH], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('5', String(PAST_PRG.start));
+    expect(log.cur).toBe(ARCH_CH);              // active-channel marker reflects the channel
+    expect(log.saved).toContain('sel');
+    expect(log.went).toEqual(['PLAY']);
+  });
+
+  it('does NOT transition to PLAY when phase is not READY (already PLAY) but still plays the archive', function () {
+    const { ui, log, ARCH } = loadGoReplay({ chs: [ARCH_CH], phase: 'PLAY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('5', String(PAST_PRG.start));
+    expect(log.went).toEqual([]);               // no go() call from a non-READY phase
+    expect(log.cur).toBe(ARCH_CH);
+    expect(log.played).toEqual([ARCH]);
+  });
+
+  it('no-ops for an unknown channel (not in ST.chs)', function () {
+    const { ui, log } = loadGoReplay({ chs: [ARCH_CH], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('999', String(PAST_PRG.start));
+    expect(log.cur).toBeNull();
+    expect(log.played).toEqual([]);
+  });
+
+  it('no-ops for a non-archive channel (arch !== true)', function () {
+    const plain = { id: '5', name: 'Plain', num: 5, img: '', cat: '', url: 'http://portal.test/live/u/p/5.ts', arch: false, archDur: 0 };
+    const { ui, log } = loadGoReplay({ chs: [plain], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('5', String(PAST_PRG.start));
+    expect(log.cur).toBeNull();
+    expect(log.played).toEqual([]);
+  });
+
+  it('no-ops when the program is absent from the channel guide (stale data-replay)', function () {
+    const { ui, log } = loadGoReplay({ chs: [ARCH_CH], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    ui.goReplay('5', '1234567890');             // no program at that start
+    expect(log.cur).toBeNull();
+    expect(log.played).toEqual([]);
+  });
+
+  it('no-ops when the channel carries no arch field at all (M3U/demo Ch) — no throw', function () {
+    const noField = { id: '5', name: 'NoField', num: 5, img: '', cat: '', url: 'http://x/y.m3u8' };
+    const { ui, log } = loadGoReplay({ chs: [noField], phase: 'READY', epg: { 5: [PAST_PRG] } });
+    expect(function run() { ui.goReplay('5', String(PAST_PRG.start)); }).not.toThrow();
+    expect(log.played).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -322,15 +322,29 @@ describe('Ch archive fields (arch / archDur)', function () {
     expect(ch.archDur).toBe(0);
   });
 
-  it('every demo channel carries arch:false, archDur:0', async function () {
+  // ADR-0036 §6: the demo path synthesizes ≥1 archive-capable channel so the
+  // catch-up Replay affordance is demonstrable offline; the rest stay arch:false.
+  it('synthesizes ≥1 archive-capable demo channel (arch:true, non-zero archDur)', async function () {
+    vi.useFakeTimers();
+    const api = loadApi({ fetch: vi.fn(), setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const p = api.connect('demo', { user: 'x', pass: 'x' });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    const arch = res.val.channels.filter(function isArch(ch) { return ch.arch === true; });
+    expect(arch.length).toBeGreaterThanOrEqual(1);
+    for (const ch of arch) expect(ch.archDur).toBeGreaterThan(0);
+    vi.useRealTimers();
+  });
+
+  it('every demo channel is well-formed: arch is boolean, non-archive channels keep archDur:0', async function () {
     vi.useFakeTimers();
     const api = loadApi({ fetch: vi.fn(), setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
     const p = api.connect('demo', { user: 'x', pass: 'x' });
     await vi.runAllTimersAsync();
     const res = await p;
     for (const ch of res.val.channels) {
-      expect(ch.arch).toBe(false);
-      expect(ch.archDur).toBe(0);
+      expect(typeof ch.arch).toBe('boolean');
+      if (ch.arch === false) expect(ch.archDur).toBe(0);
     }
     vi.useRealTimers();
   });
