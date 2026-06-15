@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036, ADR-0037
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -199,13 +199,15 @@ describe('connect(realUrl) — proxy routing', function () {
     const res = await api.connect(BASE, { user: USR, pass: PSS });
     const ch = res.val.channels[0];
     expect(ch).toEqual({
-      id:   '42',
-      name: 'World News 24',
-      grp:  'News',
-      url:  BASE + '/live/' + USR + '/' + PSS + '/42.ts',
-      img:  'http://img.example.com/42.png',
-      cat:  '7',
-      num:  1,
+      id:      '42',
+      name:    'World News 24',
+      grp:     'News',
+      url:     BASE + '/live/' + USR + '/' + PSS + '/42.ts',
+      img:     'http://img.example.com/42.png',
+      cat:     '7',
+      num:     1,
+      arch:    false,
+      archDur: 0,
     });
   });
 
@@ -261,6 +263,103 @@ describe('connect(realUrl) — proxy routing', function () {
     const res = await api.connect(BASE, { user: USR, pass: PSS });
     expect(res.val.categories[0]).toEqual({ category_id: '7', category_name: 'News' });
     expect(res.val.channels[0].grp).toBe('News');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archive capability — arch / archDur on the Ch schema (ADR-0035, TASK-0072)
+// ---------------------------------------------------------------------------
+describe('Ch archive fields (arch / archDur)', function () {
+  const BASE = 'http://portal.example.com';
+  const USR  = 'alice';
+  const PSS  = 'secret';
+  const INF_OK = { user_info: { auth: 1, allowed_output_formats: ['ts'] } };
+  const CATS   = [{ category_id: '7', category_name: 'News' }];
+
+  /** Sequential Xtream mock returning the given streams payload. */
+  function mkFetch(strms) {
+    return vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(INF_OK) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(CATS) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(strms) });
+  }
+
+  /** Connect against BASE with the given streams payload, return channels[0]. */
+  async function firstCh(strms) {
+    const ftch = mkFetch(strms);
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    return res.val.channels[0];
+  }
+
+  it('mkXtCh sets arch:true and archDur:N from tv_archive / tv_archive_duration', async function () {
+    const ch = await firstCh([{ num: 1, name: 'Arch TV', stream_id: 5, category_id: '7', tv_archive: 1, tv_archive_duration: 7 }]);
+    expect(ch.arch).toBe(true);
+    expect(ch.archDur).toBe(7);
+  });
+
+  it('mkXtCh coerces a string "1" tv_archive to arch:true and string duration to a number', async function () {
+    const ch = await firstCh([{ num: 1, name: 'Arch TV', stream_id: 5, category_id: '7', tv_archive: '1', tv_archive_duration: '14' }]);
+    expect(ch.arch).toBe(true);
+    expect(ch.archDur).toBe(14);
+  });
+
+  it('mkXtCh yields arch:false, archDur:0 when tv_archive is 0', async function () {
+    const ch = await firstCh([{ num: 1, name: 'Plain TV', stream_id: 5, category_id: '7', tv_archive: 0, tv_archive_duration: 0 }]);
+    expect(ch.arch).toBe(false);
+    expect(ch.archDur).toBe(0);
+  });
+
+  it('mkXtCh yields arch:false, archDur:0 when the fields are absent (no throw)', async function () {
+    const ch = await firstCh([{ num: 1, name: 'Legacy TV', stream_id: 5, category_id: '7' }]);
+    expect(ch.arch).toBe(false);
+    expect(ch.archDur).toBe(0);
+  });
+
+  it('mkXtCh archDur falls back to 0 for a NaN tv_archive_duration', async function () {
+    const ch = await firstCh([{ num: 1, name: 'Arch TV', stream_id: 5, category_id: '7', tv_archive: 1, tv_archive_duration: 'oops' }]);
+    expect(ch.arch).toBe(true);
+    expect(ch.archDur).toBe(0);
+  });
+
+  // ADR-0036 §6: the demo path synthesizes ≥1 archive-capable channel so the
+  // catch-up Replay affordance is demonstrable offline; the rest stay arch:false.
+  it('synthesizes ≥1 archive-capable demo channel (arch:true, non-zero archDur)', async function () {
+    vi.useFakeTimers();
+    const api = loadApi({ fetch: vi.fn(), setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const p = api.connect('demo', { user: 'x', pass: 'x' });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    const arch = res.val.channels.filter(function isArch(ch) { return ch.arch === true; });
+    expect(arch.length).toBeGreaterThanOrEqual(1);
+    for (const ch of arch) expect(ch.archDur).toBeGreaterThan(0);
+    vi.useRealTimers();
+  });
+
+  it('every demo channel is well-formed: arch is boolean, non-archive channels keep archDur:0', async function () {
+    vi.useFakeTimers();
+    const api = loadApi({ fetch: vi.fn(), setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const p = api.connect('demo', { user: 'x', pass: 'x' });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    for (const ch of res.val.channels) {
+      expect(typeof ch.arch).toBe('boolean');
+      if (ch.arch === false) expect(ch.archDur).toBe(0);
+    }
+    vi.useRealTimers();
+  });
+
+  it('every M3U channel carries arch:false, archDur:0', function () {
+    const api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
+    const txt = [
+      '#EXTM3U',
+      '#EXTINF:-1 tvg-id="c1" tvg-name="Channel One" group-title="News",Channel One',
+      'http://stream.example.com/c1',
+    ].join('\n');
+    const res = api.parsM3u(txt);
+    expect(res.ok).toBe(true);
+    expect(res.val.channels[0].arch).toBe(false);
+    expect(res.val.channels[0].archDur).toBe(0);
   });
 });
 
@@ -505,8 +604,8 @@ describe('IptvApi export surface', function () {
     api = loadApi({ fetch: vi.fn(), setTimeout: vi.fn(), clearTimeout: vi.fn(), Promise, encodeURIComponent, AbortController, URL });
   });
 
-  it('exposes exactly connect, isDemo, parsM3u, loadM3u — no auto-detect heuristic', function () {
-    expect(Object.keys(api).sort()).toEqual(['connect', 'isDemo', 'loadM3u', 'parsM3u']);
+  it('exposes the public surface (incl. ADR-0030 loadEpg/getTvgUrl, ADR-0037 loadVod/loadSerInfo) — no auto-detect heuristic', function () {
+    expect(Object.keys(api).sort()).toEqual(['connect', 'getTvgUrl', 'isDemo', 'loadEpg', 'loadM3u', 'loadSerInfo', 'loadVod', 'parsM3u']);
   });
 
   it('the removed heuristic key is undefined on the export object', function () {

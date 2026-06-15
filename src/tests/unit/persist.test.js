@@ -349,6 +349,7 @@ function mkUiWin(opts) {
     document: {
       getElementById: function getEl(id) { return elMap[id] || null; },
       querySelector:  function qSel()    { return null; },
+      addEventListener: vi.fn(),
       body: { classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() } },
     },
   };

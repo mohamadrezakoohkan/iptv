@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -33,6 +33,8 @@ const EL = {
   mm3u: null,   // #mode-m3u radio
   fchp: null,   // #fmt-chip contextual format chip button (ADR-0025)
   fdtl: null,   // #fmt-detail inline engine-detail text (ADR-0025)
+  fsb:  null,   // #fs-btn fullscreen toggle (ADR-0039)
+  pipb: null,   // #pip-btn picture-in-picture toggle (ADR-0039)
   apnl: null,   // #acct-panel aside (ADR-0014)
   abtn: null,   // #acct-btn nav button (ADR-0014)
   ascr: null,   // #acct-scrim backdrop (ADR-0014)
@@ -49,6 +51,8 @@ const EL = {
   lcls: null,   // #log-close button (ADR-0028)
   lclr: null,   // #log-clear button (ADR-0028)
   llst: null,   // #log-list container (ADR-0028)
+  rtst: null,   // #rem-toasts reminder firing toast stack (ADR-0034)
+  ctog: null,   // #content-toggle Live|Movies|Series segmented control (ADR-0038)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -80,6 +84,30 @@ const SIGNAL_ICOS = {
 // ---------------------------------------------------------------------------
 let tmp  = null;   // debounce timeout id  (tmp = temporary)
 let srch = '';     // pending search query (srch = search)
+
+// ---------------------------------------------------------------------------
+// Content-mode flag (ADR-0038, specs/vod-library.md §5a, §7) — the transient
+// Live | Movies | Series browse mode. It is a render-mode flag held in the UI
+// layer exactly as a render filter, NOT a state-machine phase (CONVENTIONS §6)
+// and NOT an ST key (§5 forbids adding ST properties) and NOT persisted (no
+// localStorage key). Default 'live'; reset to 'live' on connect/switch/
+// disconnect (resetMode) and naturally on reload (module re-init). Valid tokens
+// are the three browse modes; getMode* reads it, goMode writes it via setMode.
+// ---------------------------------------------------------------------------
+const MODES = ['live', 'movies', 'series'];
+let mode = 'live';   // active content mode (mode = render-mode flag, §5a)
+
+// ---------------------------------------------------------------------------
+// Series drill-down state (ADR-0038, specs/vod-library.md §5b) — presentational
+// navigation within `series` mode, NOT a state-machine phase and NOT persisted
+// (CONVENTIONS §6, no localStorage key). `serCur` holds the open series id (the
+// drill-down view) or null (the series list view); `vodCtx` holds the connected
+// Xtream account context (src/user/pass/ext) captured at connect time so the
+// on-demand get_series_info loader (IptvApi.loadSerInfo, TASK-0078) can run when
+// a series is opened. Both reset on connect/switch/disconnect (resetMode).
+// ---------------------------------------------------------------------------
+let serCur = null;   // open series id (drill-down) or null (series list)
+let vodCtx = null;   // { src, user, pass, ext } connected account context
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -125,8 +153,223 @@ function mkFav(ch, favs) {
 }
 
 /**
+ * Build one now/next row HTML (ADR-0031): a mono marker + the program title,
+ * single-line ellipsized, title HTML-escaped. opts: { kind, prg } where kind is
+ * 'now' | 'nxt'. Returns '' when the program is absent so a missing now/next
+ * part is omitted entirely (never rendered as "null"/"undefined").
+ */
+function mkNnRow(opts) {
+  if (!opts.prg) return '';
+  const mark = opts.kind === 'now' ? 'NOW' : 'NEXT';
+  return '<span class="ch-nn-row ch-nn-' + opts.kind + '">'
+    + '<span class="ch-nn-mark">' + mark + '</span>'
+    + '<span class="ch-nn-title">' + escHtml(opts.prg.title) + '</span>'
+    + '</span>';
+}
+
+/**
+ * Build the now/next line HTML for a channel (ADR-0031), reading
+ * window.IptvEpg.getNowNext(ch.id) at render time. The NOW/NEXT text rows stay
+ * decorative (aria-hidden) — never a click target (specs/epg.md §4, §7). A
+ * Remind toggle (ADR-0033, specs/reminders.md §3) is appended for the NEXT part
+ * only, and only when `next` is an upcoming program and IptvRem is present; the
+ * toggle is a real focusable button OUTSIDE the aria-hidden text so assistive
+ * tech reaches it. Returns '' when both now and next are absent.
+ */
+function mkNowNext(ch) {
+  const now = Date.now();
+  const nn  = window.IptvEpg.getNowNext(ch.id, now);
+  const row = mkNnRow({ kind: 'now', prg: nn.now }) + mkNnRow({ kind: 'nxt', prg: nn.next });
+  if (!row) return '';
+  const rem = mkRem({ chId: ch.id, prg: nn.next, now });
+  return '<div class="ch-nn">'
+    + '<span class="ch-nn-text" aria-hidden="true">' + row + '</span>'
+    + rem
+    + '</div>';
+}
+
+/**
+ * Pure: a short local-time clock string for a unix-ms timestamp (ADR-0031).
+ * Falls back to '' for a missing/invalid stamp so a malformed program never
+ * throws during schedule render (mirrors fmtLogTime, ADR-0028).
+ */
+function fmtPrgTime(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Build the state-flipping accessible label for a Remind toggle (ADR-0033,
+ * specs/reminders.md §3): a clear-reminder label when pressed, a set-reminder
+ * label when not. The program title is HTML-escaped (guide data).
+ * opts: { title, on }
+ */
+function getRemLabel(opts) {
+  const t = escHtml(opts.title || '');
+  return opts.on ? 'Clear reminder for ' + t : 'Remind me when ' + t + ' starts';
+}
+
+/**
+ * Build the Remind toggle <button> HTML for an upcoming program (ADR-0033,
+ * specs/reminders.md §3). A keyboard-focusable real button carrying
+ * data-rem="<chId>|<start>" (the ADR-0032 identity), aria-pressed PRESENT in
+ * the baseline (Rule R-0001: rendered "true" when a reminder is set, else
+ * "false" — the toggle mutates an attribute that exists in source, never adds
+ * one that was never present), and a state-flipping accessible label. The
+ * pressed state is read from window.IptvRem at render time; callers guard the
+ * IptvRem-absent case so the row renders exactly as before when the module is
+ * missing (test isolation). opts: { chId, prg }.
+ */
+function mkRemBtn(opts) {
+  const prg = opts.prg;
+  const on  = window.IptvRem.has(opts.chId, prg.start);
+  const lbl = getRemLabel({ title: prg.title, on });
+  return '<button type="button" class="ch-rem' + (on ? ' on' : '') + '"'
+    + ' data-rem="' + escHtml(String(opts.chId)) + '|' + escHtml(String(prg.start)) + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + lbl + '">'
+    + '<span class="ch-rem-ico" aria-hidden="true">&#9200;</span>'
+    + '</button>';
+}
+
+/**
+ * Build the Remind toggle for a program ONLY when it is upcoming (start in the
+ * future relative to `now`) AND the IptvRem module is present (ADR-0033,
+ * specs/reminders.md §3). A current/past program, or an absent IptvRem module,
+ * yields '' so no toggle is rendered. opts: { chId, prg, now }.
+ */
+function mkRem(opts) {
+  if (!window.IptvRem) return '';
+  if (!opts.prg || opts.prg.start <= opts.now) return '';
+  return mkRemBtn({ chId: opts.chId, prg: opts.prg });
+}
+
+/**
+ * Decide whether a PAST program on a channel is archive-capable and inside the
+ * channel's archive window (ADR-0036, specs/catchup-archive.md §3). True only
+ * when the program is past (prg.stop <= now), the channel advertises archive
+ * (ch.arch === true), and — when archDur > 0 — the program start is not older
+ * than the window (now - archDur days); an archDur of 0/absent skips the window
+ * check. A channel without arch (M3U/demo/no field) is never replayable.
+ * opts: { ch, prg, now }.
+ */
+function isReplayable(opts) {
+  const ch  = opts.ch;
+  const prg = opts.prg;
+  if (!ch || ch.arch !== true) return false;
+  if (prg.stop > opts.now) return false;
+  const dur = ch.archDur || 0;
+  if (dur > 0 && prg.start < opts.now - dur * 86400000) return false;
+  return true;
+}
+
+/**
+ * Build the Replay control <button> HTML for a past archive-capable in-window
+ * program (ADR-0036, specs/catchup-archive.md §3), or '' when the program is
+ * not replayable. A keyboard-focusable real button carrying
+ * data-replay="<chId>|<start>" (the program identity, mirroring the Remind
+ * toggle's data-rem form) and an aria-label of "Replay <title>" PRESENT in the
+ * baseline (Rule R-0001: a one-shot action button — no attribute is toggled or
+ * added back at runtime). Activation is wired separately (TASK-0075).
+ * opts: { ch, prg, now }.
+ */
+function mkReplay(opts) {
+  if (!isReplayable(opts)) return '';
+  const prg = opts.prg;
+  const lbl = 'Replay ' + escHtml(prg.title || '');
+  return '<button type="button" class="ch-replay"'
+    + ' data-replay="' + escHtml(String(opts.ch.id)) + '|' + escHtml(String(prg.start)) + '"'
+    + ' aria-label="' + lbl + '">'
+    + '<span class="ch-replay-ico" aria-hidden="true">&#9658;</span>'
+    + '</button>';
+}
+
+/**
+ * Build one schedule row HTML for a program (ADR-0031, specs/epg.md §5): a
+ * local-time range (start–stop), the program title, and the optional category.
+ * The currently-airing program (start <= now < stop) gets the ch-sched-cur
+ * marker class. An upcoming program (start in the future) gains a keyboard-
+ * focusable Remind toggle (ADR-0033, specs/reminders.md §3); a PAST program on
+ * an archive-capable channel within its archive window gains a keyboard-
+ * focusable Replay control instead (ADR-0036, specs/catchup-archive.md §3); the
+ * airing program and non-archive/M3U/demo rows get neither. All program-derived
+ * text is HTML-escaped (guide data). opts: { prg, now, ch } where now is the
+ * reference time (unix ms) and ch is the owning channel (optional — no Replay
+ * when absent, the row still renders, no throw).
+ */
+function mkSchedRow(opts) {
+  const prg = opts.prg;
+  const cur = (prg.start <= opts.now && opts.now < prg.stop) ? ' ch-sched-cur' : '';
+  const rng = escHtml(fmtPrgTime(prg.start)) + '–' + escHtml(fmtPrgTime(prg.stop));
+  const cat = prg.cat ? '<span class="ch-sched-cat">' + escHtml(prg.cat) + '</span>' : '';
+  const rem = mkRem({ chId: prg.chId, prg, now: opts.now });
+  const rep = mkReplay({ ch: opts.ch, prg, now: opts.now });
+  return '<li class="ch-sched-row' + cur + '">'
+    + '<span class="ch-sched-time">' + rng + '</span>'
+    + '<span class="ch-sched-meta">'
+    + '<span class="ch-sched-title">' + escHtml(prg.title) + '</span>'
+    + cat
+    + '</span>'
+    + rem
+    + rep
+    + '</li>';
+}
+
+/**
+ * Build the schedule program list for a channel's expandable guide (ADR-0031 /
+ * ADR-0036). For a non-archive channel this is the upcoming list exactly as
+ * before (getSched: current + future). For an archive-capable channel it also
+ * prepends the channel's PAST programs that are inside the archive window, so a
+ * past archive-capable row (and its Replay control) can render; the merged list
+ * stays ascending by start. opts: { ch, now }.
+ */
+function getSchedPrgs(opts) {
+  const ch  = opts.ch;
+  const now = opts.now;
+  const up  = window.IptvEpg.getSched(ch.id, now);
+  if (ch.arch !== true) return up;
+  const all  = window.IptvEpg.get(ch.id);
+  const past = [];
+  for (let i = 0; i < all.length; i += 1) {
+    if (all[i].stop <= now && isReplayable({ ch, prg: all[i], now })) past.push(all[i]);
+  }
+  return past.concat(up);
+}
+
+/**
+ * Build the expandable schedule block HTML for a channel (ADR-0031,
+ * specs/epg.md §5): a keyboard-focusable expand <button> carrying aria-expanded
+ * (always 'false' at render — collapsed baseline, Rule R-0001) and an accessible
+ * label, plus the schedule list (hidden via aria-hidden until expanded). The
+ * list renders the channel's schedule rows (getSchedPrgs: upcoming rows, plus
+ * past in-window rows for an archive-capable channel — ADR-0036), the current
+ * program marked. Returns '' when the guide is empty so a guide-less card never
+ * gains an expand control. The control is the only interactive node inside the
+ * card besides the fav star; its handler (onGridClick) stops propagation so
+ * expanding never plays the channel.
+ */
+function mkSched(ch) {
+  const now  = Date.now();
+  const prgs = getSchedPrgs({ ch, now });
+  if (prgs.length === 0) return '';
+  let rows = '';
+  for (let i = 0; i < prgs.length; i += 1) {
+    rows += mkSchedRow({ prg: prgs[i], now, ch });
+  }
+  const lbl = 'Show guide for ' + escHtml(ch.name);
+  return '<button type="button" class="ch-exp" data-exp="' + ch.id + '"'
+    + ' aria-expanded="false" aria-label="' + lbl + '">'
+    + '<span class="ch-exp-label">Guide</span>'
+    + '<span class="ch-exp-caret" aria-hidden="true">&#9662;</span>'
+    + '</button>'
+    + '<ul class="ch-sched" aria-hidden="true">' + rows + '</ul>';
+}
+
+/**
  * Build a single channel card HTML string.
- * Reads ST.cur and ST.favs from window.IptvSt.
+ * Reads ST.cur and ST.favs from window.IptvSt; appends a now/next line
+ * (ADR-0031) only when a guide is loaded for the channel — guarded so the card
+ * still renders when the EPG module is absent (test isolation, specs/epg.md §4).
  * @param {Object} ch - Ch object
  */
 function mkCard(ch) {
@@ -134,6 +377,9 @@ function mkCard(ch) {
   const favs = st.favs;
   const cur  = st.cur;
   const active = (cur && String(cur.id) === String(ch.id)) ? ' ch-active' : '';
+  const hasEpg = Boolean(window.IptvEpg && window.IptvEpg.has(ch.id));
+  const nn = hasEpg ? mkNowNext(ch) : '';
+  const sched = hasEpg ? mkSched(ch) : '';
   return '<div class="ch-card' + active + '" role="button" tabindex="0" data-id="' + ch.id + '">'
     + '<div class="ch-card-top">'
     + '<span class="ch-num">' + fmtNum(ch.num) + '</span>'
@@ -141,6 +387,8 @@ function mkCard(ch) {
     + mkFav(ch, favs)
     + '</div>'
     + '<span class="ch-name">' + ch.name + '</span>'
+    + nn
+    + sched
     + '</div>';
 }
 
@@ -188,12 +436,16 @@ function mkSort(opts) {
 }
 
 // ---------------------------------------------------------------------------
-// fireSrch — executes debounced search; reads module-level srch
+// fireSrch — executes debounced search; reads module-level srch. Searches the
+// ACTIVE content mode's item set (getModeItems, ADR-0038 §5a) so search filters
+// within Movies/Series exactly as within Live — in live mode getModeItems is
+// ST.chs, so live behavior is unchanged.
 // ---------------------------------------------------------------------------
 function fireSrch() {
-  const st = window.IptvSt.ST;
+  const st    = window.IptvSt.ST;
+  const items = getModeItems();
   window.IptvSt.setSrch(srch);
-  rndGrid(window.IptvSrch.getChs(st.chs, srch, st.flt, st.favs, st.sort));
+  rndGrid(window.IptvSrch.getChs(items, srch, st.flt, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -206,16 +458,21 @@ function onSrch(evt) {
 }
 
 // ---------------------------------------------------------------------------
-// onCatClick — event-delegated click handler on EL.nav
+// onCatClick — event-delegated click handler on EL.nav. Filters the ACTIVE
+// content mode's set (getModeCats/getModeItems, ADR-0038 §5a): in Movies mode a
+// category click filters the movie grid by item.cat === id; in live mode it is
+// the original behavior (getModeItems → ST.chs, getModeCats → ST.cats).
 // ---------------------------------------------------------------------------
 function onCatClick(evt) {
   const btn = evt.target.closest('[data-cat]');
   if (!btn) return;
-  const cat = btn.getAttribute('data-cat');
-  const st  = window.IptvSt.ST;
+  const cat   = btn.getAttribute('data-cat');
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
   window.IptvSt.setFlt(cat);
-  rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, cat, st.favs, st.sort));
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, cat, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +491,228 @@ function toggleFav(id) {
 }
 
 // ---------------------------------------------------------------------------
+// getRemPrg — pure: resolve the live Prg for a chId+start from the IptvEpg
+// store (ADR-0033). Matches by start within the channel's upcoming schedule
+// (getSched: programs whose stop is still in the future, which includes every
+// remindable upcoming program). Returns null when no guide / no match — so a
+// stale data-rem (guide changed) degrades to a no-op.
+// ---------------------------------------------------------------------------
+function getRemPrg(chId, start) {
+  if (!window.IptvEpg) return null;
+  const prgs = window.IptvEpg.getSched(chId, Date.now());
+  for (let i = 0; i < prgs.length; i += 1) {
+    if (String(prgs[i].start) === String(start)) return prgs[i];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// toggleRem — toggle a reminder from a Remind button's data-rem (ADR-0033,
+// specs/reminders.md §3–§4). Resolves chId+start (start is the segment after
+// the last '|'), resolves the live Prg, calls IptvRem.toggle, and updates the
+// button's aria-pressed + accessible label + on-class IN PLACE (mirroring
+// toggleFav), no full grid re-render, no ST phase. Guarded so an absent IptvRem
+// or a stale/unresolvable program is a silent no-op.
+// ---------------------------------------------------------------------------
+function toggleRem(btn) {
+  if (!window.IptvRem) return;
+  const key   = btn.getAttribute('data-rem') || '';
+  const cut   = key.lastIndexOf('|');
+  const chId  = cut === -1 ? key : key.slice(0, cut);
+  const start = cut === -1 ? '' : key.slice(cut + 1);
+  const prg   = getRemPrg(chId, start);
+  if (!prg) return;
+  const on  = window.IptvRem.toggle(chId, prg);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.setAttribute('aria-label', getRemLabel({ title: prg.title, on }));
+  btn.classList.toggle('on', on);
+  if (on) askRemPerm();
+}
+
+// ---------------------------------------------------------------------------
+// askRemPerm — best-effort, permission-gated request for the browser
+// Notification permission (ADR-0034, specs/reminders.md §5). Called ONLY from a
+// user gesture (the Remind toggle's set branch above) — never on load. It is a
+// no-op unless window.Notification exists and its permission is still 'default'
+// (so it requests at most once: after a grant/deny the permission is no longer
+// 'default'). A denied/unsupported result simply leaves notifications skipped;
+// the request is fired-and-forgotten and never throws.
+// ---------------------------------------------------------------------------
+function askRemPerm() {
+  const N = window.Notification;
+  if (!N || typeof N.requestPermission !== 'function') return;
+  if (N.permission !== 'default') return;
+  try {
+    const p = N.requestPermission();
+    if (p && typeof p.then === 'function') p.then(noop, noop);
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// noop — shared no-op for fire-and-forget promise handlers (CONVENTIONS §9
+// forbids anonymous functions assigned to variables; a named declaration kept
+// at module scope satisfies the .then(noop, noop) calls without inlining).
+// ---------------------------------------------------------------------------
+function noop() {}
+
+// ---------------------------------------------------------------------------
+// rmToast — remove one toast element from the DOM (ADR-0034). Guarded so a
+// double dismiss (manual click + auto-timeout) is harmless.
+// ---------------------------------------------------------------------------
+function rmToast(el) {
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+// ---------------------------------------------------------------------------
+// goRemWatch — the toast Watch/Jump action (ADR-0034, specs/reminders.md §6):
+// resolve the Ch from ST.chs by chId and reuse the EXISTING select+play path
+// (setCur + saveSt('sel') + go('PLAY') when READY), exactly like a card click
+// (onGridClick). A channel no longer in the loaded list degrades silently
+// (nothing plays). The caller dismisses the toast regardless.
+// ---------------------------------------------------------------------------
+function goRemWatch(chId) {
+  const st = window.IptvSt.ST;
+  const ch = st.chs.find(function byId(c) { return String(c.id) === String(chId); });
+  if (!ch) return;
+  window.IptvSt.setCur(ch);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
+  if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  rndHead();
+  if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
+}
+
+// ---------------------------------------------------------------------------
+// getReplayPrg — pure: resolve the stored Prg for a chId+start from the IptvEpg
+// store (ADR-0036, specs/catchup-archive.md §4). Unlike getRemPrg (upcoming
+// only), Replay targets a PAST program, so it scans the channel's FULL stored
+// guide (IptvEpg.get) and matches by start. Returns null when no guide / no
+// match — so a stale data-replay (guide changed) degrades to a no-op.
+// ---------------------------------------------------------------------------
+function getReplayPrg(chId, start) {
+  if (!window.IptvEpg) return null;
+  const prgs = window.IptvEpg.get(chId);
+  for (let i = 0; i < prgs.length; i += 1) {
+    if (String(prgs[i].start) === String(start)) return prgs[i];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// goReplay — activate a past archive-capable program through the EXISTING
+// select+play path (ADR-0036, specs/catchup-archive.md §4), mirroring goRemWatch
+// / a card click. Resolves the Ch from ST.chs (no-op when gone or not arch),
+// resolves the Prg by start from the stored guide (no-op when absent), builds the
+// timeshift archive URL via IptvPlay.getArchUrl, then runs the same transition:
+// setCur → saveSt('sel') → go('PLAY') when READY → rndHead → loadPlay(archUrl).
+// The played URL is the archive URL, not the live URL; the active-channel marker
+// reflects the channel. Non-archive / missing channels degrade silently.
+// ---------------------------------------------------------------------------
+function goReplay(chId, start) {
+  const st = window.IptvSt.ST;
+  const ch = st.chs.find(function byId(c) { return String(c.id) === String(chId); });
+  if (!ch || ch.arch !== true) return;
+  const prg = getReplayPrg(chId, start);
+  if (!prg) return;
+  if (!window.IptvPlay) return;
+  const url = window.IptvPlay.getArchUrl({ ch, prg });
+  window.IptvSt.setCur(ch);
+  if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
+  if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
+  rndHead();
+  window.IptvPlay.loadPlay(url);
+}
+
+// ---------------------------------------------------------------------------
+// onReplay — read a Replay button's data-replay="<chId>|<start>" (the program
+// identity, mirroring the Remind toggle's data-rem form), split chId/start at
+// the last '|', and route to goReplay (ADR-0036). A malformed/absent key
+// degrades to a no-op inside goReplay.
+// ---------------------------------------------------------------------------
+function onReplay(btn) {
+  const key   = btn.getAttribute('data-replay') || '';
+  const cut   = key.lastIndexOf('|');
+  const chId  = cut === -1 ? key : key.slice(0, cut);
+  const start = cut === -1 ? '' : key.slice(cut + 1);
+  goReplay(chId, start);
+}
+
+// ---------------------------------------------------------------------------
+// mkToast — build the toast element for a fired Rem (ADR-0034): a program-copy
+// line (NOW marker + escaped title + local start time via fmtPrgTime), a
+// Watch/Jump action carrying data-watch="<chId>", and a dismiss control. role
+// is built into the aria-live container (#rem-toasts); the toast itself is the
+// transient child. Returns a detached element the caller appends.
+// ---------------------------------------------------------------------------
+function mkToast(rem) {
+  const el  = document.createElement('div');
+  el.className = 'rem-toast';
+  el.innerHTML = '<div class="rem-toast-head">'
+    + '<span class="rem-toast-mark">Starting now</span>'
+    + '<span class="rem-toast-time">' + escHtml(fmtPrgTime(rem.start)) + '</span>'
+    + '</div>'
+    + '<span class="rem-toast-title">' + escHtml(rem.title || '') + '</span>'
+    + '<div class="rem-toast-acts">'
+    + '<button type="button" class="rem-toast-watch" data-watch="' + escHtml(String(rem.chId)) + '">Watch</button>'
+    + '<button type="button" class="rem-toast-close" aria-label="Dismiss reminder">&#10005;</button>'
+    + '</div>';
+  return el;
+}
+
+// ---------------------------------------------------------------------------
+// onToastClick — delegated click on the toast stack (ADR-0034): a Watch button
+// jumps to the channel (goRemWatch) then dismisses its toast; a close button
+// dismisses its toast. Both resolve the owning .rem-toast via closest.
+// ---------------------------------------------------------------------------
+function onToastClick(evt) {
+  const toast = evt.target.closest('.rem-toast');
+  if (!toast) return;
+  const watch = evt.target.closest('[data-watch]');
+  if (watch) { goRemWatch(watch.getAttribute('data-watch')); rmToast(toast); return; }
+  if (evt.target.closest('.rem-toast-close')) rmToast(toast);
+}
+
+// ---------------------------------------------------------------------------
+// fireNote — best-effort, permission-gated browser Notification for a fired Rem
+// (ADR-0034, specs/reminders.md §5): created ONLY when window.Notification
+// exists AND permission is already 'granted'; otherwise skipped silently. Never
+// auto-requests permission (that is askRemPerm, gated to the toggle gesture) and
+// never throws — the toast still fires when this is skipped.
+// ---------------------------------------------------------------------------
+function fireNote(rem) {
+  const N = window.Notification;
+  if (!N || N.permission !== 'granted') return;
+  try { mkNote(N, rem); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// mkNote — construct the browser Notification (ADR-0034). Isolated so the only
+// `new Notification()` call sits behind fireNote's permission guard and its
+// try/catch (CONVENTIONS §13 permits built-in constructors; the Web
+// Notifications API is treated as a host built-in here).
+// ---------------------------------------------------------------------------
+function mkNote(N, rem) {
+  // eslint-disable-next-line no-new
+  new N(rem.title || 'Reminder', { body: 'Starting now', tag: String(rem.chId) + '|' + String(rem.start) });
+}
+
+// ---------------------------------------------------------------------------
+// fireRem — the public firing entry point the reminder timer (TASK-0070, ADR-
+// 0034) calls for each newly-due reminder. Shows the in-app toast (auto-
+// dismissing after S.toastMs) and fires the best-effort permission-gated
+// notification. Guarded so a missing toast container / missing globals is a
+// silent no-op — nothing throws, nothing blocks browsing (specs/reminders.md
+// §5). Returns the toast element (or null) for the caller / tests.
+// ---------------------------------------------------------------------------
+function fireRem(rem) {
+  if (!EL.rtst || !rem) return null;
+  const el = mkToast(rem);
+  EL.rtst.appendChild(el);
+  setTimeout(function autoDismiss() { rmToast(el); }, window.S ? window.S.toastMs : 8000);
+  fireNote(rem);
+  return el;
+}
+
+// ---------------------------------------------------------------------------
 // goClrSrch — empty-state "Clear search" action (ADR-0022): clear the search
 // input and re-run the existing debounced search path with an empty query so
 // the grid re-renders to the unfiltered (within current category) result.
@@ -248,12 +727,16 @@ function goClrSrch() {
 // goViewAll — empty-state "Browse all channels" action (ADR-0022): switch the
 // active category to "All Channels" through the existing category-filter path
 // (setFlt + rndSide + rndGrid), exactly as a sidebar "All Channels" click does.
+// Operates within the ACTIVE content mode's set (getModeCats/getModeItems,
+// ADR-0038 §5a); in live mode this is the original behavior.
 // ---------------------------------------------------------------------------
 function goViewAll() {
-  const st = window.IptvSt.ST;
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
   window.IptvSt.setFlt('all');
-  rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, 'all', st.favs, st.sort));
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, 'all', st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -266,24 +749,91 @@ function onEmptyAct(kind) {
 }
 
 // ---------------------------------------------------------------------------
+// toggleSched — flip a channel card's presentational schedule expansion
+// (ADR-0031, specs/epg.md §5). Purely presentational like the account/log
+// panels (setAcct/setLog, ADR-0014/ADR-0028): an is-expanded class on the card
+// plus the control's aria-expanded and the list's aria-hidden are the single
+// source of truth — no ST phase, no boolean flag (CONVENTIONS §6), no storage
+// key. Reads the live DOM state so a re-render starting collapsed re-collapses.
+// ---------------------------------------------------------------------------
+function toggleSched(btn) {
+  const card  = btn.closest('.ch-card');
+  if (!card) return;
+  const sched = card.querySelector('.ch-sched');
+  const open  = btn.getAttribute('aria-expanded') !== 'true';
+  card.classList.toggle('is-expanded', open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (sched) sched.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+// ---------------------------------------------------------------------------
 // onGridClick — event-delegated click handler on EL.list (ch-grid)
 // ---------------------------------------------------------------------------
 function onGridClick(evt) {
   const act  = evt.target.closest('[data-empty-act]');
   if (act) { onEmptyAct(act.getAttribute('data-empty-act')); return; }
+  const exp  = evt.target.closest('[data-exp]');
+  if (exp) { evt.stopPropagation(); toggleSched(exp); return; }
+  const rem  = evt.target.closest('[data-rem]');
+  if (rem) { evt.stopPropagation(); toggleRem(rem); return; }
+  const rep  = evt.target.closest('[data-replay]');
+  if (rep) { evt.stopPropagation(); onReplay(rep); return; }
   const fav  = evt.target.closest('[data-fav]');
   if (fav) { toggleFav(fav.getAttribute('data-fav')); return; }
+  // Series drill-down navigation (ADR-0038, §5b): a series card opens its
+  // seasons/episodes drill-down; the back control returns to the series list.
+  // Both are routed BEFORE the [data-id] select+play branch so a series card
+  // (data-ser) never falls into the play path — episode entries (data-id) do
+  // (their actual play call is TASK-0082; today they no-op like a movie card).
+  const back = evt.target.closest('[data-back]');
+  if (back) { goSerBack(); return; }
+  const ser  = evt.target.closest('[data-ser]');
+  if (ser) { goSerOpen(ser.getAttribute('data-ser')); return; }
   const card = evt.target.closest('[data-id]');
   if (!card) return;
   const id = card.getAttribute('data-id');
-  const st = window.IptvSt.ST;
-  const ch = st.chs.find(function byId(c) { return String(c.id) === id; });
-  if (!ch) return;
-  window.IptvSt.setCur(ch);
+  // Movies/series modes (ADR-0038, §5c): a [data-id] card is a Vod item (movie
+  // card or episode entry), resolved from the VOD store, not ST.chs. Live mode
+  // resolves the Ch from ST.chs as before. Both feed the SAME select+play arc.
+  const item = mode === 'live'
+    ? window.IptvSt.ST.chs.find(function byId(c) { return String(c.id) === id; })
+    : getVodItem(id);
+  goPlay(item);
+}
+
+// ---------------------------------------------------------------------------
+// getVodItem — pure: resolve a [data-id] Vod item by id from the active content
+// mode's VOD store (ADR-0038, §5c). Movies → the movie list; series → the open
+// series' episode list (serCur). null when absent (gone / wrong mode / no store)
+// so a stale card degrades to a no-op in goPlay, like goReplay. (CONVENTIONS §9
+// get* pure.)
+// ---------------------------------------------------------------------------
+function getVodItem(id) {
+  const vod = window.IptvVod;
+  if (!vod) return null;
+  const list = mode === 'series'
+    ? (serCur !== null ? vod.episodes(serCur) : [])
+    : vod.movies();
+  const hit = list.find(function byId(v) { return String(v.id) === String(id); });
+  return hit || null;
+}
+
+// ---------------------------------------------------------------------------
+// goPlay — the EXISTING select+play transition for a resolved item (ADR-0038,
+// §5c), shared by live card clicks and on-demand movie/episode selection. Item
+// gone → silent no-op (like goReplay). Mirrors goRemWatch exactly: setCur →
+// saveSt('sel') → go('PLAY') when READY → rndHead → loadPlay(item.url). The
+// on-demand URL preserves its extension, so the UNCHANGED loadPlay → getEng
+// resolves the same engine through the same proxy — no new branch, route, or
+// engine.
+// ---------------------------------------------------------------------------
+function goPlay(item) {
+  if (!item) return;
+  window.IptvSt.setCur(item);
   if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
   if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
   rndHead();
-  if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
+  if (window.IptvPlay) window.IptvPlay.loadPlay(item.url);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +841,18 @@ function onGridClick(evt) {
 // ---------------------------------------------------------------------------
 function onGridKey(evt) {
   if (evt.key !== 'Enter') return;
+  // The expand control, the Remind toggle, and the Replay control are real
+  // <button>s: Enter/Space already fire a native click that onGridClick handles
+  // (toggleSched / toggleRem / onReplay). Routing the keydown here too would
+  // double-fire, so the button activates itself (ADR-0031, ADR-0033, ADR-0036).
+  if (evt.target.closest('[data-exp]')) return;
+  if (evt.target.closest('[data-rem]')) return;
+  if (evt.target.closest('[data-replay]')) return;
+  // The drill-down back control is a real <button>: Enter fires a native click
+  // onGridClick already handles, so routing the keydown too would double-fire
+  // (ADR-0038, §5b). Series cards / episode entries are role="button" divs with
+  // no native activation, so they DO route here (Enter selects them).
+  if (evt.target.closest('[data-back]')) return;
   onGridClick(evt);
 }
 
@@ -331,6 +893,63 @@ function onAcctKey(evt) {
   if (evt.key !== 'Escape') return;
   if (EL.apnl && EL.apnl.classList.contains('is-open')) setAcct(false);
   if (EL.lpnl && EL.lpnl.classList.contains('is-open')) setLog(false);
+}
+
+// ---------------------------------------------------------------------------
+// isTyping — pure predicate: the keydown target is a typing context (a text
+// INPUT / TEXTAREA / SELECT or any contenteditable element), so the player
+// shortcuts must NOT hijack search / login typing (ADR-0039,
+// specs/player-controls.md §2c). Reads the event target's tagName /
+// isContentEditable; a null/undefined target is treated as non-typing.
+// ---------------------------------------------------------------------------
+function isTyping(tgt) {
+  if (!tgt) return false;
+  const tag = tgt.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return tgt.isContentEditable === true;
+}
+
+// ---------------------------------------------------------------------------
+// getPlayAct — pure: map a keydown event's key to the IptvCtrl action name it
+// triggers, or '' for an unhandled key (ADR-0039, specs/player-controls.md
+// §2c). F→toggleFs, P→togglePip, Space/K→togglePlay, M→toggleMute,
+// ArrowUp→volUp, ArrowDown→volDn. Escape is deliberately NOT mapped — it stays
+// with onAcctKey (ADR-0014/ADR-0028). Letter keys are matched case-insensitively
+// (evt.key is 'f'/'F' depending on Shift/CapsLock); Space matches both ' ' and
+// the named 'Spacebar' some engines emit.
+// ---------------------------------------------------------------------------
+function getPlayAct(evt) {
+  const k = evt.key;
+  if (k === ' ' || k === 'Spacebar' || k === 'k' || k === 'K') return 'togglePlay';
+  if (k === 'f' || k === 'F') return 'toggleFs';
+  if (k === 'p' || k === 'P') return 'togglePip';
+  if (k === 'm' || k === 'M') return 'toggleMute';
+  if (k === 'ArrowUp') return 'volUp';
+  if (k === 'ArrowDown') return 'volDn';
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// onPlayKey — the player keyboard-shortcut handler (ADR-0039,
+// specs/player-controls.md §2c). A SEPARATE document keydown listener from
+// onAcctKey (the two concerns never merge), active ONLY while a stream is
+// playing (IptvSt.ST.phase === 'PLAY'). It returns immediately — with no
+// preventDefault — when not in PLAY, when the target is a typing context
+// (search / login fields), when IptvCtrl is absent (test isolation), or when
+// the key is not one it consumes. It NEVER handles Escape (getPlayAct never
+// maps it), so the existing onAcctKey panel-close behavior is untouched.
+// preventDefault is called ONLY for a consumed key (so Space does not scroll
+// the page and the Arrows do not move the caret / scroll), never otherwise.
+// ---------------------------------------------------------------------------
+function onPlayKey(evt) {
+  if (window.IptvSt.ST.phase !== 'PLAY') return;
+  if (isTyping(evt.target)) return;
+  const c = window.IptvCtrl;
+  if (!c) return;
+  const act = getPlayAct(evt);
+  if (!act) return;
+  evt.preventDefault();
+  c[act]();
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +1312,8 @@ function mkEL() {
   EL.mm3u  = document.getElementById('mode-m3u');
   EL.fchp  = document.getElementById('fmt-chip');
   EL.fdtl  = document.getElementById('fmt-detail');
+  EL.fsb   = document.getElementById('fs-btn');
+  EL.pipb  = document.getElementById('pip-btn');
   EL.apnl  = document.getElementById('acct-panel');
   EL.abtn  = document.getElementById('acct-btn');
   EL.ascr  = document.getElementById('acct-scrim');
@@ -709,8 +1330,12 @@ function mkEL() {
   EL.lcls  = document.getElementById('log-close');
   EL.lclr  = document.getElementById('log-clear');
   EL.llst  = document.getElementById('log-list');
+  EL.rtst  = document.getElementById('rem-toasts');
+  EL.ctog  = document.getElementById('content-toggle');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
+  if (EL.fsb)  EL.fsb.addEventListener('click', onFsBtn);
+  if (EL.pipb) EL.pipb.addEventListener('click', onPipBtn);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -726,6 +1351,7 @@ function mkEL() {
   if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
   if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
   if (EL.apnl || EL.lpnl) document.addEventListener('keydown', onAcctKey);
+  document.addEventListener('keydown', onPlayKey);
   if (EL.alst) EL.alst.addEventListener('click', onAcctList);
   if (EL.apst) EL.apst.addEventListener('click', onPstList);
   if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
@@ -733,7 +1359,10 @@ function mkEL() {
   if (EL.lcls) EL.lcls.addEventListener('click', onLogClose);
   if (EL.lscr) EL.lscr.addEventListener('click', onLogClose);
   if (EL.lclr) EL.lclr.addEventListener('click', onLogClear);
+  if (EL.rtst) EL.rtst.addEventListener('click', onToastClick);
+  if (EL.ctog) EL.ctog.addEventListener('click', onToggle);
   rndLog();
+  rndToggle();
 }
 
 // ---------------------------------------------------------------------------
@@ -848,9 +1477,19 @@ function onPlayClick(evt) {
 // placeholder when the filtered list is empty (ADR-0022). The placeholder is
 // chosen by IptvEmpty.resolveContent from the live ST (total source count,
 // active filter, search query, favourites) — same opts other rnd* read.
+// In `series` mode (ADR-0038, §5b) the grid surface is reused for the series
+// browse list (series cards) and, when a series is open, its seasons/episodes
+// drill-down — both routed here so every existing caller (rndMode2, onCatClick,
+// goViewAll, fireSrch, onSort) renders the right series surface unchanged.
 // ---------------------------------------------------------------------------
 function rndGrid(chs) {
   if (!EL.list) return;
+  if (mode === 'series') {
+    if (serCur !== null) { rndDrill(); return; }
+    EL.list.classList.remove('is-drill');
+    rndSerList(chs);
+    return;
+  }
   if (!chs || chs.length === 0) {
     const st = window.IptvSt.ST;
     const es = window.IptvEmpty.resolveContent({
@@ -886,8 +1525,9 @@ function onSort(evt) {
   const st = window.IptvSt;
   st.setSort(evt.target.value);
   if (st.saveSt) st.saveSt('sort');
-  const s = st.ST;
-  rndGrid(window.IptvSrch.getChs(s.chs, s.srch, s.flt, s.favs, s.sort));
+  const s     = st.ST;
+  const items = getModeItems();
+  rndGrid(window.IptvSrch.getChs(items, s.srch, s.flt, s.favs, s.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -1001,6 +1641,419 @@ function saveActive(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// getCMode — pure accessor for the active content mode (ADR-0038). Exposed so
+// other modules / tests read the render-mode flag without touching the var.
+// ---------------------------------------------------------------------------
+function getCMode() {
+  return mode;
+}
+
+// ---------------------------------------------------------------------------
+// setCMode — set the content mode to a known token (ADR-0038); an unknown token
+// is ignored (defensive at the only writer, mirroring setSort's tolerance). The
+// only writer of the module-level `mode` flag besides resetMode.
+// ---------------------------------------------------------------------------
+function setCMode(m) {
+  if (MODES.indexOf(m) !== -1) mode = m;
+}
+
+// ---------------------------------------------------------------------------
+// resetMode — return the content mode to 'live' (ADR-0038, §5a/§7). Called on
+// connect, account switch, and disconnect so the toggle never persists a stale
+// mode across sessions (and reload resets it via module re-init).
+// ---------------------------------------------------------------------------
+function resetMode() {
+  mode = 'live';
+  serCur = null;
+}
+
+// ---------------------------------------------------------------------------
+// hasVodMovs / hasVodSers — pure predicates: whether the VOD store currently
+// has movies / series (ADR-0038 contextual presence, §5a). Guarded so an absent
+// IptvVod module (test isolation / pre-connect) reports false — only Live shows.
+// ---------------------------------------------------------------------------
+function hasVodMovs() {
+  return Boolean(window.IptvVod && window.IptvVod.hasMovies());
+}
+
+function hasVodSers() {
+  return Boolean(window.IptvVod && window.IptvVod.hasSeries());
+}
+
+// ---------------------------------------------------------------------------
+// getModeItems — pure: the active mode's item set (ADR-0038, §5a). Live →
+// ST.chs (live channels). Movies → the VOD store's movie Vod[] (Ch-compatible
+// for the grid). Series → the VOD store's Series[] browse entries. An absent
+// VOD store yields [] so the grid simply renders empty (silent degrade).
+// ---------------------------------------------------------------------------
+function getModeItems() {
+  if (mode === 'movies') return window.IptvVod ? window.IptvVod.movies() : [];
+  if (mode === 'series') return window.IptvVod ? window.IptvVod.series() : [];
+  return window.IptvSt.ST.chs;
+}
+
+// ---------------------------------------------------------------------------
+// mkModeCats — pure: distinct categories of an item set in first-seen order,
+// shaped { id, name } for rndSide (ADR-0038). The item's cat id is the button's
+// data-cat; its grp is the human label. Used to derive Movies/Series sidebar
+// categories from the VOD store (the live mode keeps ST.cats unchanged).
+// ---------------------------------------------------------------------------
+function mkModeCats(items) {
+  const seen = {};
+  const out  = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const id = String(items[i].cat ?? '');
+    if (seen[id]) continue;
+    seen[id] = true;
+    out.push({ id, name: items[i].grp || 'Uncategorized' });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// getModeCats — pure: the active mode's sidebar category list (ADR-0038, §5a).
+// Live → ST.cats (delivery order). Movies/Series → categories derived from the
+// active item set via mkModeCats. TASK-0080/0081 refine the browse render; this
+// task establishes the per-mode source switch.
+// ---------------------------------------------------------------------------
+function getModeCats() {
+  if (mode === 'live') return window.IptvSt.ST.cats;
+  return mkModeCats(getModeItems());
+}
+
+// ---------------------------------------------------------------------------
+// mkSerCard — pure: one Series browse-entry card HTML (ADR-0038, §5b). A
+// keyboard-focusable card mirroring mkCard's poster/title shape (poster from
+// img with a letter-tile fallback, title from name), but carrying data-ser
+// (the series id) instead of data-id so onGridClick routes it to the drill-down
+// OPEN path, not the select+play path (movies/episodes use data-id). A series is
+// a browse entry, never a Vod, so it has no num/fav/EPG affordances — one-shot
+// control, no toggled aria attribute (Rule R-0001). Series text is HTML-escaped.
+// ---------------------------------------------------------------------------
+function mkSerCard(ser) {
+  return '<div class="ch-card ser-card" role="button" tabindex="0" data-ser="' + escHtml(String(ser.id)) + '">'
+    + '<div class="ch-card-top">' + mkLogo(ser) + '</div>'
+    + '<span class="ch-name">' + escHtml(ser.name) + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkEpiRow — pure: one selectable episode entry HTML inside a season group
+// (ADR-0038, §5b). The episode is a Vod item (kind:'episode'), so it carries
+// data-id (its episode id) and routes through the existing select+play path in
+// onGridClick exactly like a movie card — TASK-0082 adds the actual play call.
+// A one-shot selectable control: keyboard-focusable, no toggled aria attribute
+// (Rule R-0001). Episode text is HTML-escaped (external payload).
+// ---------------------------------------------------------------------------
+function mkEpiRow(epi) {
+  return '<div class="ch-card epi-row" role="button" tabindex="0" data-id="' + escHtml(String(epi.id)) + '">'
+    + '<span class="ch-name">' + escHtml(epi.name) + '</span>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkSerBack — pure: the drill-down back affordance HTML (ADR-0038, §5b). A real
+// keyboard-focusable <button> carrying data-back so onGridClick returns to the
+// series list. A one-shot control: its aria-label is present in the baseline and
+// never toggled at runtime (Rule R-0001).
+// ---------------------------------------------------------------------------
+function mkSerBack() {
+  return '<button type="button" class="ser-back" data-back="1" aria-label="Back to series list">'
+    + '<span class="ser-back-ico" aria-hidden="true">&#8592;</span>'
+    + '<span class="ser-back-label">Series</span>'
+    + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// getSerName — pure: resolve a series id to its display name from the stored
+// Series browse list (ADR-0038). '' when unknown (the drill-down still renders).
+// ---------------------------------------------------------------------------
+function getSerName(id) {
+  const sers = window.IptvVod ? window.IptvVod.series() : [];
+  const sid  = String(id);
+  for (let i = 0; i < sers.length; i += 1) {
+    if (String(sers[i].id) === sid) return sers[i].name;
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// groupBySeason — pure: group an episode Vod[] into [{ season, epis }] in
+// first-seen season order (ADR-0038, §5b). An episode's `cat` is its season key
+// (set by the vod.js normalizer); used for the season grouping headers.
+// ---------------------------------------------------------------------------
+function groupBySeason(epis) {
+  const seen = {};
+  const out  = [];
+  for (let i = 0; i < epis.length; i += 1) {
+    const s = String(epis[i].cat ?? '');
+    if (!seen[s]) { seen[s] = { season: s, epis: [] }; out.push(seen[s]); }
+    seen[s].epis.push(epis[i]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// mkSeason — pure: one season group's HTML (ADR-0038, §5b): a grouping header
+// ("Season <n>") plus its episode entries. Season label HTML-escaped.
+// ---------------------------------------------------------------------------
+function mkSeason(grp) {
+  let rows = '';
+  for (let i = 0; i < grp.epis.length; i += 1) rows += mkEpiRow(grp.epis[i]);
+  return '<div class="ser-season">'
+    + '<h3 class="ser-season-head">Season ' + escHtml(grp.season) + '</h3>'
+    + '<div class="ser-eps">' + rows + '</div>'
+    + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// mkDrill — pure: the full seasons/episodes drill-down HTML for the open series
+// (ADR-0038, §5b): the back affordance + the series title header, then each
+// season group with its episode entries. When the series has no loaded episodes
+// (fetch failed / empty / not yet loaded), an empty "No episodes" state renders
+// instead of seasons — never an error or crash (silent degrade). opts: { id }.
+// ---------------------------------------------------------------------------
+function mkDrill(opts) {
+  const epis = window.IptvVod ? window.IptvVod.episodes(opts.id) : [];
+  const head = '<div class="ser-drill-head">' + mkSerBack()
+    + '<h2 class="ser-drill-title">' + escHtml(getSerName(opts.id)) + '</h2></div>';
+  if (epis.length === 0) {
+    return head + '<p class="ser-empty" role="status">No episodes available.</p>';
+  }
+  const groups = groupBySeason(epis);
+  let body = '';
+  for (let i = 0; i < groups.length; i += 1) body += mkSeason(groups[i]);
+  return head + '<div class="ser-seasons">' + body + '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// rndSerList — render the series-mode browse list (ADR-0038, §5b): one Series
+// card per entry (mkSerCard), or the contextual empty-state placeholder when the
+// filtered list is empty (reusing the grid empty-state, like rndGrid). The list
+// is the filtered/sorted Series[] the caller passes (getChs output).
+// ---------------------------------------------------------------------------
+function rndSerList(sers) {
+  if (!EL.list) return;
+  if (!sers || sers.length === 0) {
+    const st = window.IptvSt.ST;
+    EL.list.innerHTML = mkEmptyBox(window.IptvEmpty.resolveContent({
+      total: getModeItems().length, shown: 0, flt: st.flt, srch: st.srch, favs: st.favs,
+    }));
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < sers.length; i += 1) html += mkSerCard(sers[i]);
+  EL.list.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// rndDrill — render the open series' seasons/episodes drill-down into the grid
+// (ADR-0038, §5b). Reuses the grid container (EL.list) so the drill-down lives
+// in the same browse surface; the drill-down markup carries its own back control
+// + season groups + episode entries (mkDrill).
+// ---------------------------------------------------------------------------
+function rndDrill() {
+  if (!EL.list || serCur === null) return;
+  EL.list.classList.add('is-drill');
+  EL.list.innerHTML = mkDrill({ id: serCur });
+}
+
+// ---------------------------------------------------------------------------
+// runSerInfo — async: best-effort on-demand fetch of the open series' seasons/
+// episodes (ADR-0038, §5b) through IptvApi.loadSerInfo (TASK-0078). Uses the
+// connected account context captured at connect time (vodCtx). On completion —
+// success OR failure — re-renders the drill-down so loaded episodes appear, or
+// the empty "no episodes" state shows (silent degrade, never throws/crashes).
+// A missing loader / missing context simply leaves the empty state.
+// ---------------------------------------------------------------------------
+async function runSerInfo(id) {
+  const api = window.IptvApi;
+  if (!api || typeof api.loadSerInfo !== 'function' || !vodCtx) { rndDrill(); return; }
+  await api.loadSerInfo({
+    src: vodCtx.src, user: vodCtx.user, pass: vodCtx.pass, ext: vodCtx.ext,
+    id, name: getSerName(id),
+  });
+  if (serCur === id) rndDrill();
+}
+
+// ---------------------------------------------------------------------------
+// goSerOpen — open a series' drill-down (ADR-0038, §5b). Presentational
+// navigation within `series` mode (no ST phase, no localStorage key): records
+// the open series id, renders the drill-down shell immediately (so the back
+// control + title appear at once), then kicks off the best-effort on-demand
+// episode fetch which re-renders when it completes. A no-op outside series mode.
+// Returns the in-flight fetch promise (settled / always-resolving) so callers
+// and tests can await the rendered result; failures degrade silently inside
+// runSerInfo (the drill-down keeps its empty state), never throwing.
+// ---------------------------------------------------------------------------
+function goSerOpen(id) {
+  if (mode !== 'series' || !id) return Promise.resolve();
+  serCur = String(id);
+  rndDrill();
+  return runSerInfo(serCur).catch(function onErr() { if (serCur !== null) rndDrill(); });
+}
+
+// ---------------------------------------------------------------------------
+// goSerBack — close the drill-down and return to the series list (ADR-0038,
+// §5b). Clears the open-series id and re-renders the series-mode browse surface
+// (sidebar + series cards) via rndMode2. Presentational navigation only.
+// ---------------------------------------------------------------------------
+function goSerBack() {
+  serCur = null;
+  if (EL.list) EL.list.classList.remove('is-drill');
+  rndMode2();
+}
+
+// ---------------------------------------------------------------------------
+// rndMode2 — re-render the sidebar + grid from the ACTIVE content mode's
+// categories/items (ADR-0038, §5a). Reuses rndSide / rndGrid / getChs unchanged
+// (a Vod item is Ch-compatible). Search + sort operate within the active mode's
+// set because getChs filters that set. Called by goMode after a switch and after
+// the VOD store fills (rndVod). Named rndMode2 to avoid colliding with the
+// existing login-mode rndMode in the shared client scope.
+// ---------------------------------------------------------------------------
+function rndMode2() {
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, st.flt, st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// mkToggle — pure: the Live | Movies | Series segmented-control HTML (ADR-0038,
+// §5a, §8). Three real <button>s, each carrying aria-pressed PRESENT in the
+// baseline (Rule R-0001 — only flipped 'true'/'false', never added at runtime),
+// the active option marked .active + aria-pressed="true". Movies/Series carry
+// `hidden` unless the VOD store has them (contextual presence). opts: { mode,
+// movs, sers } where movs/sers are the booleans from hasMovies/hasSeries.
+// ---------------------------------------------------------------------------
+function mkToggle(opts) {
+  return mkToggleOpt({ id: 'live', label: 'Live', mode: opts.mode, hide: false })
+    + mkToggleOpt({ id: 'movies', label: 'Movies', mode: opts.mode, hide: !opts.movs })
+    + mkToggleOpt({ id: 'series', label: 'Series', mode: opts.mode, hide: !opts.sers });
+}
+
+// ---------------------------------------------------------------------------
+// mkToggleOpt — pure: one toggle option <button> HTML (ADR-0038). aria-pressed
+// is always present in the baseline (Rule R-0001); `hidden` collapses an option
+// the source lacks. opts: { id, label, mode, hide }.
+// ---------------------------------------------------------------------------
+function mkToggleOpt(opts) {
+  const on  = opts.mode === opts.id;
+  const cls = 'ct-opt' + (on ? ' active' : '');
+  const hid = opts.hide ? ' hidden' : '';
+  return '<button type="button" class="' + cls + '" data-mode="' + opts.id + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '"' + hid + '>' + opts.label + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// rndToggle — render the content toggle into #content-toggle reflecting the
+// active mode + contextual presence (ADR-0038, §5a). aria-pressed / hidden are
+// only flipped from their source-present baseline (Rule R-0001). Guarded so an
+// absent container (test isolation) is a no-op. Called on init, after connect/
+// switch/disconnect, and after the VOD store fills (rndVod).
+// ---------------------------------------------------------------------------
+function rndToggle() {
+  if (!EL.ctog) return;
+  EL.ctog.innerHTML = mkToggle({ mode, movs: hasVodMovs(), sers: hasVodSers() });
+}
+
+// ---------------------------------------------------------------------------
+// goMode — switch the active content mode (ADR-0038, §5a). A no-op when the mode
+// is unchanged or unknown. Otherwise sets the mode, resets the active category
+// filter to "All" for that mode (setFlt('all')), re-renders the toggle, and
+// re-renders the sidebar + grid from the new mode's categories/items (rndMode2).
+// Presentational navigation only — no ST phase, no localStorage key.
+// ---------------------------------------------------------------------------
+function goMode(next) {
+  if (next === mode || MODES.indexOf(next) === -1) return;
+  setCMode(next);
+  serCur = null;   // leaving/entering a mode starts at the list, never a stale drill-down (ADR-0038, §5b)
+  if (EL.list) EL.list.classList.remove('is-drill');
+  window.IptvSt.setFlt('all');
+  rndToggle();
+  rndMode2();
+}
+
+// ---------------------------------------------------------------------------
+// onToggle — delegated click on #content-toggle (ADR-0038): a [data-mode]
+// option routes to goMode for that mode; anything else is ignored. A hidden
+// option cannot be clicked, so contextual presence is enforced by render.
+// ---------------------------------------------------------------------------
+function onToggle(evt) {
+  const opt = evt.target.closest('[data-mode]');
+  if (!opt) return;
+  goMode(opt.getAttribute('data-mode'));
+}
+
+// ---------------------------------------------------------------------------
+// rndVod — re-render the toggle (and, when browsing Movies/Series, the active
+// surface) after the best-effort VOD store fills (ADR-0038, mirroring rndGuide).
+// Surfacing Movies/Series options as the store arrives is the contextual-
+// presence behavior (§5a). Guarded as a callback so the VOD fetch layer (api.js)
+// need not import ui.js. The default mode is 'live', so a fill normally only
+// reveals the toggle options; if the user already switched, the surface refreshes.
+// ---------------------------------------------------------------------------
+function rndVod() {
+  rndToggle();
+  if (mode !== 'live') rndMode2();
+}
+
+// ---------------------------------------------------------------------------
+// goVod — kick off the best-effort, non-blocking VOD fetch after a successful
+// connect (ADR-0037/ADR-0038), mirroring goEpg. Channels are already rendered;
+// this only populates window.IptvVod and re-renders the toggle (rndVod) as the
+// store fills. A failed / empty / timed-out fetch is swallowed by IptvApi.loadVod
+// and never affects ST.phase or browsing. opts: { src, user, pass, m3u, ext }
+// ---------------------------------------------------------------------------
+function goVod(opts) {
+  const api = window.IptvApi;
+  vodCtx = { src: opts.src, user: opts.user, pass: opts.pass, ext: opts.ext, m3u: opts.m3u };
+  if (!api || typeof api.loadVod !== 'function') return;
+  api.loadVod({
+    src:    opts.src,
+    user:   opts.user,
+    pass:   opts.pass,
+    m3u:    opts.m3u,
+    ext:    opts.ext,
+    onDone: rndVod,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// rndGuide — re-render the channel grid from current ST after a guide arrives
+// (ADR-0030, ADR-0031). The grid's now/next line reads window.IptvEpg at
+// render time, so re-rendering surfaces guides as they fill in. Guarded as a
+// callback so the EPG fetch layer (api.js) need not import ui.js.
+// ---------------------------------------------------------------------------
+function rndGuide() {
+  const st = window.IptvSt.ST;
+  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// goEpg — kick off the best-effort, non-blocking EPG fetch after a successful
+// connect (ADR-0030). Channels are already rendered; this only populates
+// window.IptvEpg and re-renders via rndGuide as guides arrive. A failed /
+// empty / timed-out EPG fetch is swallowed by IptvApi.loadEpg and never
+// affects ST.phase or browsing. opts: { src, user, pass, m3u, chs, epgUrl }
+// ---------------------------------------------------------------------------
+function goEpg(opts) {
+  const api = window.IptvApi;
+  if (!api || typeof api.loadEpg !== 'function') return;
+  api.loadEpg({
+    src:    opts.src,
+    user:   opts.user,
+    pass:   opts.pass,
+    m3u:    opts.m3u,
+    chs:    opts.chs,
+    epgUrl: opts.epgUrl,
+    onDone: rndGuide,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // onOk — handle successful connect result
 // ---------------------------------------------------------------------------
 function onOk(val) {
@@ -1011,7 +2064,9 @@ function onOk(val) {
   const pass = EL.pwd   ? EL.pwd.value          : '';
   const m3u  = getMode() === 'm3u';
   saveActive({ url: src, host: val.host, user, pass, m3u });
+  resetMode();
   const st = window.IptvSt.ST;
+  rndToggle();
   rndSide(st.cats, st.chs, st.favs);
   rndHead();
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
@@ -1021,6 +2076,8 @@ function onOk(val) {
   if (EL.url)   EL.url.disabled   = false;
   if (EL.uname) EL.uname.disabled = false;
   if (EL.pwd)   EL.pwd.disabled   = false;
+  goEpg({ src, user, pass, m3u, chs: st.chs, epgUrl: val.epgUrl });
+  goVod({ src, user, pass, m3u, ext: val.ext });
 }
 
 // ---------------------------------------------------------------------------
@@ -1069,12 +2126,16 @@ function onSwOk(acct, val) {
   window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
   window.IptvSt.go('READY');
   window.IptvSt.saveAct(acct.id);
+  resetMode();
   const st = window.IptvSt.ST;
+  rndToggle();
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
   rndHead();
   rndAcct();
+  goEpg({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, chs: st.chs, epgUrl: val.epgUrl });
+  goVod({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, ext: val.ext });
 }
 
 // ---------------------------------------------------------------------------
@@ -1138,7 +2199,10 @@ function tearDown() {
   if (EL.pwd)   { EL.pwd.value   = ''; EL.pwd.disabled   = false; }
   if (EL.bcon)  { EL.bcon.disabled = true; EL.bcon.textContent = 'Connect'; }
   window.IptvSt.setCur(null);
+  if (window.IptvVod) window.IptvVod.clear();
+  resetMode();
   rndFoot();
+  rndToggle();
   rndSide([], [], []);
   rndGrid([]);
   rndHead();
@@ -1197,6 +2261,58 @@ function onFmtChip() {
 }
 
 // ---------------------------------------------------------------------------
+// setCtrl — pure presentational sync of one control button (ADR-0039,
+// specs/player-controls.md §1, §1a): hide it (hidden attribute → out of tab
+// order) when its capability is unsupported; otherwise show it and mutate its
+// aria-pressed VALUE only — never adding the attribute (it is present in the
+// index.html baseline as "false", Rule R-0001) — plus an is-on class mirroring
+// the pressed state for the accent treatment. opts: { el, ok, on }.
+// ---------------------------------------------------------------------------
+function setCtrl(opts) {
+  const el = opts.el;
+  if (!el) return;
+  if (!opts.ok) { el.hidden = true; return; }
+  el.hidden = false;
+  el.setAttribute('aria-pressed', opts.on ? 'true' : 'false');
+  el.classList.toggle('is-on', opts.on);
+}
+
+// ---------------------------------------------------------------------------
+// rndCtrls — render the in-player controls chrome (ADR-0039,
+// specs/player-controls.md §1, §1a, §2). Feature-detects each control via
+// IptvCtrl (hasFs / hasPip) and hides the unsupported one; for a supported
+// control it syncs aria-pressed + visual state from the ACTUAL browser state
+// (isFs / isPip), so a browser-initiated exit (Escape from fullscreen, closing
+// the PiP window) un-presses the button. Invoked at init and from the IptvCtrl
+// state-sync callback. Guarded to no-op when IptvCtrl is absent (test isolation).
+// ---------------------------------------------------------------------------
+function rndCtrls() {
+  const c = window.IptvCtrl;
+  if (!c) return;
+  setCtrl({ el: EL.fsb,  ok: c.hasFs(),  on: c.isFs() });
+  setCtrl({ el: EL.pipb, ok: c.hasPip(), on: c.isPip() });
+}
+
+// ---------------------------------------------------------------------------
+// onFsBtn — fullscreen toggle click (ADR-0039): delegate to IptvCtrl.toggleFs.
+// The button's pressed state follows the fullscreenchange event via rndCtrls
+// (the state-sync callback), never an optimistic flip here. Guarded no-op when
+// IptvCtrl is absent.
+// ---------------------------------------------------------------------------
+function onFsBtn() {
+  if (window.IptvCtrl) window.IptvCtrl.toggleFs();
+}
+
+// ---------------------------------------------------------------------------
+// onPipBtn — PiP toggle click (ADR-0039): delegate to IptvCtrl.togglePip. The
+// pressed state follows the enter/leave picture-in-picture events via rndCtrls,
+// never an optimistic flip here. Guarded no-op when IptvCtrl is absent.
+// ---------------------------------------------------------------------------
+function onPipBtn() {
+  if (window.IptvCtrl) window.IptvCtrl.togglePip();
+}
+
+// ---------------------------------------------------------------------------
 // rndPlayer — update player-card visibility and render both no-output states
 // from IptvEmpty.resolveSignal (ADR-0023, specs/empty-states.md §3). Idle ("NO
 // SIGNAL" + guidance, optional Connect) shows whenever not playing; the
@@ -1244,4 +2360,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSort, toggleFav, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, rndCtrls, onFsBtn, onPipBtn, onPlayKey, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };

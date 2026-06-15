@@ -1,4 +1,4 @@
-<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023, ADR-0027, ADR-0028 -->
+<!-- ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0010, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0023, ADR-0027, ADR-0028, ADR-0030, ADR-0034 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,6 +34,28 @@
           <!-- ADR: ADR-0025 — single contextual, clickable format chip; hidden until a channel plays -->
           <button type="button" class="fmt-chip" id="fmt-chip" aria-expanded="false" hidden>HLS</button>
           <span class="fmt-detail" id="fmt-detail" hidden></span>
+          <!-- ADR: ADR-0039 — in-player controls chrome: Fullscreen + PiP toggles, secondary
+               content-head controls alongside the format chip. aria-pressed is PRESENT in the
+               baseline ("false", Rule R-0001); rndCtrls only mutates its value, and hides an
+               unsupported control via the `hidden` attribute (removed from tab order). -->
+          <button type="button" class="ctrl-btn" id="fs-btn" aria-pressed="false" aria-label="Toggle fullscreen">
+            <svg class="ctrl-ico ctrl-fs-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+              <path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+            </svg>
+            <svg class="ctrl-ico ctrl-fs-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/>
+              <path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/>
+              <path d="M9 9 3 3"/><path d="m21 21-6-6"/><path d="m3 21 6-6"/><path d="M21 3l-6 6"/>
+            </svg>
+          </button>
+          <button type="button" class="ctrl-btn" id="pip-btn" aria-pressed="false" aria-label="Toggle picture-in-picture">
+            <svg class="ctrl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 10h6a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"/>
+              <path d="M22 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v2"/>
+              <path d="M22 11v6a2 2 0 0 1-2 2h-6"/>
+            </svg>
+          </button>
           <!-- sun/moon theme toggle (ADR-0019) — top-right, immediately before the account button -->
           <button type="button" class="thm-toggle" id="theme-toggle" role="switch" aria-checked="false" aria-label="Toggle light theme">
             <svg class="thm-ico thm-sun" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -83,6 +105,15 @@
         </div>
         <div class="ch-section">
           <div class="ch-bar">
+            <!-- ADR: ADR-0038 — Live | Movies | Series content toggle. Options are real
+                 buttons with aria-pressed PRESENT in the baseline (Rule R-0001); Movies/Series
+                 carry `hidden` until window.IptvVod has them (contextual presence). The builder
+                 (rndToggle, ui.js) only flips aria-pressed/hidden, never adds aria at runtime. -->
+            <div class="content-toggle" id="content-toggle" role="group" aria-label="Content type">
+              <button type="button" class="ct-opt active" data-mode="live" aria-pressed="true">Live</button>
+              <button type="button" class="ct-opt" data-mode="movies" aria-pressed="false" hidden>Movies</button>
+              <button type="button" class="ct-opt" data-mode="series" aria-pressed="false" hidden>Series</button>
+            </div>
             <span class="ch-bar-count" id="ch-count"></span>
             <div class="ch-bar-sort">
               <label class="ch-sort-label" for="ch-sort">Sort</label>
@@ -146,6 +177,11 @@
       </div>
       <div class="log-list" id="log-list"></div>
     </aside>
+    <!-- reminder firing toast stack (ADR-0034) — transient, dismissible toasts
+         announcing a fired reminder, with a Watch/Jump action. The container is
+         an aria-live region so a fired toast is announced to assistive tech
+         (specs/reminders.md §5, §8); each toast is built on demand by ui.js. -->
+    <div class="rem-toasts" id="rem-toasts" role="region" aria-live="polite" aria-label="Reminders"></div>
     <div class="acct-scrim" id="acct-scrim"></div>
     <aside class="acct-panel" id="acct-panel" role="dialog" aria-label="Accounts" aria-hidden="true">
       <div class="acct-head">
@@ -169,7 +205,14 @@
   <script src="/st.js"></script>
   <script src="/srch.js"></script>
   <script src="/errlog.js"></script>
+  <script src="/epg.js"></script>
+  <!-- ADR: ADR-0032 — program-reminders store; loaded after epg.js, before ui.js -->
+  <script src="/rem.js"></script>
+  <!-- ADR: ADR-0037 — VOD (Movies & Series) store + normalizers + URL builders -->
+  <script src="/vod.js"></script>
   <script src="/play.js"></script>
+  <!-- ADR: ADR-0039 — in-player controls layer (IptvCtrl); loaded before ui.js (rndCtrls) and main.js (mkCtrls) -->
+  <script src="/ctrl.js"></script>
   <script src="/empty.js"></script>
   <script src="/ui.js"></script>
   <script src="/nav.js"></script>

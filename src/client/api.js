@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036, ADR-0037
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -6,6 +6,17 @@
 
   const TOUT_MS = 15000;
   const DEMO_MS = 700;
+
+  // EPG fetch wiring (ADR-0030, specs/epg.md §3). Best-effort + non-blocking:
+  // these bound the Xtream short-EPG fan-out so a large portal is not hammered
+  // and shape the synthetic demo guide. All file-global invariants (RULE-ID-7).
+  const EPG_BATCH = 6;          // max concurrent get_simple_data_table fetches
+  const EPG_CAP   = 120;        // max channels we request a short-EPG for
+  const DEMO_PRGS = 4;          // synthetic programs generated per demo channel
+  const DEMO_DUR  = 1800000;    // synthetic program length, ms (30 min)
+  const HR_MS     = 3600000;    // one hour in ms (demo guide spans Date.now())
+  const DEMO_ARCH = 4;          // every Nth demo channel is archive-capable (ADR-0036, §6)
+  const ARCH_DUR  = 7;          // synthetic archive retention window, days
 
   /**
    * DEMO_DATA: [category-name, [channel-names]][]
@@ -23,6 +34,13 @@
 
   const DEMO_SRC1 = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
   const DEMO_SRC2 = 'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
+
+  // Demo VOD synthesis (ADR-0037, specs/vod-library.md §6): one offline-playable
+  // movie under a demo VOD category, so a Movies tab + a playable VOD item are
+  // demonstrable with no live Xtream portal. File-global invariants (RULE-ID-7).
+  const DEMO_VOD_CAT  = 'demo-movies';     // demo VOD category id
+  const DEMO_VOD_ID   = 'demo-vod-1';      // demo movie item id
+  const DEMO_VOD_NAME = 'Demo Movie';      // demo movie display name
 
   /** @param {string} src */
   function isDemo(src) {
@@ -49,16 +67,22 @@
    * cat is the category id (slug of grp) so it matches getDemoCats()'s id —
    * the id-based grid filter (getChs flt, ADR-0009) keys on ch.cat === cat.id;
    * grp stays the human-readable category/genre name (Ch schema, §5a chip).
+   * Every DEMO_ARCHth channel is flagged archive-capable (arch:true, non-zero
+   * archDur) so the catch-up Replay affordance is demonstrable offline (ADR-0036,
+   * specs/catchup-archive.md §6); the rest stay arch:false as before.
    */
   function mkDemoCh(opts) {
+    const arch = opts.cnt % DEMO_ARCH === 1;
     return {
-      id:  String(opts.cnt),
-      name: opts.name,
-      grp:  opts.grp,
-      url:  opts.cnt % 2 === 0 ? DEMO_SRC2 : DEMO_SRC1,
-      img:  '',
-      cat:  catSlug(opts.grp),
-      num:  opts.cnt,
+      id:      String(opts.cnt),
+      name:    opts.name,
+      grp:     opts.grp,
+      url:     opts.cnt % 2 === 0 ? DEMO_SRC2 : DEMO_SRC1,
+      img:     '',
+      cat:     catSlug(opts.grp),
+      num:     opts.cnt,
+      arch:    arch,
+      archDur: arch ? ARCH_DUR : 0,
     };
   }
 
@@ -140,14 +164,25 @@
     try { return new URL(url).hostname; } catch (_) { return url; }
   }
 
-  /** Fetch an M3U playlist via proxy, parse it, return Result<{server,host,user,categories,channels}>. */
+  /**
+   * Extract the playlist's XMLTV guide URL from the #EXTM3U header (ADR-0030):
+   * the iptv-org convention exposes it as url-tvg="…" (x-tvg-url="…" alias).
+   * '' when absent — the M3U EPG path simply does nothing without a guide URL.
+   */
+  function getTvgUrl(text) {
+    const hd = String(text).split('\n')[firstNonEmpty(String(text).split('\n'))] || '';
+    const m = hd.match(/(?:url-tvg|x-tvg-url)="([^"]*)"/i);
+    return m ? m[1].split(',')[0].trim() : '';
+  }
+
+  /** Fetch an M3U playlist via proxy, parse it, return Result<{server,host,user,categories,channels,epgUrl}>. */
   async function loadM3u(url) {
     const prx = '/api/xtream?url=' + encodeURIComponent(url);
     const res = await fetchTxt(prx);
     if (!res.ok) return res;
     const parsed = parsM3u(res.val);
     if (!parsed.ok) return parsed;
-    return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels } };
+    return { ok: true, val: { server: null, host: hostOf(url), user: '', categories: parsed.val.categories, channels: parsed.val.channels, epgUrl: getTvgUrl(res.val) } };
   }
 
   /** Predicate: no-action player_api.php payload carries a truthy user_info.auth. */
@@ -179,18 +214,26 @@
     return m;
   }
 
+  /** Coerce a raw tv_archive_duration to a non-negative day count; 0 on missing/NaN. */
+  function getArchDur(raw) {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   /** Build a Ch object from one raw get_live_streams entry. opts: {raw, cmap, base, user, pass, ext} */
   function mkXtCh(opts) {
     const d = opts.raw;
     const cid = String(d.category_id ?? '');
     return {
-      id:   String(d.stream_id),
-      name: String(d.name ?? ''),
-      grp:  opts.cmap.has(cid) ? opts.cmap.get(cid) : 'Uncategorized',
-      url:  opts.base + '/live/' + opts.user + '/' + opts.pass + '/' + d.stream_id + '.' + opts.ext,
-      img:  typeof d.stream_icon === 'string' ? d.stream_icon : '',
-      cat:  cid,
-      num:  typeof d.num === 'number' ? d.num : 0,
+      id:      String(d.stream_id),
+      name:    String(d.name ?? ''),
+      grp:     opts.cmap.has(cid) ? opts.cmap.get(cid) : 'Uncategorized',
+      url:     opts.base + '/live/' + opts.user + '/' + opts.pass + '/' + d.stream_id + '.' + opts.ext,
+      img:     typeof d.stream_icon === 'string' ? d.stream_icon : '',
+      cat:     cid,
+      num:     typeof d.num === 'number' ? d.num : 0,
+      arch:    Boolean(d.tv_archive),
+      archDur: getArchDur(d.tv_archive_duration),
     };
   }
 
@@ -246,6 +289,237 @@
     return loadXtream(src, { user: usr, pass: pss });
   }
 
+  // -------------------------------------------------------------------------
+  // EPG fetch wiring (ADR-0030, specs/epg.md §3) — best-effort, non-blocking.
+  // loadEpg runs AFTER a successful connect (channels already rendered); it
+  // only writes window.IptvEpg and never throws, never changes ST.phase, never
+  // blocks browsing. A failed / empty / timed-out fetch is swallowed.
+  // -------------------------------------------------------------------------
+
+  /** True when the EPG store global is loaded (test isolation guards it). */
+  function hasEpg() {
+    return Boolean(window.IptvEpg);
+  }
+
+  /** Build the proxied get_simple_data_table URL for one stream id. opts: {src, user, pass, id} */
+  function mkEpgUrl(src, opts) {
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
+      + '&password=' + opts.pass + '&action=get_simple_data_table&stream_id=' + opts.id;
+    return '/api/xtream?url=' + encodeURIComponent(tmp);
+  }
+
+  /** Fetch + parse + store one channel's Xtream short-EPG; swallows failure. opts: {src, user, pass} */
+  async function runXtCh(ch, opts) {
+    const res = await loadJson(mkEpgUrl(opts.src, { user: opts.user, pass: opts.pass, id: ch.id }));
+    if (!res.ok) return;
+    window.IptvEpg.set(ch.id, window.IptvEpg.parsXtEpg(res.val, String(ch.id)));
+  }
+
+  /** Run runXtCh over one bounded batch of channels concurrently. opts: {src, user, pass} */
+  async function runBatch(batch, opts) {
+    await Promise.all(batch.map(function each(ch) { return runXtCh(ch, opts); }));
+  }
+
+  /** Xtream EPG path: per-channel short-EPG, batched to EPG_BATCH, capped at EPG_CAP. opts: {src, user, pass, chs} */
+  async function runXtEpg(opts) {
+    const chs = (opts.chs || []).slice(0, EPG_CAP);
+    for (let i = 0; i < chs.length; i += EPG_BATCH) {
+      await runBatch(chs.slice(i, i + EPG_BATCH), { src: opts.src, user: opts.user, pass: opts.pass });
+    }
+  }
+
+  /** M3U EPG path: fetch the XMLTV guide URL through the proxy, parse, bulk-store by tvg-id. */
+  async function runM3uEpg(epgUrl) {
+    if (!epgUrl) return;
+    const res = await fetchTxt('/api/xtream?url=' + encodeURIComponent(epgUrl));
+    if (!res.ok) return;
+    window.IptvEpg.setAll(window.IptvEpg.parsXmltv(res.val));
+  }
+
+  /** Build one synthetic Prg for a demo channel at slot idx around base time. */
+  function mkDemoPrg(ch, opts) {
+    const start = opts.base + opts.idx * DEMO_DUR;
+    return {
+      chId:  String(ch.id),
+      title: ch.name + ' — Program ' + (opts.idx + 1),
+      start,
+      stop:  start + DEMO_DUR,
+      desc:  '',
+      cat:   ch.grp || '',
+    };
+  }
+
+  /** Synthetic guide for one demo channel: DEMO_PRGS programs spanning Date.now(). */
+  function getDemoPrgs(ch, base) {
+    const prgs = [];
+    for (let i = 0; i < DEMO_PRGS; i += 1) prgs.push(mkDemoPrg(ch, { base, idx: i }));
+    return prgs;
+  }
+
+  /** Demo EPG path: generate an in-memory guide per channel — no network call. */
+  function runDemoEpg(chs) {
+    const base = Date.now() - HR_MS;
+    const list = chs || [];
+    for (let i = 0; i < list.length; i += 1) {
+      window.IptvEpg.set(list[i].id, getDemoPrgs(list[i], base));
+    }
+  }
+
+  /** Dispatch the matched EPG path. opts: {src, user, pass, m3u, chs, epgUrl} */
+  async function runEpg(opts) {
+    if (isDemo(opts.src)) { runDemoEpg(opts.chs); return; }
+    if (opts.m3u === true) { await runM3uEpg(opts.epgUrl); return; }
+    await runXtEpg({ src: opts.src, user: opts.user, pass: opts.pass, chs: opts.chs });
+  }
+
+  /**
+   * Best-effort EPG fetch wired into the connect flow (ADR-0030). Populates
+   * window.IptvEpg on whichever path matched, then fires opts.onDone (a guarded
+   * re-render hook). Never throws, never blocks: any failure resolves quietly.
+   * opts: { src, user, pass, m3u, chs, epgUrl, onDone }
+   */
+  async function loadEpg(opts) {
+    if (!hasEpg()) return { ok: false, err: 'EPG store unavailable' };
+    try {
+      await runEpg(opts || {});
+      if (opts && typeof opts.onDone === 'function') opts.onDone();
+      return { ok: true, val: window.IptvEpg.count() };
+    } catch (e) {
+      return { ok: false, err: 'EPG fetch failed' };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // VOD fetch wiring (ADR-0037, specs/vod-library.md §4) — best-effort,
+  // non-blocking, mirroring loadEpg. loadVod runs AFTER a successful Xtream
+  // connect (channels already rendered); it fetches movie VOD + series through
+  // the existing /api/xtream proxy via the existing loadJson (15 s timeout),
+  // normalizes via the TASK-0077 window.IptvVod helpers, and writes the store.
+  // It never throws, never changes ST.phase, never blocks browsing; any
+  // failure / empty / timeout is swallowed (empty VOD store). M3U/demo leave the
+  // store empty (the demo path synthesizes one offline-playable movie).
+  // -------------------------------------------------------------------------
+
+  /** True when the VOD store global is loaded (test isolation guards it). */
+  function hasVod() {
+    return Boolean(window.IptvVod);
+  }
+
+  /** Account credentials/base bundle for the on-demand URL builders. opts: {src, user, pass, ext} */
+  function vodAcct(opts) {
+    return { base: getBase(opts.src), user: opts.user, pass: opts.pass, ext: opts.ext };
+  }
+
+  /** Fetch one proxied Xtream VOD/series action, returning its raw value or [] on failure. opts: {src, user, pass, actn} */
+  async function loadVodAct(opts) {
+    const res = await loadJson(mkPxUrl(opts.src, { user: opts.user, pass: opts.pass, actn: opts.actn }));
+    return res.ok ? res.val : [];
+  }
+
+  /** Xtream movie VOD path: fetch categories + streams, normalize, store. opts: {src, user, pass, ext} */
+  async function runXtMovs(opts) {
+    const cats = getXtCats(await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_vod_categories' }));
+    const raw  = await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_vod_streams' });
+    const acct = vodAcct(opts);
+    window.IptvVod.setMovs(window.IptvVod.getMovs({ raw, cmap: mkCatMap(cats), base: acct.base, user: acct.user, pass: acct.pass, ext: acct.ext }));
+  }
+
+  /** Xtream series path: fetch categories + series, normalize browse entries, store. opts: {src, user, pass} */
+  async function runXtSers(opts) {
+    const cats = getXtCats(await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_series_categories' }));
+    const raw  = await loadVodAct({ src: opts.src, user: opts.user, pass: opts.pass, actn: 'get_series' });
+    window.IptvVod.setSers(window.IptvVod.getSers({ raw, cmap: mkCatMap(cats) }));
+  }
+
+  /** Xtream VOD path: best-effort movies + series fan-out (bounded to two calls each). opts: {src, user, pass, ext} */
+  async function runXtVod(opts) {
+    await runXtMovs(opts);
+    await runXtSers({ src: opts.src, user: opts.user, pass: opts.pass });
+  }
+
+  /** Build the single offline-playable demo Vod movie (specs/vod-library.md §6). */
+  function mkDemoVod() {
+    return {
+      id:   DEMO_VOD_ID,
+      name: DEMO_VOD_NAME,
+      grp:  'Demo Movies',
+      url:  DEMO_SRC1,
+      img:  '',
+      cat:  DEMO_VOD_CAT,
+      num:  1,
+      kind: 'movie',
+    };
+  }
+
+  /** Demo VOD path: synthesize one offline-playable movie, no network, no series. */
+  function runDemoVod() {
+    window.IptvVod.setMovs([mkDemoVod()]);
+    window.IptvVod.setSers([]);
+  }
+
+  /**
+   * Best-effort VOD fetch wired into the connect flow (ADR-0037). Populates
+   * window.IptvVod movies + series on the Xtream path, synthesizes one demo
+   * movie on the demo path, and leaves the store empty on M3U. Fires opts.onDone
+   * (a guarded re-render hook) on completion. Never throws, never blocks: any
+   * failure resolves quietly with an empty store. opts: { src, user, pass, m3u, ext, onDone }
+   */
+  async function loadVod(opts) {
+    if (!hasVod()) return { ok: false, err: 'VOD store unavailable' };
+    const o = opts || {};
+    try {
+      window.IptvVod.clear();
+      if (isDemo(o.src)) { runDemoVod(); }
+      else if (o.m3u !== true) { await runXtVod({ src: o.src, user: o.user, pass: o.pass, ext: o.ext }); }
+      if (typeof o.onDone === 'function') o.onDone();
+      return { ok: true, val: window.IptvVod.movies().length + window.IptvVod.series().length };
+    } catch (e) {
+      return { ok: false, err: 'VOD fetch failed' };
+    }
+  }
+
+  /** Build the proxied get_series_info URL for one series id. opts: {src, user, pass, id} */
+  function mkSerInfUrl(src, opts) {
+    const tmp = getBase(src) + '/player_api.php?username=' + opts.user
+      + '&password=' + opts.pass + '&action=get_series_info&series_id=' + opts.id;
+    return '/api/xtream?url=' + encodeURIComponent(tmp);
+  }
+
+  /** Resolve a series' display name from the stored Series browse list; '' when unknown. */
+  function getSerName(id) {
+    const sers = window.IptvVod.series();
+    const sid = String(id);
+    for (let i = 0; i < sers.length; i += 1) {
+      if (sers[i].id === sid) return sers[i].name;
+    }
+    return '';
+  }
+
+  /**
+   * On-demand per-series episode loader (ADR-0037, specs/vod-library.md §5b).
+   * Best-effort + idempotent: fetches get_series_info&series_id=<id> through the
+   * proxy, normalizes its episodes map into Vod episode items, stores them keyed
+   * by series_id. Already-loaded series are not refetched; failure is swallowed.
+   * The series display name comes from opts.name, else the stored Series entry.
+   * opts: { src, user, pass, id, ext, name }
+   */
+  async function loadSerInfo(opts) {
+    if (!hasVod()) return { ok: false, err: 'VOD store unavailable' };
+    const o = opts || {};
+    if (window.IptvVod.episodes(o.id).length > 0) return { ok: true, val: 0 };
+    try {
+      const res = await loadJson(mkSerInfUrl(o.src, { user: o.user, pass: o.pass, id: o.id }));
+      if (!res.ok) return { ok: true, val: 0 };
+      const acct = vodAcct(o);
+      const name = o.name || getSerName(o.id);
+      const epis = window.IptvVod.getEpis({ raw: res.val, series: name, base: acct.base, user: acct.user, pass: acct.pass, ext: acct.ext });
+      window.IptvVod.setEpis(o.id, epis);
+      return { ok: true, val: epis.length };
+    } catch (e) {
+      return { ok: false, err: 'series info fetch failed' };
+    }
+  }
+
   /** Extract quoted attribute value from an #EXTINF line. Returns '' if absent. */
   function getM3uAttr(line, attr) {
     const re = new RegExp(attr + '="([^"]*)"');
@@ -279,13 +553,15 @@
   function mkM3uCh(opts) {
     const seg = firstSeg(opts.grp);
     return {
-      id:   opts.tvgId || String(opts.num),
-      name: opts.tvgName || opts.chanName,
-      grp:  seg,
-      url:  opts.strUrl,
-      img:  opts.img,
-      cat:  seg,
-      num:  opts.num,
+      id:      opts.tvgId || String(opts.num),
+      name:    opts.tvgName || opts.chanName,
+      grp:     seg,
+      url:     opts.strUrl,
+      img:     opts.img,
+      cat:     seg,
+      num:     opts.num,
+      arch:    false,
+      archDur: 0,
     };
   }
 
@@ -362,5 +638,5 @@
     return { ok: true, val: { categories: getM3uCats(chs), channels: chs } };
   }
 
-  window.IptvApi = { connect, isDemo, parsM3u, loadM3u };
+  window.IptvApi = { connect, isDemo, parsM3u, loadM3u, loadEpg, getTvgUrl, loadVod, loadSerInfo };
 }());
