@@ -2,8 +2,8 @@
 id: TASK-0089
 adr: ADR-0041
 evolution: 24
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -47,5 +47,34 @@ this task only surfaces the field. The M3U and demo Results are unchanged (no
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/api.js` — added a pure `getMaxConns(inf)` helper that coerces
+  `inf.user_info.max_connections` via `Math.trunc(Number(...))`, returning the
+  value only when finite and `> 0`, else `0` (the "unknown" sentinel). This
+  collapses missing / null / `0` / `""` / unparseable all to `0`, and trims
+  fractional values. `loadXtream` now reads it from the same no-action payload
+  already used for `hasAuth` / `getExt` and adds `maxConns` to the success
+  Result `val` (after the existing `server`, `host`, `user`, `categories`,
+  `channels` — shape otherwise unchanged). Top ADR comment line gained
+  `ADR-0041`.
+- `src/tests/unit/api.test.js` — new `describe('Xtream connect maxConns
+  (ADR-0041)')` block: boundary coercion (1, "1", 2, "2", missing, null, 0, "",
+  "x"), a "channels/categories still present alongside maxConns" assertion, and
+  two absence assertions (`'maxConns' in val` is `false` on the demo and M3U
+  Results). Top ADR comment line gained `ADR-0041`.
+
+Non-obvious for future tasks:
+
+- This task only THREADS the field. The gate semantics (`1` → single-conn;
+  `>1` → multi; `0`/absent → unknown → run the fan-out) are documented in
+  `getMaxConns`'s JSDoc but enforced by TASK-0090, not here.
+- The demo and M3U Result values deliberately omit the key entirely (absent =
+  unknown), so consumers must treat `val.maxConns === undefined` the same as the
+  `0` sentinel. Tests assert absence via the `in` operator rather than `=== 0`.
+- `loadXtream` does not return `ext` (it is consumed internally via `vodAcct`),
+  so do not assume `val.ext` exists on the Xtream path — unchanged by this task.
+
+ADR-0041 `governs:` already listed both touched files; no traceability edit
+needed. Full unit suite green (1038 passed, 12 new for this task). No commits
+made.

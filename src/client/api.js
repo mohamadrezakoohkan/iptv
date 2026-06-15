@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036, ADR-0037
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035, ADR-0036, ADR-0037, ADR-0041
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -190,6 +190,19 @@
     return Boolean(inf && inf.user_info && inf.user_info.auth);
   }
 
+  /**
+   * Coerce the no-action payload's user_info.max_connections to a non-negative
+   * integer connection-capacity (ADR-0041, specs/epg.md gate input). "1"/1 → 1,
+   * "2"/2 → 2; missing / null / 0 / "" / unparseable → 0 (the "unknown"
+   * sentinel). The gate (TASK-0090) treats exactly 1 as single-connection and
+   * 0 / >1 as run-the-fan-out (unknown is the conservative non-regressing case).
+   */
+  function getMaxConns(inf) {
+    const raw = inf && inf.user_info && inf.user_info.max_connections;
+    const n = Math.trunc(Number(raw));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   /** Read the stream URL extension from the no-action info payload. Fallback "ts". */
   function getExt(inf) {
     const fmts = inf && inf.user_info && inf.user_info.allowed_output_formats;
@@ -255,13 +268,14 @@
     if (!res.ok) return res;
     if (!hasAuth(res.val)) return { ok: false, err: 'Login failed – the portal rejected the username or password' };
     const ext = getExt(res.val);
+    const maxConns = getMaxConns(res.val);
     res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_categories' }));
     if (!res.ok) return res;
     const cats = getXtCats(res.val);
     res = await loadJson(mkPxUrl(src, { user: opts.user, pass: opts.pass, actn: 'get_live_streams' }));
     if (!res.ok) return res;
     const chs = getXtChs({ raw: res.val, cats, src, user: opts.user, pass: opts.pass, ext });
-    return { ok: true, val: { server: getBase(src), host: src, user: opts.user, categories: cats, channels: chs } };
+    return { ok: true, val: { server: getBase(src), host: src, user: opts.user, categories: cats, channels: chs, maxConns } };
   }
 
   /** Return demo Result after simulated delay. */

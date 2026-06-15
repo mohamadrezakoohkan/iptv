@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036, ADR-0037
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0035, ADR-0036, ADR-0037, ADR-0041
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -360,6 +360,111 @@ describe('Ch archive fields (arch / archDur)', function () {
     expect(res.ok).toBe(true);
     expect(res.val.channels[0].arch).toBe(false);
     expect(res.val.channels[0].archDur).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// maxConns — connection-capacity threaded through the Xtream connect Result
+// (ADR-0041, TASK-0089). Coerced from the no-action payload's
+// user_info.max_connections; absent on the demo and M3U Results.
+// ---------------------------------------------------------------------------
+describe('Xtream connect maxConns (ADR-0041)', function () {
+  const BASE = 'http://portal.example.com';
+  const USR  = 'alice';
+  const PSS  = 'secret';
+  const CATS = [{ category_id: '7', category_name: 'News' }];
+  const STRMS = [{ num: 1, name: 'World News 24', stream_id: 42, stream_icon: '', category_id: '7' }];
+
+  /** Sequential Xtream mock whose no-action payload carries the given user_info. */
+  function mkFetch(userInfo) {
+    return vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue({ user_info: userInfo }) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(CATS) })
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(STRMS) });
+  }
+
+  /** Connect against BASE with the given user_info, return the success val. */
+  async function connectVal(userInfo) {
+    const ftch = mkFetch(userInfo);
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const res = await api.connect(BASE, { user: USR, pass: PSS });
+    return res.val;
+  }
+
+  it('numeric max_connections: 1 → maxConns: 1 (single-connection boundary)', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: 1 });
+    expect(val.maxConns).toBe(1);
+  });
+
+  it('string max_connections: "1" → maxConns: 1', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: '1' });
+    expect(val.maxConns).toBe(1);
+  });
+
+  it('numeric max_connections: 2 → maxConns: 2 (multi-connection)', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: 2 });
+    expect(val.maxConns).toBe(2);
+  });
+
+  it('string max_connections: "2" → maxConns: 2', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: '2' });
+    expect(val.maxConns).toBe(2);
+  });
+
+  it('missing max_connections → maxConns: 0 (unknown sentinel)', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'] });
+    expect(val.maxConns).toBe(0);
+  });
+
+  it('null max_connections → maxConns: 0', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: null });
+    expect(val.maxConns).toBe(0);
+  });
+
+  it('max_connections: 0 → maxConns: 0', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: 0 });
+    expect(val.maxConns).toBe(0);
+  });
+
+  it('empty-string max_connections: "" → maxConns: 0', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: '' });
+    expect(val.maxConns).toBe(0);
+  });
+
+  it('non-numeric max_connections: "x" → maxConns: 0', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: 'x' });
+    expect(val.maxConns).toBe(0);
+  });
+
+  it('still carries the expected channels and categories alongside maxConns', async function () {
+    const val = await connectVal({ auth: 1, allowed_output_formats: ['ts'], max_connections: 1 });
+    expect(val.maxConns).toBe(1);
+    expect(val.categories).toEqual([{ category_id: '7', category_name: 'News' }]);
+    expect(val.channels).toHaveLength(1);
+    expect(val.channels[0].id).toBe('42');
+  });
+
+  it('the demo connect Result carries no maxConns field (absent = unknown)', async function () {
+    vi.useFakeTimers();
+    const api = loadApi({ fetch: vi.fn(), setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController });
+    const p = api.connect('demo', { user: 'x', pass: 'x' });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect('maxConns' in res.val).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('an M3U connect Result carries no maxConns field (absent = unknown)', async function () {
+    const M3U = [
+      '#EXTM3U',
+      '#EXTINF:-1 tvg-id="c1" tvg-name="Channel One" group-title="News",Channel One',
+      'http://stream.example.com/c1',
+    ].join('\n');
+    const ftch = vi.fn().mockResolvedValueOnce({ ok: true, text: vi.fn().mockResolvedValue(M3U) });
+    const api = loadApi({ fetch: ftch, setTimeout, clearTimeout, Promise, encodeURIComponent, AbortController, URL });
+    const res = await api.connect('http://list.example.com/x.m3u', { m3u: true });
+    expect(res.ok).toBe(true);
+    expect('maxConns' in res.val).toBe(false);
   });
 });
 
