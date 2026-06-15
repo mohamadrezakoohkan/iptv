@@ -103,3 +103,4 @@ invariants the structure preserves.
 - `product-memory.md` — durable product-project memory file (`docs/MEMORY.md`) and how it is referenced
 - `epg.md` — electronic program guide: now/next on cards + expandable per-channel schedule (Xtream short-EPG + XMLTV via tvg-id)
 - `reminders.md` — program reminders on the EPG: Remind toggle (aria-pressed) on schedule rows + NOW/NEXT line, localStorage-persisted store, client timer firing an in-app toast + best-effort permission-gated browser Notification with jump-to-channel
+- `catchup-archive.md` — catch-up (archive/timeshift) playback: per-channel archive detection (Xtream `tv_archive`/`tv_archive_duration` on the `Ch` schema) + a Replay affordance on past schedule rows that builds the Xtream timeshift URL and reuses the existing CORS proxy + dual-engine player and select+play path (Xtream-only; M3U/demo degrade silently)

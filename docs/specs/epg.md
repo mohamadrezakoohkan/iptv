@@ -155,6 +155,13 @@ The user can expand a channel to see its upcoming schedule:
   reflecting open state, and an accessible label. The schedule list is hidden
   (`aria-hidden`) when collapsed.
 - A channel with no loaded guide shows **no** expand affordance.
+- **Catch-up (archive) Replay.** On archive-capable Xtream channels, each **past**
+  schedule row also carries a keyboard-focusable **Replay** control that plays the
+  program from the source's timeshift archive through the existing player. The
+  Replay affordance, its gating (past + archive-capable + within window), and the
+  archive-URL/playback wiring are specified separately in
+  `docs/specs/catchup-archive.md` (ADR-0035/ADR-0036). Future rows carry the
+  Remind toggle (`reminders.md`); the two are mutually exclusive by row time.
 
 ## 6. State, persistence, and conventions
 
