@@ -422,12 +422,16 @@ function mkSort(opts) {
 }
 
 // ---------------------------------------------------------------------------
-// fireSrch — executes debounced search; reads module-level srch
+// fireSrch — executes debounced search; reads module-level srch. Searches the
+// ACTIVE content mode's item set (getModeItems, ADR-0038 §5a) so search filters
+// within Movies/Series exactly as within Live — in live mode getModeItems is
+// ST.chs, so live behavior is unchanged.
 // ---------------------------------------------------------------------------
 function fireSrch() {
-  const st = window.IptvSt.ST;
+  const st    = window.IptvSt.ST;
+  const items = getModeItems();
   window.IptvSt.setSrch(srch);
-  rndGrid(window.IptvSrch.getChs(st.chs, srch, st.flt, st.favs, st.sort));
+  rndGrid(window.IptvSrch.getChs(items, srch, st.flt, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -440,16 +444,21 @@ function onSrch(evt) {
 }
 
 // ---------------------------------------------------------------------------
-// onCatClick — event-delegated click handler on EL.nav
+// onCatClick — event-delegated click handler on EL.nav. Filters the ACTIVE
+// content mode's set (getModeCats/getModeItems, ADR-0038 §5a): in Movies mode a
+// category click filters the movie grid by item.cat === id; in live mode it is
+// the original behavior (getModeItems → ST.chs, getModeCats → ST.cats).
 // ---------------------------------------------------------------------------
 function onCatClick(evt) {
   const btn = evt.target.closest('[data-cat]');
   if (!btn) return;
-  const cat = btn.getAttribute('data-cat');
-  const st  = window.IptvSt.ST;
+  const cat   = btn.getAttribute('data-cat');
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
   window.IptvSt.setFlt(cat);
-  rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, cat, st.favs, st.sort));
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, cat, st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -704,12 +713,16 @@ function goClrSrch() {
 // goViewAll — empty-state "Browse all channels" action (ADR-0022): switch the
 // active category to "All Channels" through the existing category-filter path
 // (setFlt + rndSide + rndGrid), exactly as a sidebar "All Channels" click does.
+// Operates within the ACTIVE content mode's set (getModeCats/getModeItems,
+// ADR-0038 §5a); in live mode this is the original behavior.
 // ---------------------------------------------------------------------------
 function goViewAll() {
-  const st = window.IptvSt.ST;
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
   window.IptvSt.setFlt('all');
-  rndSide(st.cats, st.chs, st.favs);
-  rndGrid(window.IptvSrch.getChs(st.chs, st.srch, 'all', st.favs, st.sort));
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, 'all', st.favs, st.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -1378,8 +1391,9 @@ function onSort(evt) {
   const st = window.IptvSt;
   st.setSort(evt.target.value);
   if (st.saveSt) st.saveSt('sort');
-  const s = st.ST;
-  rndGrid(window.IptvSrch.getChs(s.chs, s.srch, s.flt, s.favs, s.sort));
+  const s     = st.ST;
+  const items = getModeItems();
+  rndGrid(window.IptvSrch.getChs(items, s.srch, s.flt, s.favs, s.sort));
 }
 
 // ---------------------------------------------------------------------------
@@ -1973,4 +1987,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch };

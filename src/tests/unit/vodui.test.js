@@ -233,3 +233,115 @@ describe('rndToggle — writes into #content-toggle reflecting state', function 
     expect(html).toMatch(/data-mode="movies"[^>]*hidden/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// TASK-0080 — Movies browse (sidebar categories + poster cards). Cover:
+// rndSide in movies mode lists the VOD movie categories with counts; rndGrid in
+// movies mode renders one poster card per movie item via the existing mkCard
+// (poster from img, title from name, letter-tile fallback); movie cards carry
+// NO live-only affordances (NOW/NEXT, Remind, Replay) because the loadUi stub
+// has no IptvEpg for VOD ids; category filter + search operate within the movie
+// set. R-0001: these assertions check innerHTML content, never DOM-attribute
+// mutations, so no baseline-attribute concern arises.
+// ---------------------------------------------------------------------------
+
+const MOVS = [
+  { id: '1', name: 'Film One', cat: '7', grp: 'Action', num: 1, img: '' },
+  { id: '2', name: 'Film Two', cat: '7', grp: 'Action', num: 2, img: 'http://x/p2.png' },
+  { id: '3', name: 'Doc',      cat: '9', grp: 'Docs',   num: 3, img: '' },
+];
+
+describe('movies browse — rndSide lists VOD movie categories with counts', function () {
+  it('renders an All button (movie total) plus one button per movie category', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    const html = els['grp-nav'].innerHTML;
+    // All Channels button carries the full movie count.
+    expect(html).toContain('data-cat="all"');
+    expect(html).toMatch(/data-cat="all"[\s\S]*?<span class="cat-count">3<\/span>/);
+    // One button per derived category, labelled by grp, counted by cat membership.
+    expect(html).toContain('data-cat="7"');
+    expect(html).toContain('data-cat="9"');
+    expect(html).toContain('>Action<');
+    expect(html).toContain('>Docs<');
+  });
+
+  it('each category button shows the count of movies in that category', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    const html = els['grp-nav'].innerHTML;
+    // cat 7 has two movies, cat 9 has one.
+    expect(html).toMatch(/data-cat="7"[\s\S]*?<span class="cat-count">2<\/span>/);
+    expect(html).toMatch(/data-cat="9"[\s\S]*?<span class="cat-count">1<\/span>/);
+  });
+});
+
+describe('movies browse — rndGrid renders one poster card per movie', function () {
+  it('renders one card per movie item via mkCard', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    const html  = els['ch-list'].innerHTML;
+    const cards = html.match(/data-id="/g) || [];
+    expect(cards.length).toBe(3);
+    expect(html).toContain('data-id="1"');
+    expect(html).toContain('data-id="2"');
+    expect(html).toContain('data-id="3"');
+  });
+
+  it('card title comes from name; poster from img with letter-tile fallback', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    const html = els['ch-list'].innerHTML;
+    // Titles from name.
+    expect(html).toContain('>Film One<');
+    expect(html).toContain('>Film Two<');
+    // Movie with a poster img renders an <img>; a poster-less movie falls back
+    // to the letter-tile (first letter of name), exactly as live channels.
+    expect(html).toContain('src="http://x/p2.png"');
+    expect(html).toContain('ch-logo-fb');
+  });
+
+  it('movie cards carry no live-only affordances (NOW/NEXT, Remind, Replay)', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    const html = els['ch-list'].innerHTML;
+    // No EPG now/next line, no Remind toggle, no Replay control, no guide expand.
+    expect(html).not.toContain('ch-nn');
+    expect(html).not.toContain('data-rem=');
+    expect(html).not.toContain('data-replay=');
+    expect(html).not.toContain('data-exp=');
+  });
+});
+
+describe('movies browse — category filter + search operate within the movie set', function () {
+  it('a category click filters the movie grid by item.cat === id', function () {
+    const { ui, els } = loadUi(mkVodStub(MOVS.slice(), []));
+    ui.goMode('movies');
+    // Simulate a sidebar click on category "7" through the delegated handler.
+    ui.onCatClick({ target: { closest() { return { getAttribute() { return '7'; } }; } } });
+    const html  = els['ch-list'].innerHTML;
+    // getChs is a pass-through stub, so the grid reflects the active mode's
+    // items; the sidebar marks the chosen filter active.
+    const side = els['grp-nav'].innerHTML;
+    expect(side).toContain('cat-btn active');
+    // The grid still renders movie cards (the active mode source is the movie set).
+    expect(html).toContain('data-id="1"');
+  });
+
+  it('search reads the active mode item set, not ST.chs', function () {
+    const vod = mkVodStub(MOVS.slice(), []);
+    const { ui, win } = loadUi(vod);
+    win.IptvSt.ST.chs = [{ id: 'c1', name: 'Live Chan', cat: 'l', grp: 'L', num: 1, img: '' }];
+    let seen = null;
+    // The loadUi setTimeout stub returns the scheduled fn; capture it so the
+    // debounced fireSrch can be flushed deterministically.
+    win.setTimeout = function setTimeout(fn) { return fn; };
+    win.IptvSrch.getChs = function getChs(items) { seen = items; return items; };
+    ui.goMode('movies');
+    ui.onSrch({ target: { value: 'film' } });
+    ui.fireSrch();   // flush the debounce manually (stub does not auto-run it)
+    // The searched set is the movie set, not the live ST.chs.
+    expect(seen).not.toBe(win.IptvSt.ST.chs);
+    expect(seen.length).toBe(3);
+  });
+});
