@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -123,8 +123,16 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 
 /* Channel grid */
 .ch-section { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--gut) 16px; scrollbar-width: thin; scrollbar-color: var(--ln) transparent; }
-.ch-bar { display: flex; align-items: center; justify-content: space-between; padding: var(--s5) 0 var(--s3); flex: none; }
-.ch-bar-count { font: 600 11px/1 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.ch-bar { display: flex; align-items: center; gap: var(--s3); padding: var(--s5) 0 var(--s3); flex: none; }
+.ch-bar-count { font: 600 11px/1 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; margin-left: auto; }
+/* Live | Movies | Series content toggle (ADR-0038) — segmented control in the
+   channel-grid toolbar; the active option (.ct-opt.active / aria-pressed=true)
+   is visually distinct, a hidden option (Movies/Series with no VOD) collapses. */
+.content-toggle { display: inline-flex; gap: var(--s1); padding: var(--s1); background: var(--sur2); border: 1px solid var(--ln); border-radius: var(--r1); flex: none; }
+.ct-opt { height: calc(var(--s6) + var(--s1)); padding: 0 var(--s3); border: none; background: transparent; border-radius: var(--s1); color: var(--dim); font: 600 12px/1 var(--font-ui); cursor: pointer; }
+.ct-opt:hover { color: var(--tx); }
+.ct-opt.active { background: var(--sur); color: var(--acc); }
+.ct-opt[hidden] { display: none; }
 /* Sort control — channel-grid toolbar (ADR-0017) */
 .ch-bar-sort { display: flex; align-items: center; gap: 7px; }
 .ch-sort-label { font: 600 11px/1 var(--font-mono); color: var(--dim); }

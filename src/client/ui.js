@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -50,6 +50,7 @@ const EL = {
   lclr: null,   // #log-clear button (ADR-0028)
   llst: null,   // #log-list container (ADR-0028)
   rtst: null,   // #rem-toasts reminder firing toast stack (ADR-0034)
+  ctog: null,   // #content-toggle Live|Movies|Series segmented control (ADR-0038)
 };
 
 // Hint text per login mode (ADR-0008)
@@ -81,6 +82,18 @@ const SIGNAL_ICOS = {
 // ---------------------------------------------------------------------------
 let tmp  = null;   // debounce timeout id  (tmp = temporary)
 let srch = '';     // pending search query (srch = search)
+
+// ---------------------------------------------------------------------------
+// Content-mode flag (ADR-0038, specs/vod-library.md §5a, §7) — the transient
+// Live | Movies | Series browse mode. It is a render-mode flag held in the UI
+// layer exactly as a render filter, NOT a state-machine phase (CONVENTIONS §6)
+// and NOT an ST key (§5 forbids adding ST properties) and NOT persisted (no
+// localStorage key). Default 'live'; reset to 'live' on connect/switch/
+// disconnect (resetMode) and naturally on reload (module re-init). Valid tokens
+// are the three browse modes; getMode* reads it, goMode writes it via setMode.
+// ---------------------------------------------------------------------------
+const MODES = ['live', 'movies', 'series'];
+let mode = 'live';   // active content mode (mode = render-mode flag, §5a)
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -1184,6 +1197,7 @@ function mkEL() {
   EL.lclr  = document.getElementById('log-clear');
   EL.llst  = document.getElementById('log-list');
   EL.rtst  = document.getElementById('rem-toasts');
+  EL.ctog  = document.getElementById('content-toggle');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
@@ -1209,7 +1223,9 @@ function mkEL() {
   if (EL.lscr) EL.lscr.addEventListener('click', onLogClose);
   if (EL.lclr) EL.lclr.addEventListener('click', onLogClear);
   if (EL.rtst) EL.rtst.addEventListener('click', onToastClick);
+  if (EL.ctog) EL.ctog.addEventListener('click', onToggle);
   rndLog();
+  rndToggle();
 }
 
 // ---------------------------------------------------------------------------
@@ -1477,6 +1493,200 @@ function saveActive(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// getCMode — pure accessor for the active content mode (ADR-0038). Exposed so
+// other modules / tests read the render-mode flag without touching the var.
+// ---------------------------------------------------------------------------
+function getCMode() {
+  return mode;
+}
+
+// ---------------------------------------------------------------------------
+// setCMode — set the content mode to a known token (ADR-0038); an unknown token
+// is ignored (defensive at the only writer, mirroring setSort's tolerance). The
+// only writer of the module-level `mode` flag besides resetMode.
+// ---------------------------------------------------------------------------
+function setCMode(m) {
+  if (MODES.indexOf(m) !== -1) mode = m;
+}
+
+// ---------------------------------------------------------------------------
+// resetMode — return the content mode to 'live' (ADR-0038, §5a/§7). Called on
+// connect, account switch, and disconnect so the toggle never persists a stale
+// mode across sessions (and reload resets it via module re-init).
+// ---------------------------------------------------------------------------
+function resetMode() {
+  mode = 'live';
+}
+
+// ---------------------------------------------------------------------------
+// hasVodMovs / hasVodSers — pure predicates: whether the VOD store currently
+// has movies / series (ADR-0038 contextual presence, §5a). Guarded so an absent
+// IptvVod module (test isolation / pre-connect) reports false — only Live shows.
+// ---------------------------------------------------------------------------
+function hasVodMovs() {
+  return Boolean(window.IptvVod && window.IptvVod.hasMovies());
+}
+
+function hasVodSers() {
+  return Boolean(window.IptvVod && window.IptvVod.hasSeries());
+}
+
+// ---------------------------------------------------------------------------
+// getModeItems — pure: the active mode's item set (ADR-0038, §5a). Live →
+// ST.chs (live channels). Movies → the VOD store's movie Vod[] (Ch-compatible
+// for the grid). Series → the VOD store's Series[] browse entries. An absent
+// VOD store yields [] so the grid simply renders empty (silent degrade).
+// ---------------------------------------------------------------------------
+function getModeItems() {
+  if (mode === 'movies') return window.IptvVod ? window.IptvVod.movies() : [];
+  if (mode === 'series') return window.IptvVod ? window.IptvVod.series() : [];
+  return window.IptvSt.ST.chs;
+}
+
+// ---------------------------------------------------------------------------
+// mkModeCats — pure: distinct categories of an item set in first-seen order,
+// shaped { id, name } for rndSide (ADR-0038). The item's cat id is the button's
+// data-cat; its grp is the human label. Used to derive Movies/Series sidebar
+// categories from the VOD store (the live mode keeps ST.cats unchanged).
+// ---------------------------------------------------------------------------
+function mkModeCats(items) {
+  const seen = {};
+  const out  = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const id = String(items[i].cat ?? '');
+    if (seen[id]) continue;
+    seen[id] = true;
+    out.push({ id, name: items[i].grp || 'Uncategorized' });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// getModeCats — pure: the active mode's sidebar category list (ADR-0038, §5a).
+// Live → ST.cats (delivery order). Movies/Series → categories derived from the
+// active item set via mkModeCats. TASK-0080/0081 refine the browse render; this
+// task establishes the per-mode source switch.
+// ---------------------------------------------------------------------------
+function getModeCats() {
+  if (mode === 'live') return window.IptvSt.ST.cats;
+  return mkModeCats(getModeItems());
+}
+
+// ---------------------------------------------------------------------------
+// rndMode2 — re-render the sidebar + grid from the ACTIVE content mode's
+// categories/items (ADR-0038, §5a). Reuses rndSide / rndGrid / getChs unchanged
+// (a Vod item is Ch-compatible). Search + sort operate within the active mode's
+// set because getChs filters that set. Called by goMode after a switch and after
+// the VOD store fills (rndVod). Named rndMode2 to avoid colliding with the
+// existing login-mode rndMode in the shared client scope.
+// ---------------------------------------------------------------------------
+function rndMode2() {
+  const st    = window.IptvSt.ST;
+  const cats  = getModeCats();
+  const items = getModeItems();
+  rndSide(cats, items, st.favs);
+  rndGrid(window.IptvSrch.getChs(items, st.srch, st.flt, st.favs, st.sort));
+}
+
+// ---------------------------------------------------------------------------
+// mkToggle — pure: the Live | Movies | Series segmented-control HTML (ADR-0038,
+// §5a, §8). Three real <button>s, each carrying aria-pressed PRESENT in the
+// baseline (Rule R-0001 — only flipped 'true'/'false', never added at runtime),
+// the active option marked .active + aria-pressed="true". Movies/Series carry
+// `hidden` unless the VOD store has them (contextual presence). opts: { mode,
+// movs, sers } where movs/sers are the booleans from hasMovies/hasSeries.
+// ---------------------------------------------------------------------------
+function mkToggle(opts) {
+  return mkToggleOpt({ id: 'live', label: 'Live', mode: opts.mode, hide: false })
+    + mkToggleOpt({ id: 'movies', label: 'Movies', mode: opts.mode, hide: !opts.movs })
+    + mkToggleOpt({ id: 'series', label: 'Series', mode: opts.mode, hide: !opts.sers });
+}
+
+// ---------------------------------------------------------------------------
+// mkToggleOpt — pure: one toggle option <button> HTML (ADR-0038). aria-pressed
+// is always present in the baseline (Rule R-0001); `hidden` collapses an option
+// the source lacks. opts: { id, label, mode, hide }.
+// ---------------------------------------------------------------------------
+function mkToggleOpt(opts) {
+  const on  = opts.mode === opts.id;
+  const cls = 'ct-opt' + (on ? ' active' : '');
+  const hid = opts.hide ? ' hidden' : '';
+  return '<button type="button" class="' + cls + '" data-mode="' + opts.id + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '"' + hid + '>' + opts.label + '</button>';
+}
+
+// ---------------------------------------------------------------------------
+// rndToggle — render the content toggle into #content-toggle reflecting the
+// active mode + contextual presence (ADR-0038, §5a). aria-pressed / hidden are
+// only flipped from their source-present baseline (Rule R-0001). Guarded so an
+// absent container (test isolation) is a no-op. Called on init, after connect/
+// switch/disconnect, and after the VOD store fills (rndVod).
+// ---------------------------------------------------------------------------
+function rndToggle() {
+  if (!EL.ctog) return;
+  EL.ctog.innerHTML = mkToggle({ mode, movs: hasVodMovs(), sers: hasVodSers() });
+}
+
+// ---------------------------------------------------------------------------
+// goMode — switch the active content mode (ADR-0038, §5a). A no-op when the mode
+// is unchanged or unknown. Otherwise sets the mode, resets the active category
+// filter to "All" for that mode (setFlt('all')), re-renders the toggle, and
+// re-renders the sidebar + grid from the new mode's categories/items (rndMode2).
+// Presentational navigation only — no ST phase, no localStorage key.
+// ---------------------------------------------------------------------------
+function goMode(next) {
+  if (next === mode || MODES.indexOf(next) === -1) return;
+  setCMode(next);
+  window.IptvSt.setFlt('all');
+  rndToggle();
+  rndMode2();
+}
+
+// ---------------------------------------------------------------------------
+// onToggle — delegated click on #content-toggle (ADR-0038): a [data-mode]
+// option routes to goMode for that mode; anything else is ignored. A hidden
+// option cannot be clicked, so contextual presence is enforced by render.
+// ---------------------------------------------------------------------------
+function onToggle(evt) {
+  const opt = evt.target.closest('[data-mode]');
+  if (!opt) return;
+  goMode(opt.getAttribute('data-mode'));
+}
+
+// ---------------------------------------------------------------------------
+// rndVod — re-render the toggle (and, when browsing Movies/Series, the active
+// surface) after the best-effort VOD store fills (ADR-0038, mirroring rndGuide).
+// Surfacing Movies/Series options as the store arrives is the contextual-
+// presence behavior (§5a). Guarded as a callback so the VOD fetch layer (api.js)
+// need not import ui.js. The default mode is 'live', so a fill normally only
+// reveals the toggle options; if the user already switched, the surface refreshes.
+// ---------------------------------------------------------------------------
+function rndVod() {
+  rndToggle();
+  if (mode !== 'live') rndMode2();
+}
+
+// ---------------------------------------------------------------------------
+// goVod — kick off the best-effort, non-blocking VOD fetch after a successful
+// connect (ADR-0037/ADR-0038), mirroring goEpg. Channels are already rendered;
+// this only populates window.IptvVod and re-renders the toggle (rndVod) as the
+// store fills. A failed / empty / timed-out fetch is swallowed by IptvApi.loadVod
+// and never affects ST.phase or browsing. opts: { src, user, pass, m3u, ext }
+// ---------------------------------------------------------------------------
+function goVod(opts) {
+  const api = window.IptvApi;
+  if (!api || typeof api.loadVod !== 'function') return;
+  api.loadVod({
+    src:    opts.src,
+    user:   opts.user,
+    pass:   opts.pass,
+    m3u:    opts.m3u,
+    ext:    opts.ext,
+    onDone: rndVod,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // rndGuide — re-render the channel grid from current ST after a guide arrives
 // (ADR-0030, ADR-0031). The grid's now/next line reads window.IptvEpg at
 // render time, so re-rendering surfaces guides as they fill in. Guarded as a
@@ -1519,7 +1729,9 @@ function onOk(val) {
   const pass = EL.pwd   ? EL.pwd.value          : '';
   const m3u  = getMode() === 'm3u';
   saveActive({ url: src, host: val.host, user, pass, m3u });
+  resetMode();
   const st = window.IptvSt.ST;
+  rndToggle();
   rndSide(st.cats, st.chs, st.favs);
   rndHead();
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
@@ -1530,6 +1742,7 @@ function onOk(val) {
   if (EL.uname) EL.uname.disabled = false;
   if (EL.pwd)   EL.pwd.disabled   = false;
   goEpg({ src, user, pass, m3u, chs: st.chs, epgUrl: val.epgUrl });
+  goVod({ src, user, pass, m3u, ext: val.ext });
 }
 
 // ---------------------------------------------------------------------------
@@ -1578,13 +1791,16 @@ function onSwOk(acct, val) {
   window.IptvSt.setChs(val.channels, val.categories, val.host, val.user);
   window.IptvSt.go('READY');
   window.IptvSt.saveAct(acct.id);
+  resetMode();
   const st = window.IptvSt.ST;
+  rndToggle();
   rndSide(st.cats, st.chs, st.favs);
   rndGrid(window.IptvSrch.getChs(st.chs, st.srch, st.flt, st.favs, st.sort));
   rndFoot();
   rndHead();
   rndAcct();
   goEpg({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, chs: st.chs, epgUrl: val.epgUrl });
+  goVod({ src: acct.url, user: acct.user, pass: acct.pass, m3u: acct.m3u, ext: val.ext });
 }
 
 // ---------------------------------------------------------------------------
@@ -1648,7 +1864,10 @@ function tearDown() {
   if (EL.pwd)   { EL.pwd.value   = ''; EL.pwd.disabled   = false; }
   if (EL.bcon)  { EL.bcon.disabled = true; EL.bcon.textContent = 'Connect'; }
   window.IptvSt.setCur(null);
+  if (window.IptvVod) window.IptvVod.clear();
+  resetMode();
   rndFoot();
+  rndToggle();
   rndSide([], [], []);
   rndGrid([]);
   rndHead();
@@ -1754,4 +1973,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats };

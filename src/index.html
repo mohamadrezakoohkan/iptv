@@ -83,6 +83,15 @@
         </div>
         <div class="ch-section">
           <div class="ch-bar">
+            <!-- ADR: ADR-0038 — Live | Movies | Series content toggle. Options are real
+                 buttons with aria-pressed PRESENT in the baseline (Rule R-0001); Movies/Series
+                 carry `hidden` until window.IptvVod has them (contextual presence). The builder
+                 (rndToggle, ui.js) only flips aria-pressed/hidden, never adds aria at runtime. -->
+            <div class="content-toggle" id="content-toggle" role="group" aria-label="Content type">
+              <button type="button" class="ct-opt active" data-mode="live" aria-pressed="true">Live</button>
+              <button type="button" class="ct-opt" data-mode="movies" aria-pressed="false" hidden>Movies</button>
+              <button type="button" class="ct-opt" data-mode="series" aria-pressed="false" hidden>Series</button>
+            </div>
             <span class="ch-bar-count" id="ch-count"></span>
             <div class="ch-bar-sort">
               <label class="ch-sort-label" for="ch-sort">Sort</label>
