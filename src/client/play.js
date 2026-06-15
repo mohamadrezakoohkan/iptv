@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0027, ADR-0028
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0027, ADR-0028, ADR-0036
 /* global window */
 
 'use strict';
@@ -46,6 +46,58 @@ function getPrx(url) {
 // ---------------------------------------------------------------------------
 function getRmx(url) {
   return RMX + encodeURIComponent(url);
+}
+
+// ---------------------------------------------------------------------------
+// pad2 — pure: zero-pad a number to two digits for the timeshift stamp
+// ---------------------------------------------------------------------------
+function pad2(n) {
+  return n < 10 ? '0' + n : String(n);
+}
+
+// ---------------------------------------------------------------------------
+// getStamp — pure: format a unix-ms instant as the Xtream timeshift local
+// stamp YYYY-MM-DD:HH-MM (ADR-0036, specs/catchup-archive.md §2)
+// ---------------------------------------------------------------------------
+function getStamp(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+    + ':' + pad2(d.getHours()) + '-' + pad2(d.getMinutes());
+}
+
+// ---------------------------------------------------------------------------
+// getArchDur — pure: program length in whole minutes, minimum 1 (ADR-0036)
+// ---------------------------------------------------------------------------
+function getArchDur(start, stop) {
+  const min = Math.round((stop - start) / 60000);
+  return min < 1 ? 1 : min;
+}
+
+// ---------------------------------------------------------------------------
+// getArchUrl — pure: build the Xtream timeshift archive URL for a program on
+// an archive-capable channel, mirroring the live form mkXtCh built
+// (<base>/live/<user>/<pass>/<id>.<ext>) → the timeshift form
+// <base>/timeshift/<user>/<pass>/<dur>/<YYYY-MM-DD:HH-MM>/<id>.<ext>
+// (ADR-0036, specs/catchup-archive.md §2). No DOM, no ST, no fetch. A url
+// without a /live/ segment (the offline demo path, §6 — a public HLS test
+// stream rather than an Xtream live url) has no timeshift form, so the channel
+// url is returned unchanged and Replay plays the demo stream as-is.
+// opts: { ch:Ch, prg:Prg }
+// ---------------------------------------------------------------------------
+function getArchUrl(opts) {
+  const ch = opts.ch;
+  const prg = opts.prg;
+  const live = String(ch.url);
+  const i = live.indexOf('/live/');
+  if (i === -1) return live;     // non-Xtream url (e.g. demo test stream): play as-is
+  const base = live.slice(0, i);
+  const tail = live.slice(i + 6).split('/');     // [user, pass, id.ext]
+  const dot = tail[2].lastIndexOf('.');
+  const sid = tail[2].slice(0, dot);
+  const ext = tail[2].slice(dot + 1);
+  const stamp = getStamp(prg.start);
+  const dur = getArchDur(prg.start, prg.stop);
+  return base + '/timeshift/' + tail[0] + '/' + tail[1] + '/' + dur + '/' + stamp + '/' + sid + '.' + ext;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,4 +265,4 @@ function goPlay() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvPlay = { mkPlay, loadPlay, goPlay, stopPlay, getEng, getPrx, getRmx };
+window.IptvPlay = { mkPlay, loadPlay, goPlay, stopPlay, getEng, getPrx, getRmx, getArchUrl };

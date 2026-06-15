@@ -21,6 +21,37 @@ Beside the account button is a **Log** button that opens a slide-in
 recorded there (only failures — successful plays are never logged), so you can
 see at a glance which channels would not play and why.
 
+Each channel card also carries a built-in **program guide (EPG)**: a now/next
+line shows what is on now and next, and an expand control reveals that channel's
+upcoming schedule — sourced from the Xtream short-EPG endpoint on the Xtream
+path and an XMLTV guide (matched per channel by `tvg-id`) on the M3U path,
+fetched best-effort through the same proxy. On any upcoming program — on the
+NOW/NEXT line or in the expanded schedule — a **Remind** toggle marks it; a
+lightweight timer then fires an in-app toast (with a one-click jump to that
+channel) plus a best-effort browser notification when the program is about to
+start, and your reminders persist across reloads. On channels whose Xtream
+source advertises archive (catch-up) support, each **past** schedule row also
+carries a keyboard-focusable **Replay** control: activating it builds the Xtream
+timeshift archive URL for that program and plays it back through the same proxy
+and dual-engine player a live channel uses.
+
+On Xtream portals that serve on-demand content, a **Live | Movies | Series**
+toggle above the channel grid opens a built-in **VOD library**: switch to
+**Movies** to browse VOD movie categories and poster cards, or **Series** to
+browse series and drill into their seasons and episodes. Selecting a movie — or
+a series episode — plays it through the same dual-engine player and select+play
+path a live channel uses. The VOD data is fetched best-effort after connect
+through the same proxy; the Movies/Series tabs appear only when the source
+actually serves them (M3U playlists and VOD-less portals show only Live).
+
+While a stream is playing, an **in-player controls layer** sits on the player
+chrome alongside the format chip: a **Fullscreen** toggle and a
+**Picture-in-Picture** toggle (each hidden where the browser cannot support it,
+e.g. PiP on iOS Safari), plus **keyboard shortcuts** active only while playing —
+F for fullscreen, P for picture-in-picture, Space/K for play-pause, M for mute,
+and ArrowUp/ArrowDown for volume. Your volume and mute choice is remembered
+across reloads.
+
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
 
@@ -99,6 +130,68 @@ command.
   actionable placeholder that explains *why* it is empty (no search matches,
   empty category, no favourites yet, or a source with no channels) and offers a
   one-tap way out where one exists (Clear search, Browse all channels).
+- **Program guide (EPG)** — each channel card surfaces what is on **now and
+  next** (a NOW/NEXT line below the channel name) plus a keyboard-focusable
+  **expand control** that reveals that channel's upcoming schedule (local-time
+  range + title + optional category, the airing program marked) without
+  starting playback. Guide data is fetched best-effort after connect through
+  the existing proxy — the Xtream short-EPG endpoint
+  (`get_simple_data_table`) per channel on the Xtream path, an XMLTV guide
+  matched by each entry's `tvg-id` on the M3U path, and a synthetic guide in
+  demo mode — and is in-memory and session-scoped (not persisted). A channel
+  with no loaded guide shows neither the now/next line nor an expand control,
+  so cards never break or gain empty placeholders.
+- **Program reminders** — a keyboard-focusable **Remind** toggle on each
+  upcoming program (the NOW/NEXT line's *next* entry and each future schedule
+  row) marks it; the toggle reflects its state with `aria-pressed` and is
+  cleared by pressing it again. Reminders persist in the browser
+  (`localStorage`), and a lightweight client timer checks them against program
+  start times: when one is due it fires an in-app toast — announced to assistive
+  tech, auto-dismissing, with a **Watch** action that jumps to and plays that
+  channel — plus a best-effort, permission-gated browser notification (requested
+  only on your first reminder, never on load). Everything degrades silently when
+  no guide is loaded, storage is unavailable, or notifications are
+  denied/unsupported.
+- **Catch-up (archive) Replay** — on channels whose Xtream source advertises
+  archive/timeshift support (`tv_archive`), each **past** schedule row in the
+  expandable guide carries a keyboard-focusable **Replay** button. Activating it
+  builds the Xtream timeshift archive URL for that program (start + duration) and
+  plays it back through the **same** CORS proxy and dual-engine player a live
+  channel uses — no new player, no separate archive surface. Replay appears only
+  where it can work (a past, archive-capable program within the channel's
+  retention window); future rows, the currently-airing program, non-archive
+  channels, and the M3U path show nothing. Demo mode synthesizes an
+  archive-capable channel with a past program so the feature is demonstrable
+  offline.
+- **VOD library (Movies & Series)** — on Xtream portals that serve on-demand
+  content, a keyboard-accessible **Live | Movies | Series** segmented toggle
+  above the channel grid switches the browse surface between live channels, VOD
+  movies, and TV series. **Movies** lists VOD movie categories in the sidebar
+  and movie poster cards in the grid; **Series** lists series cards that drill
+  into a seasons/episodes view (fetched on demand) with a back affordance.
+  Selecting a movie or a series episode plays it through the **same** dual-engine
+  player and select+play path a live channel uses — the on-demand stream URL
+  preserves the source container extension, so engine resolution is unchanged
+  (no new player, no separate VOD surface). VOD is fetched best-effort after
+  connect through the same proxy and kept in memory (not persisted); the
+  Movies/Series tabs appear **only** when the source actually has them (M3U,
+  demo beyond its one synthesized movie, and VOD-less Xtream portals show only
+  Live). Demo mode synthesizes one offline-playable movie so the feature is
+  demonstrable without a live portal.
+- **In-player controls layer** — over the shared `<video>`, accessible
+  keyboard-focusable **Fullscreen** (`#fs-btn`) and **Picture-in-Picture**
+  (`#pip-btn`) buttons render on the player chrome beside the format chip, each
+  feature-detected and hidden (removed from tab order) where the browser cannot
+  support it. Their pressed state follows the **actual** browser fullscreen/PiP
+  state — a browser-initiated exit (Escape from fullscreen, closing the PiP
+  window) un-presses the button. **Keyboard shortcuts** are active only while a
+  stream is playing and never while typing in a field: F = fullscreen, P =
+  picture-in-picture, Space/K = play-pause, M = mute, ArrowUp/ArrowDown =
+  volume. Escape stays with the panel-close handler (no collision). The single
+  client-wide **volume/mute preference** persists across reloads under
+  `localStorage['iptv_vol']`. The layer is client-only over the existing player
+  — no new playback engine, no new server route, and it applies uniformly to
+  live, catch-up, and VOD.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).

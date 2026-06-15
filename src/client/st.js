@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015, ADR-0017, ADR-0019
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0015, ADR-0017, ADR-0019, ADR-0040
 /* global window */
 
 'use strict';
@@ -44,6 +44,19 @@ const SRTS = ['num-asc', 'name-asc', 'name-desc', 'fav-first'];
 // ---------------------------------------------------------------------------
 const THMS    = ['light', 'dark'];
 const THM_DEF = 'dark';
+
+// ---------------------------------------------------------------------------
+// Volume/mute preference defaults (ADR-0040) — the fallback applied when
+// iptv_vol is absent, malformed, or out of range. Mirrors the ST.vol / ST.muted
+// initial values. Volume/mute is presentational chrome, NOT an ST phase field
+// (§6 unaffected): it lives here only because st.js owns localStorage
+// read/write. Named VOL_DEF / MUT_DEF (unique across the shared non-module
+// client scope) to avoid an "Identifier already declared" load error — the
+// recurring shared-window-scope lesson.
+// ADR: ADR-0040
+// ---------------------------------------------------------------------------
+const VOL_DEF = 1.0;
+const MUT_DEF = false;
 
 const PHASES = {
   INIT:  ['LOAD'],
@@ -114,12 +127,25 @@ function setSort(tok) {
   ST.sort = tok;
 }
 
+// ---------------------------------------------------------------------------
+// setVol — writes ST.vol then persists the client-wide volume/mute preference
+// (ADR-0040), mirroring how sort persists on write. saveVol is guarded against
+// localStorage exceptions, so this never throws.
+// ADR: ADR-0040
+// ---------------------------------------------------------------------------
 function setVol(v) {
   ST.vol = v;
+  saveVol();
 }
 
+// ---------------------------------------------------------------------------
+// setMuted — writes ST.muted then persists the client-wide volume/mute
+// preference (ADR-0040).
+// ADR: ADR-0040
+// ---------------------------------------------------------------------------
 function setMuted(b) {
   ST.muted = b;
+  saveVol();
 }
 
 function setFavs(arr) {
@@ -207,6 +233,41 @@ function loadTheme() {
 function saveTheme(thm) {
   const ls = window.localStorage;
   try { ls.setItem(window.S.themeKey, String(thm)); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// loadVol — reads the persisted volume/mute preference from iptv_vol
+// (ADR-0040). Returns { vol, muted } only when the stored JSON is an object
+// with a finite vol clamped to [0,1] and a boolean muted; any absent,
+// malformed, out-of-range, or wrong-type value (and any localStorage / JSON
+// access exception) falls back to the defaults (VOL_DEF 1.0, MUT_DEF false).
+// Never throws. Volume/mute is chrome, not an ST phase field.
+// ADR: ADR-0040
+// ---------------------------------------------------------------------------
+function loadVol() {
+  const ls = window.localStorage;
+  let pref = null;
+  try { pref = JSON.parse(ls.getItem(window.S.volKey)); } catch (e) {}
+  if (!pref || typeof pref !== 'object') return { vol: VOL_DEF, muted: MUT_DEF };
+  const vol = pref.vol;
+  const mut = pref.muted;
+  if (typeof vol !== 'number' || !isFinite(vol) || vol < 0 || vol > 1) {
+    return { vol: VOL_DEF, muted: MUT_DEF };
+  }
+  if (typeof mut !== 'boolean') return { vol: VOL_DEF, muted: MUT_DEF };
+  return { vol: vol, muted: mut };
+}
+
+// ---------------------------------------------------------------------------
+// saveVol — serialises the current ST.vol / ST.muted to iptv_vol as
+// { vol, muted } JSON (ADR-0040). Guarded against localStorage exceptions like
+// the other writers. Called by setVol / setMuted on every change.
+// ADR: ADR-0040
+// ---------------------------------------------------------------------------
+function saveVol() {
+  const ls  = window.localStorage;
+  const out = { vol: ST.vol, muted: ST.muted };
+  try { ls.setItem(window.S.volKey, JSON.stringify(out)); } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +457,8 @@ window.IptvSt = {
   saveSt,
   loadTheme,
   saveTheme,
+  loadVol,
+  saveVol,
   mkAcct,
   getAct,
   addAcct,

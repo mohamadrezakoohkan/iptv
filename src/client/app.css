@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -101,6 +101,21 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .fmt-detail { flex: none; font: 500 11px/1 var(--font-mono); color: var(--dim); white-space: nowrap; }
 .fmt-detail[hidden] { display: none; }
 
+/* ADR: ADR-0039 — in-player controls chrome (#fs-btn / #pip-btn): secondary
+   content-head controls sized via the ADR-0024 spacing tokens and coloured via
+   the ADR-0019 colour tokens, consistent with the format chip and theme toggle.
+   An accent treatment marks the pressed (aria-pressed="true") state; a `hidden`
+   control is removed from the layout (and the tab order); the focus ring is the
+   one global :focus-visible outline shared by every control (ADR-0024). */
+.ctrl-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; }
+.ctrl-btn:hover { border-color: var(--dim); color: var(--tx); }
+.ctrl-btn[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); background: rgba(242,163,60,0.08); }
+.ctrl-btn[hidden] { display: none; }
+.ctrl-btn .ctrl-ico { width: 16px; height: 16px; }
+.ctrl-btn .ctrl-fs-off { display: none; }
+.ctrl-btn[aria-pressed="true"] .ctrl-fs-on { display: none; }
+.ctrl-btn[aria-pressed="true"] .ctrl-fs-off { display: inline-block; }
+
 /* Player */
 .player-wrap { flex: none; padding: var(--s6) var(--s6) 0; }
 .player-card { width: 100%; aspect-ratio: 16/9; max-height: 35vh; background: var(--sur); border: 1px solid var(--ln); border-radius: var(--r2); overflow: hidden; position: relative; }
@@ -123,8 +138,31 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 
 /* Channel grid */
 .ch-section { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--gut) 16px; scrollbar-width: thin; scrollbar-color: var(--ln) transparent; }
-.ch-bar { display: flex; align-items: center; justify-content: space-between; padding: var(--s5) 0 var(--s3); flex: none; }
-.ch-bar-count { font: 600 11px/1 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.ch-bar { display: flex; align-items: center; gap: var(--s3); padding: var(--s5) 0 var(--s3); flex: none; }
+.ch-bar-count { font: 600 11px/1 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; margin-left: auto; }
+/* Live | Movies | Series content toggle (ADR-0038) — segmented control in the
+   channel-grid toolbar; the active option (.ct-opt.active / aria-pressed=true)
+   is visually distinct, a hidden option (Movies/Series with no VOD) collapses. */
+.content-toggle { display: inline-flex; gap: var(--s1); padding: var(--s1); background: var(--sur2); border: 1px solid var(--ln); border-radius: var(--r1); flex: none; }
+.ct-opt { height: calc(var(--s6) + var(--s1)); padding: 0 var(--s3); border: none; background: transparent; border-radius: var(--s1); color: var(--dim); font: 600 12px/1 var(--font-ui); cursor: pointer; }
+.ct-opt:hover { color: var(--tx); }
+.ct-opt.active { background: var(--sur); color: var(--acc); }
+.ct-opt[hidden] { display: none; }
+/* Series seasons/episodes drill-down (ADR-0038, §5b) — the series-mode grid is
+   reused for the browse list (series cards) and, once a series is opened, its
+   drill-down. is-drill flips the grid to a block flow so the back control +
+   season group headers + episode entries stack full-width. */
+.ch-grid.is-drill { display: block; }
+.ser-drill-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0 var(--s4); }
+.ser-drill-title { font: 700 16px/1.2 var(--font-ui); color: var(--tx); margin: 0; }
+.ser-back { display: inline-flex; align-items: center; gap: var(--s1); height: calc(var(--s6) + var(--s1)); padding: 0 var(--s3); background: var(--sur2); border: 1px solid var(--ln); border-radius: var(--r1); color: var(--tx); font: 600 12px/1 var(--font-ui); cursor: pointer; flex: none; }
+.ser-back:hover { border-color: var(--dim); }
+.ser-back-ico { font-size: 14px; line-height: 1; }
+.ser-seasons { display: flex; flex-direction: column; gap: var(--s5); }
+.ser-season-head { font: 700 12px/1 var(--font-mono); color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 var(--s3); }
+.ser-eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: var(--s3); }
+.epi-row { gap: 0; }
+.ser-empty { padding: var(--s6) 0; color: var(--dim); font: 500 13px/1.4 var(--font-ui); text-align: center; }
 /* Sort control — channel-grid toolbar (ADR-0017) */
 .ch-bar-sort { display: flex; align-items: center; gap: 7px; }
 .ch-sort-label { font: 600 11px/1 var(--font-mono); color: var(--dim); }
@@ -143,6 +181,56 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ch-fav:hover { color: var(--acc); }
 .ch-fav.on { color: var(--acc); }
 .ch-name { font: 500 12px/15px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Now/next line on the channel card (ADR-0031, specs/epg.md §4) — decorative
+   metadata below the channel name, present only when a guide is loaded. Reads
+   the ADR-0024 spacing/radius tokens and ADR-0019 colour tokens; markers use
+   the mono font like other card meta; titles ellipsize to one line; NEXT is
+   dimmer than NOW. No hard-coded magic colours/spacings. */
+.ch-nn { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s1); }
+.ch-nn-text { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; flex: 1 1 auto; }
+.ch-nn-row { display: flex; align-items: baseline; gap: var(--s1); min-width: 0; }
+.ch-nn-mark { font: 600 9px/1 var(--font-mono); letter-spacing: 0.08em; color: var(--dim); flex: none; }
+.ch-nn-title { font: 500 11px/14px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-nn-now .ch-nn-mark { color: var(--acc); }
+.ch-nn-nxt .ch-nn-title { color: var(--dim); }
+/* Expandable per-channel schedule (ADR-0031, specs/epg.md §5). The expand
+   control is a real focusable button below the now/next line; the schedule list
+   is collapsed by default and revealed when the card carries is-expanded —
+   presentational only, mirroring the panel-open model (ADR-0028, no ST phase).
+   Reads ADR-0024 spacing/radius tokens and ADR-0019 colour tokens; the marker
+   font matches other card meta. No hard-coded magic colours/spacings. */
+.ch-exp { margin-top: var(--s1); align-self: flex-start; display: inline-flex; align-items: center; gap: var(--s1); height: var(--s5); padding: 0 var(--s2); border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; font: 600 9px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; transition: border-color 140ms, color 140ms; }
+.ch-exp:hover { border-color: var(--dim); color: var(--tx); }
+.ch-exp-caret { font-size: 8px; line-height: 1; transition: transform 160ms ease; }
+.ch-card.is-expanded .ch-exp { border-color: var(--acc); color: var(--acc); }
+.ch-card.is-expanded .ch-exp-caret { transform: rotate(180deg); }
+.ch-sched { list-style: none; margin: var(--s1) 0 0; padding: 0; display: none; flex-direction: column; gap: var(--s1); }
+.ch-card.is-expanded .ch-sched { display: flex; }
+.ch-sched-row { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); min-width: 0; }
+.ch-sched-row.ch-sched-cur { border-color: var(--acc); }
+.ch-sched-time { flex: none; font: 500 9px/1.3 var(--font-mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.ch-sched-row.ch-sched-cur .ch-sched-time { color: var(--acc); }
+.ch-sched-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ch-sched-title { font: 500 11px/14px var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-sched-cat { font: 500 9px/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Remind toggle (ADR-0033, specs/reminders.md §3) — a keyboard-focusable
+   aria-pressed button on each upcoming schedule row and on the NOW/NEXT line's
+   NEXT part. Mirrors the fav star's on/off colour posture using the accent
+   token when pressed. Reads ADR-0024 spacing/sizing/radius tokens and ADR-0019
+   colour tokens; no hard-coded magic colours/spacings. */
+.ch-rem { flex: none; align-self: center; margin-left: auto; width: calc(var(--s6) + var(--s1)); height: calc(var(--s6) + var(--s1)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; line-height: 1; transition: border-color 140ms, color 140ms; }
+.ch-rem-ico { font-size: 12px; line-height: 1; }
+.ch-rem:hover { border-color: var(--dim); color: var(--tx); }
+.ch-rem[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); }
+.ch-nn .ch-rem { margin-left: auto; }
+/* Replay control (ADR-0036, specs/catchup-archive.md §3) — a keyboard-focusable
+   one-shot action button on each PAST archive-capable in-window schedule row.
+   Sized/positioned identically to the Remind toggle so past and future rows
+   stay visually consistent; reads ADR-0024 spacing/sizing/radius tokens and
+   ADR-0019 colour tokens (no hard-coded magic colours/spacings). */
+.ch-replay { flex: none; align-self: center; margin-left: auto; width: calc(var(--s6) + var(--s1)); height: calc(var(--s6) + var(--s1)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; line-height: 1; transition: border-color 140ms, color 140ms; }
+.ch-replay-ico { font-size: 11px; line-height: 1; }
+.ch-replay:hover { border-color: var(--acc); color: var(--acc); }
 /* Contextual no-content placeholder (ADR-0022, specs/empty-states.md §2) —
    icon + title + body + optional action button, all on existing tokens. */
 .ch-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 56px 20px; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }
@@ -313,7 +401,24 @@ body.is-err .player-wrap { display: none; }
 .log-row-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11px/1.3 var(--font-mono); color: var(--dim); }
 .log-empty { margin: 0; padding: 24px 8px; text-align: center; font: 400 12px/1.5 var(--font-ui); color: var(--dim); }
 
+/* Reminder firing toast stack — ADR-0034, specs/reminders.md §5–§6, §8.
+   A bottom-right transient stack consistent with the log/error UI posture
+   (surface tokens, --ln border, --r1 radius). Each toast carries the program
+   copy, a Watch/Jump action, and a dismiss control; auto-dismisses via JS. */
+.rem-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: 340px; pointer-events: none; }
+.rem-toast { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+.rem-toast-head { display: flex; align-items: baseline; gap: 8px; }
+.rem-toast-mark { flex: none; font: 600 10px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--live); }
+.rem-toast-time { flex: none; margin-left: auto; font: 500 10px/1 var(--font-mono); color: var(--dim); }
+.rem-toast-title { font: 600 13px/1.35 var(--font-ui); color: var(--tx); overflow: hidden; text-overflow: ellipsis; }
+.rem-toast-acts { display: flex; align-items: center; gap: 8px; }
+.rem-toast-watch { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--tx); cursor: pointer; font: 500 12px/1 var(--font-ui); }
+.rem-toast-watch:hover { border-color: var(--dim); }
+.rem-toast-close { margin-left: auto; width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; font-size: 13px; line-height: 1; }
+.rem-toast-close:hover { border-color: var(--dim); color: var(--tx); }
+
 @media (max-width: 760px) {
+  .rem-toasts { left: 16px; right: 16px; max-width: none; }
   .acct-panel { width: 100%; }
   .acct-btn .acct-label { display: none; }
   .log-panel { width: 100%; }

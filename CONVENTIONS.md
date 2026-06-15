@@ -241,15 +241,18 @@ Rules:
 Type + default + validation colocated. One *_DEF object per type.
 
 ```js
-/** @typedef {{ id:string, name:string, grp:string, url:string, img:string, cat:string, num:number }} Ch */
+// ADR: ADR-0035 — arch/archDur carry per-channel Xtream archive (catch-up) capability.
+/** @typedef {{ id:string, name:string, grp:string, url:string, img:string, cat:string, num:number, arch:boolean, archDur:number }} Ch */
 const CH_DEF = {
-  id:   { t: 'string', req: true,  def: ''      },
-  name: { t: 'string', req: true,  def: ''      },
-  grp:  { t: 'string', req: false, def: 'Other' },
-  url:  { t: 'string', req: true,  def: ''      },
-  img:  { t: 'string', req: false, def: ''      },
-  cat:  { t: 'string', req: false, def: ''      },
-  num:  { t: 'number', req: false, def: 0       },
+  id:      { t: 'string',  req: true,  def: ''      },
+  name:    { t: 'string',  req: true,  def: ''      },
+  grp:     { t: 'string',  req: false, def: 'Other' },
+  url:     { t: 'string',  req: true,  def: ''      },
+  img:     { t: 'string',  req: false, def: ''      },
+  cat:     { t: 'string',  req: false, def: ''      },
+  num:     { t: 'number',  req: false, def: 0       },
+  arch:    { t: 'boolean', req: false, def: false   },  // Xtream tv_archive (catch-up capable)
+  archDur: { t: 'number',  req: false, def: 0       },  // Xtream tv_archive_duration, days
 };
 
 /** @typedef {{ chId:string, title:string, start:number, stop:number, desc:string, cat:string }} Prg */

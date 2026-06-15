@@ -1,4 +1,4 @@
-// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023
+// ADR: ADR-0004, ADR-0010, ADR-0012, ADR-0023, ADR-0036
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -354,6 +354,116 @@ describe('loadPlay() — mpegts unsupported, remux fallback', function () {
     const ctx = loadPlay({ hls: null, ts: null, native: false });
     const res = ctx.iptvPlay.loadPlay('http://stream.test/live.m3u8');
     expect(res).toEqual({ ok: false, err: 'HLS not supported' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getArchUrl() — pure Xtream timeshift archive URL builder (ADR-0036)
+// ---------------------------------------------------------------------------
+
+// Expected local-time stamp YYYY-MM-DD:HH-MM, computed the same way the builder
+// does so the assertion is timezone-independent.
+function stampOf(ts) {
+  const d = new Date(ts);
+  const p = function p2(n) { return n < 10 ? '0' + n : String(n); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ':' + p(d.getHours()) + '-' + p(d.getMinutes());
+}
+
+describe('getArchUrl() — timeshift archive URL builder', function () {
+  let ctx;
+  // A fixed reference instant and a 30-minute program around it.
+  const START = Date.UTC(2026, 0, 15, 12, 0, 0);   // 2026-01-15 12:00 UTC
+  const STOP  = START + 30 * 60000;                 // +30 min
+
+  beforeEach(function () {
+    ctx = loadPlay({ hls: mkHlsStub(true), ts: null, native: false });
+  });
+
+  it('builds the timeshift form from a TS live URL', function () {
+    const ch  = { url: 'http://portal.test:8080/live/usr/pss/42.ts' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(url).toBe('http://portal.test:8080/timeshift/usr/pss/30/' + stampOf(START) + '/42.ts');
+  });
+
+  it('builds the timeshift form from an HLS live URL', function () {
+    const ch  = { url: 'https://portal.test/live/usr/pss/7.m3u8' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(url).toBe('https://portal.test/timeshift/usr/pss/30/' + stampOf(START) + '/7.m3u8');
+  });
+
+  it('preserves base/user/pass/stream-id/ext exactly from the live URL', function () {
+    const ch  = { url: 'http://a.b.example:25461/live/U-1/P_2/123.ts' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(url.startsWith('http://a.b.example:25461/timeshift/U-1/P_2/')).toBe(true);
+    expect(url.endsWith('/123.ts')).toBe(true);
+  });
+
+  it('formats the start stamp as local YYYY-MM-DD:HH-MM', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(url).toContain('/' + stampOf(START) + '/');
+    expect(stampOf(START)).toMatch(/^\d{4}-\d{2}-\d{2}:\d{2}-\d{2}$/);
+  });
+
+  it('rounds a 30-minute program to a duration of 30', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg: { start: START, stop: START + 30 * 60000 } });
+    expect(url).toContain('/timeshift/usr/pss/30/');
+  });
+
+  it('rounds duration to the nearest whole minute (89s → 1)', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg: { start: START, stop: START + 89000 } });
+    expect(url).toContain('/timeshift/usr/pss/1/');
+  });
+
+  it('rounds duration to the nearest whole minute (91s → 2)', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg: { start: START, stop: START + 91000 } });
+    expect(url).toContain('/timeshift/usr/pss/2/');
+  });
+
+  it('clamps a sub-minute program to a minimum duration of 1', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg: { start: START, stop: START + 5000 } });
+    expect(url).toContain('/timeshift/usr/pss/1/');
+  });
+
+  it('clamps a zero-length program to a minimum duration of 1', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg: { start: START, stop: START } });
+    expect(url).toContain('/timeshift/usr/pss/1/');
+  });
+
+  it('getEng(getArchUrl) === getEng(ch.url) for a TS channel', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/42.ts' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(ctx.iptvPlay.getEng(url)).toBe(ctx.iptvPlay.getEng(ch.url));
+    expect(ctx.iptvPlay.getEng(url)).toBe('ts');
+  });
+
+  it('getEng(getArchUrl) === getEng(ch.url) for an HLS channel', function () {
+    const ch  = { url: 'https://portal.test/live/usr/pss/7.m3u8' };
+    const prg = { start: START, stop: STOP };
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(ctx.iptvPlay.getEng(url)).toBe(ctx.iptvPlay.getEng(ch.url));
+    expect(ctx.iptvPlay.getEng(url)).toBe('hls');
+  });
+
+  it('is pure — no ST mutation, no DOM, returns a plain string', function () {
+    const ch  = { url: 'http://portal.test/live/usr/pss/1.ts' };
+    const prg = { start: START, stop: STOP };
+    const before = ctx.win.IptvSt.ST.phase;
+    const url = ctx.iptvPlay.getArchUrl({ ch, prg });
+    expect(typeof url).toBe('string');
+    expect(ctx.win.IptvSt.ST.phase).toBe(before);
+    expect(ctx.win.IptvSt.ST.err).toBe(null);
   });
 });
 

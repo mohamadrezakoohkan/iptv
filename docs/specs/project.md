@@ -83,7 +83,7 @@ Product source and tests live under `src/`; product documentation lives under
 invariants the structure preserves.
 
 - `src/index.html` — product HTML entry point (served at `/`).
-- `src/client/**` — vanilla-JS client modules and `app.css`.
+- `src/client/**` — vanilla-JS client modules and `app.css` (incl. `epg.js`, the in-memory program-guide store + parsers + now/next selectors).
 - `src/server/**` — Express server (`srv.js`, `rtr.js`, `cfg.js`, `hls.js`).
 - `src/tests/{unit,ui,int}/**` — Vitest unit, Playwright UI, and Vitest
   integration suites.
@@ -101,3 +101,8 @@ invariants the structure preserves.
 - `playback-failure-log.md` — session failure log for channels that fail to play, surfaced via a log button beside the account button
 - `integration-testing.md` — live-network integration test tier
 - `product-memory.md` — durable product-project memory file (`docs/MEMORY.md`) and how it is referenced
+- `epg.md` — electronic program guide: now/next on cards + expandable per-channel schedule (Xtream short-EPG + XMLTV via tvg-id)
+- `reminders.md` — program reminders on the EPG: Remind toggle (aria-pressed) on schedule rows + NOW/NEXT line, localStorage-persisted store, client timer firing an in-app toast + best-effort permission-gated browser Notification with jump-to-channel
+- `catchup-archive.md` — catch-up (archive/timeshift) playback: per-channel archive detection (Xtream `tv_archive`/`tv_archive_duration` on the `Ch` schema) + a Replay affordance on past schedule rows that builds the Xtream timeshift URL and reuses the existing CORS proxy + dual-engine player and select+play path (Xtream-only; M3U/demo degrade silently)
+- `player-controls.md` — client-only in-player controls layer over the shared `<video>`: feature-detected Fullscreen + Picture-in-Picture toggles (hidden where unsupported, e.g. iOS Safari PiP), keyboard shortcuts active only while playing (F/P/Space/K/M/Arrow), accessible content-head buttons alongside the format chip, and a single client-wide volume/mute preference persisted as `iptv_vol` (mirroring theme/sort); works in demo mode offline
+- `vod-library.md` — VOD library (Movies & Series) on the Xtream path: best-effort fetch of `get_vod_categories`/`get_vod_streams` + `get_series`/`get_series_info` through the existing `/api/xtream` proxy, normalized into a parallel on-demand `Vod` item shape (mirroring `mkXtCh`), presented in the existing sidebar/grid behind a Live | Movies | Series content toggle with a series seasons/episodes drill-down; on-demand stream URLs (`/movie/…`, `/series/…`, extension preserved) play through the existing dual-engine player + select+play path (Xtream-only; M3U/demo degrade silently, demo synthesizes one offline-playable movie)
