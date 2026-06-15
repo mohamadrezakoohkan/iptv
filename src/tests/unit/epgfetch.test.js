@@ -1,4 +1,4 @@
-// ADR: ADR-0030, ADR-0036
+// ADR: ADR-0030, ADR-0036, ADR-0041
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -221,6 +221,103 @@ describe('loadEpg — demo path', function () {
     // The past program's identity (chId + start) is what data-replay encodes.
     expect(String(past[0].chId)).toBe('arch1');
     expect(typeof past[0].start).toBe('number');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// maxConns gate (ADR-0041, TASK-0090): the bulk Xtream short-EPG fan-out is
+// SKIPPED entirely on a single-connection portal (maxConns === 1) so the lone
+// connection stays free for live playback; it runs unchanged on multi /
+// unknown. Demo + M3U paths are never gated.
+// ---------------------------------------------------------------------------
+describe('loadEpg — single-connection gate (maxConns)', function () {
+  /** A fetch that records every call and returns a valid short-EPG payload. */
+  function recFetch(calls) {
+    return vi.fn(function onFetch(url) {
+      calls.push(url);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(xtPayload(1700000000, 1700003600)), text: () => Promise.resolve('') });
+    });
+  }
+
+  /** Count proxied get_simple_data_table requests among recorded URLs. */
+  function epgCalls(calls) {
+    return calls.filter(function isEpg(u) {
+      return decodeURIComponent(u).includes('action=get_simple_data_table');
+    }).length;
+  }
+
+  it('maxConns === 1: Xtream EPG issues ZERO get_simple_data_table requests; store stays empty', async function () {
+    const calls = [];
+    const { api, epg } = mkApi(shims(recFetch(calls)));
+    const chs = [{ id: '10', name: 'A' }, { id: '20', name: 'B' }];
+    const res = await api.loadEpg({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, chs, maxConns: 1 });
+
+    expect(res.ok).toBe(true);
+    expect(epgCalls(calls)).toBe(0);
+    expect(epg.count()).toBe(0);
+  });
+
+  it('maxConns === 2: Xtream EPG fan-out runs exactly as today', async function () {
+    const calls = [];
+    const { api, epg } = mkApi(shims(recFetch(calls)));
+    const chs = [{ id: '10', name: 'A' }, { id: '20', name: 'B' }];
+    await api.loadEpg({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, chs, maxConns: 2 });
+
+    expect(epgCalls(calls)).toBe(2);
+    expect(epg.count()).toBe(2);
+  });
+
+  it('a larger maxConns (5): Xtream EPG fan-out runs', async function () {
+    const calls = [];
+    const { api, epg } = mkApi(shims(recFetch(calls)));
+    const chs = [{ id: '1', name: 'A' }, { id: '2', name: 'B' }, { id: '3', name: 'C' }];
+    await api.loadEpg({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, chs, maxConns: 5 });
+
+    expect(epgCalls(calls)).toBe(3);
+    expect(epg.count()).toBe(3);
+  });
+
+  it('maxConns === 0 (unknown sentinel): conservative default runs the fan-out', async function () {
+    const calls = [];
+    const { api, epg } = mkApi(shims(recFetch(calls)));
+    const chs = [{ id: '10', name: 'A' }];
+    await api.loadEpg({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, chs, maxConns: 0 });
+
+    expect(epgCalls(calls)).toBe(1);
+    expect(epg.count()).toBe(1);
+  });
+
+  it('maxConns absent/undefined: conservative default runs the fan-out (no regression)', async function () {
+    const calls = [];
+    const { api, epg } = mkApi(shims(recFetch(calls)));
+    const chs = [{ id: '10', name: 'A' }];
+    await api.loadEpg({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, chs });
+
+    expect(epgCalls(calls)).toBe(1);
+    expect(epg.count()).toBe(1);
+  });
+
+  it('demo path is NEVER gated: maxConns === 1 still synthesizes the in-memory guide', async function () {
+    const fetchFn = vi.fn();
+    const { api, epg } = mkApi(shims(fetchFn));
+    const chs = [{ id: 'd1', name: 'Demo One', grp: 'News' }, { id: 'd2', name: 'Demo Two', grp: 'Sports' }];
+    const res = await api.loadEpg({ src: 'demo', chs, maxConns: 1 });
+
+    expect(res.ok).toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(epg.count()).toBe(2);
+  });
+
+  it('M3U path is NEVER gated: maxConns === 1 still fetches the XMLTV guide', async function () {
+    const fetchFn = vi.fn(function onFetch() {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve(xmltvFor('bbc.uk')) });
+    });
+    const { api, epg } = mkApi(shims(fetchFn));
+    const res = await api.loadEpg({ src: 'http://host/pl.m3u', m3u: true, chs: [{ id: 'bbc.uk', name: 'BBC' }], epgUrl: 'http://guide/epg.xml', maxConns: 1 });
+
+    expect(res.ok).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(epg.has('bbc.uk')).toBe(true);
   });
 });
 

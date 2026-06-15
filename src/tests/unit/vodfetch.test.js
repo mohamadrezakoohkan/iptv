@@ -1,4 +1,4 @@
-// ADR: ADR-0037
+// ADR: ADR-0037, ADR-0041
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -217,6 +217,93 @@ describe('loadVod — M3U path', function () {
     expect(fetchFn).not.toHaveBeenCalled();
     expect(vod.movies().length).toBe(0);
     expect(vod.series().length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// maxConns gate (ADR-0041, TASK-0090): the bulk Xtream VOD/series fan-out is
+// SKIPPED entirely on a single-connection portal (maxConns === 1) so the lone
+// connection stays free for live playback; it runs unchanged on multi /
+// unknown. The store is still cleared but stays empty. Demo + M3U paths are
+// never gated, and loadSerInfo (on-demand, user action) is never gated.
+// ---------------------------------------------------------------------------
+describe('loadVod — single-connection gate (maxConns)', function () {
+  /** Count proxied VOD/series fan-out requests among recorded calls. */
+  function vodCalls(mockCalls) {
+    return mockCalls.filter(function isVod(c) {
+      const dec = inner(c[0]);
+      return dec.includes('action=get_vod_categories')
+        || dec.includes('action=get_vod_streams')
+        || dec.includes('action=get_series_categories')
+        || dec.includes('action=get_series');
+    }).length;
+  }
+
+  it('maxConns === 1: issues ZERO VOD/series requests and leaves the store empty (after clear)', async function () {
+    const fetchFn = routeFetch({ get_vod_categories: VOD_CATS, get_vod_streams: VOD_STRMS, get_series_categories: SER_CATS, get_series: SERS });
+    const { api, vod } = mkApi(shims(fetchFn));
+    vod.setMovs([{ id: 'stale', name: 's', grp: '', url: '', img: '', cat: '', num: 0, kind: 'movie' }]);
+    const res = await api.loadVod({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, ext: 'ts', maxConns: 1 });
+
+    expect(res.ok).toBe(true);
+    expect(vodCalls(fetchFn.mock.calls)).toBe(0);
+    expect(vod.movies().length).toBe(0); // cleared, no fan-out repopulated it
+    expect(vod.series().length).toBe(0);
+  });
+
+  it('maxConns === 2: the Xtream VOD fan-out runs exactly as today', async function () {
+    const fetchFn = routeFetch({ get_vod_categories: VOD_CATS, get_vod_streams: VOD_STRMS, get_series_categories: SER_CATS, get_series: SERS });
+    const { api, vod } = mkApi(shims(fetchFn));
+    await api.loadVod({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, ext: 'ts', maxConns: 2 });
+
+    expect(vodCalls(fetchFn.mock.calls)).toBeGreaterThan(0);
+    expect(vod.movies().length).toBe(2);
+    expect(vod.series().length).toBe(1);
+  });
+
+  it('a larger maxConns (5): the Xtream VOD fan-out runs', async function () {
+    const fetchFn = routeFetch({ get_vod_categories: VOD_CATS, get_vod_streams: VOD_STRMS, get_series_categories: SER_CATS, get_series: SERS });
+    const { api, vod } = mkApi(shims(fetchFn));
+    await api.loadVod({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, ext: 'ts', maxConns: 5 });
+    expect(vod.movies().length).toBe(2);
+  });
+
+  it('maxConns === 0 (unknown sentinel): conservative default runs the fan-out', async function () {
+    const fetchFn = routeFetch({ get_vod_categories: VOD_CATS, get_vod_streams: VOD_STRMS, get_series_categories: SER_CATS, get_series: SERS });
+    const { api, vod } = mkApi(shims(fetchFn));
+    await api.loadVod({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, ext: 'ts', maxConns: 0 });
+    expect(vodCalls(fetchFn.mock.calls)).toBeGreaterThan(0);
+    expect(vod.movies().length).toBe(2);
+  });
+
+  it('maxConns absent/undefined: conservative default runs the fan-out (no regression)', async function () {
+    const fetchFn = routeFetch({ get_vod_categories: VOD_CATS, get_vod_streams: VOD_STRMS, get_series_categories: SER_CATS, get_series: SERS });
+    const { api, vod } = mkApi(shims(fetchFn));
+    await api.loadVod({ src: 'http://portal:8080', user: 'u', pass: 'p', m3u: false, ext: 'ts' });
+    expect(vodCalls(fetchFn.mock.calls)).toBeGreaterThan(0);
+    expect(vod.movies().length).toBe(2);
+  });
+
+  it('demo path is NEVER gated: maxConns === 1 still synthesizes its one movie', async function () {
+    const fetchFn = vi.fn();
+    const { api, vod } = mkApi(shims(fetchFn));
+    const res = await api.loadVod({ src: 'demo', maxConns: 1 });
+    expect(res.ok).toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(vod.movies().length).toBe(1);
+  });
+
+  it('loadSerInfo is NEVER gated: it fetches regardless of maxConns', async function () {
+    let hit = '';
+    const fetchFn = vi.fn(function onFetch(url) {
+      hit = url;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(SER_INFO), text: () => Promise.resolve('') });
+    });
+    const { api, vod } = mkApi(shims(fetchFn));
+    const res = await api.loadSerInfo({ src: 'http://portal:8080', user: 'u', pass: 'p', id: '55', ext: 'ts', name: 'The Show', maxConns: 1 });
+    expect(res.ok).toBe(true);
+    expect(inner(hit)).toContain('action=get_series_info');
+    expect(vod.episodes('55').length).toBe(3);
   });
 });
 
