@@ -140,7 +140,13 @@ command.
   matched by each entry's `tvg-id` on the M3U path, and a synthetic guide in
   demo mode — and is in-memory and session-scoped (not persisted). A channel
   with no loaded guide shows neither the now/next line nor an expand control,
-  so cards never break or gain empty placeholders.
+  so cards never break or gain empty placeholders. On a **single-connection**
+  Xtream portal (one whose `user_info.max_connections` is `1`) this bulk
+  EPG/VOD fetch is **skipped entirely** — the connect-time burst would
+  otherwise exhaust the single allowed connection and starve live playback — so
+  that source shows no NOW/NEXT line and no Movies/Series tabs but plays live
+  channels reliably. Multi-connection (and portals that do not advertise the
+  field) fetch the guide and library as usual.
 - **Program reminders** — a keyboard-focusable **Remind** toggle on each
   upcoming program (the NOW/NEXT line's *next* entry and each future schedule
   row) marks it; the toggle reflects its state with `aria-pressed` and is
