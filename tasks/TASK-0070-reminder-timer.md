@@ -2,8 +2,8 @@
 id: TASK-0070
 adr: ADR-0034
 evolution: 20
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0067, TASK-0069]
 ---
 
@@ -46,5 +46,36 @@ on their own without any further user action, degrading silently.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/client/cfg.js` — added `remTick: 20000` to the frozen `S` (the coarse
+  reminder-timer tick interval, ms; ADR-0034). `S` stays frozen.
+- `src/client/main.js` — added `onTick()` (one timer tick: reads
+  `IptvRem.due(Date.now())`, fires each due reminder once via
+  `window.IptvUi.fireRem`, then `IptvRem.rm(chId, start)` it so it never
+  re-fires) and wired, in `onReady`, `IptvRem.load()` on boot (reminders
+  survive a reload — the gap TASK-0068 flagged) plus a single
+  `setInterval(onTick, S.remTick)`. Added `ADR-0034` to the file's `ADR:`
+  comment (closing the gap TASK-0069 left) and `setInterval` to the
+  `/* global */` directive.
+- `src/tests/unit/remtimer.test.js` — new unit tests (9) for the timer.
+
+Non-obvious notes for reviewers:
+
+- `onTick` is named with the `on*` prefix (CONVENTIONS §9 event-handler verb)
+  because it handles the periodic timer event; it stays under the 20-line /
+  2-param / no-nested-function limits. It is a guarded no-op when
+  `window.IptvRem` is absent (test isolation) and a silent no-op when the store
+  is empty / no guide is loaded (`due()` returns `[]`). It removes a due
+  reminder even when `IptvUi.fireRem` is unavailable, so it can never re-fire.
+- A **single** interval is started (one timer for all reminders), not one timer
+  per reminder, as the ADR requires.
+- `main.js` reads the bare browser global `setInterval`. The new unit tests
+  cover both paths: a capture-stub `setInterval` injected into the
+  `new Function` scope to assert the wiring (one interval, at `S.remTick`) and
+  to drive the tick deterministically, and a genuine-global path under
+  `vi.useFakeTimers()` that advances the real faked clock to confirm the tick
+  fires automatically and once.
+- ADR-0034 `governs:` already listed `src/client/main.js` and
+  `src/client/cfg.js`; both now carry the `ADR: ADR-0034` comment, so the list
+  is accurate — no `governs:` edit was needed.

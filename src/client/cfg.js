@@ -32,6 +32,7 @@ const S = {
   favsKey:  'iptv_favs',
   remsKey:  'iptv_rems',   // program reminders store (ADR-0032)
   toastMs:  8000,          // reminder firing toast auto-dismiss ms (ADR-0034)
+  remTick:  20000,         // reminder timer tick interval ms — coarse (ADR-0034)
   sortKey:  'iptv_sort',
   themeKey: 'iptv_theme',   // light/dark theme choice (ADR-0019)
   psts:     PSTS,

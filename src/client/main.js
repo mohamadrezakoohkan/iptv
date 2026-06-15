@@ -1,5 +1,5 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030
-/* global window, document */
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030, ADR-0034
+/* global window, document, setInterval */
 
 'use strict';
 
@@ -56,6 +56,26 @@ function goLoad(acct) {
 }
 
 // ---------------------------------------------------------------------------
+// onTick — one reminder-timer tick (ADR-0034, specs/reminders.md §5). Reads the
+// newly-due reminders via the pure IptvRem.due(now) selector, fires each once
+// through the firing surface (window.IptvUi.fireRem, TASK-0069), then removes it
+// from the store so it never re-fires on a later tick. A guarded no-op when
+// window.IptvRem is absent (test isolation) and a silent no-op when no guide is
+// loaded / the store is empty (due returns []). Nothing throws, nothing blocks
+// browsing.
+// ---------------------------------------------------------------------------
+function onTick() {
+  const rem = window.IptvRem;
+  if (!rem) return;
+  const due  = rem.due(Date.now());
+  const fire = window.IptvUi ? window.IptvUi.fireRem : null;
+  for (let i = 0; i < due.length; i += 1) {
+    if (fire) fire(due[i]);
+    rem.rm(due[i].chId, due[i].start);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // onReady — DOMContentLoaded entry; initialises all modules
 // ---------------------------------------------------------------------------
 function onReady() {
@@ -82,4 +102,9 @@ function onReady() {
   if (acct) {
     goLoad(acct);
   }
+  // Reminders survive a page reload: restore the persisted store, then start
+  // the single coarse reminder timer (ADR-0034, specs/reminders.md §5). Both
+  // guarded: a missing IptvRem (test isolation) is a silent no-op.
+  if (window.IptvRem) window.IptvRem.load();
+  setInterval(onTick, window.S ? window.S.remTick : 20000);
 }
