@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -185,6 +185,14 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .ch-rem:hover { border-color: var(--dim); color: var(--tx); }
 .ch-rem[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); }
 .ch-nn .ch-rem { margin-left: auto; }
+/* Replay control (ADR-0036, specs/catchup-archive.md §3) — a keyboard-focusable
+   one-shot action button on each PAST archive-capable in-window schedule row.
+   Sized/positioned identically to the Remind toggle so past and future rows
+   stay visually consistent; reads ADR-0024 spacing/sizing/radius tokens and
+   ADR-0019 colour tokens (no hard-coded magic colours/spacings). */
+.ch-replay { flex: none; align-self: center; margin-left: auto; width: calc(var(--s6) + var(--s1)); height: calc(var(--s6) + var(--s1)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; line-height: 1; transition: border-color 140ms, color 140ms; }
+.ch-replay-ico { font-size: 11px; line-height: 1; }
+.ch-replay:hover { border-color: var(--acc); color: var(--acc); }
 /* Contextual no-content placeholder (ADR-0022, specs/empty-states.md §2) —
    icon + title + body + optional action button, all on existing tokens. */
 .ch-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 56px 20px; text-align: center; color: var(--dim); font: 400 13px/20px var(--font-ui); }

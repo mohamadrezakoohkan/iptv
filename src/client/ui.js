@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -218,13 +218,57 @@ function mkRem(opts) {
 }
 
 /**
+ * Decide whether a PAST program on a channel is archive-capable and inside the
+ * channel's archive window (ADR-0036, specs/catchup-archive.md §3). True only
+ * when the program is past (prg.stop <= now), the channel advertises archive
+ * (ch.arch === true), and — when archDur > 0 — the program start is not older
+ * than the window (now - archDur days); an archDur of 0/absent skips the window
+ * check. A channel without arch (M3U/demo/no field) is never replayable.
+ * opts: { ch, prg, now }.
+ */
+function isReplayable(opts) {
+  const ch  = opts.ch;
+  const prg = opts.prg;
+  if (!ch || ch.arch !== true) return false;
+  if (prg.stop > opts.now) return false;
+  const dur = ch.archDur || 0;
+  if (dur > 0 && prg.start < opts.now - dur * 86400000) return false;
+  return true;
+}
+
+/**
+ * Build the Replay control <button> HTML for a past archive-capable in-window
+ * program (ADR-0036, specs/catchup-archive.md §3), or '' when the program is
+ * not replayable. A keyboard-focusable real button carrying
+ * data-replay="<chId>|<start>" (the program identity, mirroring the Remind
+ * toggle's data-rem form) and an aria-label of "Replay <title>" PRESENT in the
+ * baseline (Rule R-0001: a one-shot action button — no attribute is toggled or
+ * added back at runtime). Activation is wired separately (TASK-0075).
+ * opts: { ch, prg, now }.
+ */
+function mkReplay(opts) {
+  if (!isReplayable(opts)) return '';
+  const prg = opts.prg;
+  const lbl = 'Replay ' + escHtml(prg.title || '');
+  return '<button type="button" class="ch-replay"'
+    + ' data-replay="' + escHtml(String(opts.ch.id)) + '|' + escHtml(String(prg.start)) + '"'
+    + ' aria-label="' + lbl + '">'
+    + '<span class="ch-replay-ico" aria-hidden="true">&#9658;</span>'
+    + '</button>';
+}
+
+/**
  * Build one schedule row HTML for a program (ADR-0031, specs/epg.md §5): a
  * local-time range (start–stop), the program title, and the optional category.
  * The currently-airing program (start <= now < stop) gets the ch-sched-cur
  * marker class. An upcoming program (start in the future) gains a keyboard-
- * focusable Remind toggle (ADR-0033, specs/reminders.md §3); a current/past
- * program renders none. All program-derived text is HTML-escaped (guide data).
- * opts: { prg, now } where now is the reference time (unix ms).
+ * focusable Remind toggle (ADR-0033, specs/reminders.md §3); a PAST program on
+ * an archive-capable channel within its archive window gains a keyboard-
+ * focusable Replay control instead (ADR-0036, specs/catchup-archive.md §3); the
+ * airing program and non-archive/M3U/demo rows get neither. All program-derived
+ * text is HTML-escaped (guide data). opts: { prg, now, ch } where now is the
+ * reference time (unix ms) and ch is the owning channel (optional — no Replay
+ * when absent, the row still renders, no throw).
  */
 function mkSchedRow(opts) {
   const prg = opts.prg;
@@ -232,6 +276,7 @@ function mkSchedRow(opts) {
   const rng = escHtml(fmtPrgTime(prg.start)) + '–' + escHtml(fmtPrgTime(prg.stop));
   const cat = prg.cat ? '<span class="ch-sched-cat">' + escHtml(prg.cat) + '</span>' : '';
   const rem = mkRem({ chId: prg.chId, prg, now: opts.now });
+  const rep = mkReplay({ ch: opts.ch, prg, now: opts.now });
   return '<li class="ch-sched-row' + cur + '">'
     + '<span class="ch-sched-time">' + rng + '</span>'
     + '<span class="ch-sched-meta">'
@@ -239,7 +284,29 @@ function mkSchedRow(opts) {
     + cat
     + '</span>'
     + rem
+    + rep
     + '</li>';
+}
+
+/**
+ * Build the schedule program list for a channel's expandable guide (ADR-0031 /
+ * ADR-0036). For a non-archive channel this is the upcoming list exactly as
+ * before (getSched: current + future). For an archive-capable channel it also
+ * prepends the channel's PAST programs that are inside the archive window, so a
+ * past archive-capable row (and its Replay control) can render; the merged list
+ * stays ascending by start. opts: { ch, now }.
+ */
+function getSchedPrgs(opts) {
+  const ch  = opts.ch;
+  const now = opts.now;
+  const up  = window.IptvEpg.getSched(ch.id, now);
+  if (ch.arch !== true) return up;
+  const all  = window.IptvEpg.get(ch.id);
+  const past = [];
+  for (let i = 0; i < all.length; i += 1) {
+    if (all[i].stop <= now && isReplayable({ ch, prg: all[i], now })) past.push(all[i]);
+  }
+  return past.concat(up);
 }
 
 /**
@@ -247,18 +314,20 @@ function mkSchedRow(opts) {
  * specs/epg.md §5): a keyboard-focusable expand <button> carrying aria-expanded
  * (always 'false' at render — collapsed baseline, Rule R-0001) and an accessible
  * label, plus the schedule list (hidden via aria-hidden until expanded). The
- * list renders getSched(ch.id) rows, the current program marked. Returns '' when
- * the guide is empty so a guide-less card never gains an expand control. The
- * control is the only interactive node inside the card besides the fav star; its
- * handler (onGridClick) stops propagation so expanding never plays the channel.
+ * list renders the channel's schedule rows (getSchedPrgs: upcoming rows, plus
+ * past in-window rows for an archive-capable channel — ADR-0036), the current
+ * program marked. Returns '' when the guide is empty so a guide-less card never
+ * gains an expand control. The control is the only interactive node inside the
+ * card besides the fav star; its handler (onGridClick) stops propagation so
+ * expanding never plays the channel.
  */
 function mkSched(ch) {
   const now  = Date.now();
-  const prgs = window.IptvEpg.getSched(ch.id, now);
+  const prgs = getSchedPrgs({ ch, now });
   if (prgs.length === 0) return '';
   let rows = '';
   for (let i = 0; i < prgs.length; i += 1) {
-    rows += mkSchedRow({ prg: prgs[i], now });
+    rows += mkSchedRow({ prg: prgs[i], now, ch });
   }
   const lbl = 'Show guide for ' + escHtml(ch.name);
   return '<button type="button" class="ch-exp" data-exp="' + ch.id + '"'

@@ -2,8 +2,8 @@
 id: TASK-0074
 adr: ADR-0036
 evolution: 21
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0072]
 ---
 
@@ -51,4 +51,53 @@ absent. Styling lands in `src/client/app.css`.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+Render-only (activation/playback is TASK-0075). Files touched:
+
+- `src/client/ui.js` — added three pure helpers + threaded the channel through
+  the schedule render:
+  - `isReplayable({ ch, prg, now })` — the gating predicate: `ch.arch === true`
+    AND `prg.stop <= now` AND (when `archDur > 0`) `prg.start >= now -
+    archDur*86400000`; `archDur === 0`/absent skips the window check. A channel
+    without `arch` (M3U/demo/no field) is never replayable, so it never throws.
+  - `mkReplay({ ch, prg, now })` — returns the `<button type="button"
+    class="ch-replay" data-replay="<chId>|<start>" aria-label="Replay <title>">`
+    (title HTML-escaped, aria-label PRESENT in baseline per R-0001; one-shot
+    action button, no attribute toggling) or `''` when not replayable.
+  - `getSchedPrgs({ ch, now })` — for a non-archive channel returns the existing
+    upcoming list (`IptvEpg.getSched`); for an archive-capable channel it
+    PREPENDS the channel's past in-window programs (read from `IptvEpg.get`,
+    which `getSched` omits since it is upcoming-only) so a past archive row can
+    render. This is the prerequisite that lets `mkSchedRow` ever see a past row.
+  - `mkSchedRow` now takes `ch` in its opts and emits `mkReplay(...)` alongside
+    the existing Remind slot; `mkSched` passes `ch` through and uses
+    `getSchedPrgs`.
+- `src/client/app.css` — `.ch-replay` / `.ch-replay-ico` / `.ch-replay:hover`,
+  sized/positioned identically to the `.ch-rem` Remind toggle (ADR-0024
+  spacing/sizing/radius tokens, ADR-0019 colour tokens). No per-component
+  `:focus-visible` rule — the single global focus ring covers it (controls.test
+  enforces exactly one `:focus-visible` rule).
+- Traceability: `ADR-0036` added to the `ui.js` and `app.css` ADR header
+  comments. ADR-0036 `governs:` already lists `ui.js`, `app.css`, and the test
+  files; no change needed.
+
+Tests:
+- Unit — `src/tests/unit/epgui.test.js`: a new "Replay control gating" describe
+  (reached via `mkCard → mkSched → mkSchedRow`, `Date.now` pinned to REF). The
+  loadUi stub's `IptvEpg` gained a `get()` returning the full list; `renderAt`
+  mirrors the real split (`getSched` = upcoming-only, `get` = full). Covers:
+  past in-window archive row renders Replay with correct `data-replay` +
+  baseline `aria-label` (R-0001); title escaped; no Replay on future / airing /
+  non-archive / no-`arch`-field (no throw) / out-of-window rows; `archDur===0`
+  skips the window check; exactly one Replay + correct row split with a
+  past+future guide.
+- UI — `src/tests/ui/catchup.test.js`: boots demo mode offline, injects an
+  arch:true and an arch:false channel + a past+future guide, re-renders via
+  production `rndGrid`/`mkCard`, and asserts the Replay button is focusable and
+  present on the past archive row, absent on the future row, and absent on the
+  non-archive channel.
+- Integration — n/a (pure render, no external connectivity).
+
+Note for TASK-0075: the demo EPG path does not yet synthesize archive-capable
+past programs, so the UI test seeds an in-page guide directly rather than
+relying on the demo guide; TASK-0075 owns the demo synthesis + `goReplay`
+activation.

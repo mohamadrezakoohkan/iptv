@@ -58,6 +58,14 @@ function loadUi(opts) {
         const e = epg[String(id)];
         return (e && e.sched) ? e.sched.slice() : [];
       },
+      // Full stored list (current + past + future). The Replay path (ADR-0036)
+      // reads get() to surface PAST programs that getSched() (upcoming-only)
+      // omits. Defaults to `sched` when no explicit `all` is supplied.
+      get: function get(id) {
+        const e = epg[String(id)];
+        if (!e) return [];
+        return (e.all ? e.all : (e.sched || [])).slice();
+      },
     };
   }
   const emptySrc = readFileSync(EMPTY_SRC, 'utf8');
@@ -304,5 +312,106 @@ describe('mkCard — schedule rows render time range, title, category', function
     const html = ui.mkCard(CH);
     expect((html.match(/data-id=/g) || []).length).toBe(1);
     expect((html.match(/data-exp=/g) || []).length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mkSchedRow — Replay control on PAST archive-capable in-window rows
+// (TASK-0074, specs/catchup-archive.md §3, ADR-0036). The control is reached via
+// mkCard → mkSched → mkSchedRow. mkSched reads Date.now(), so each case pins it
+// to REF. The card needs a loaded guide (has() === true) so the schedule renders.
+// ---------------------------------------------------------------------------
+
+// Archive-capable / non-archive channel variants of CH (same id so the guide map
+// keys line up). archDur is in days.
+const CH_ARCH = { id: '5', name: 'Channel Five', num: 5, img: '', cat: 'news', arch: true, archDur: 7 };
+const CH_NOARCH = { id: '5', name: 'Channel Five', num: 5, img: '', cat: 'news', arch: false, archDur: 0 };
+
+// A PAST program (fully behind REF) and a FUTURE program, both for chId 5.
+function pastPrg(opts) { return mkPrg({ off: (opts && opts.off) || -120, title: (opts && opts.title) || 'Old Show', len: 30 }); }
+function futPrg(opts)  { return mkPrg({ off: (opts && opts.off) || 60,  title: (opts && opts.title) || 'Future Show', len: 30 }); }
+
+// Render mkCard(ch) for `ch` with the full stored list `all`, Date.now pinned to
+// REF. `sched` (what getSched returns) mirrors the real upcoming-only selector
+// (prg.stop > now); `all` (what get returns) is the full list — so the Replay
+// path (which reads get() to surface PAST rows) is exercised against a realistic
+// store split.
+function renderAt(ch, all) {
+  const realNow = Date.now;
+  Date.now = function fixedNow() { return REF; };
+  const sched = all.filter(function up(p) { return p.stop > REF; });
+  try {
+    const ui = loadUi({ epg: { 5: { now: null, next: null, sched, all } } });
+    return ui.mkCard(ch);
+  } finally {
+    Date.now = realNow;
+  }
+}
+
+describe('mkSchedRow — Replay control gating (ADR-0036)', function () {
+  it('renders a focusable Replay <button> with data-replay + baseline aria-label on a past in-window archive row', function () {
+    const html = renderAt(CH_ARCH, [pastPrg({ title: 'Old Show' })]);
+    expect(html).toMatch(/<button type="button" class="ch-replay"/);
+    // data-replay carries "<chId>|<start>"; start = REF - 120min.
+    expect(html).toContain('data-replay="5|' + (REF - 120 * 60000) + '"');
+    // R-0001: the aria-label is PRESENT in the baseline markup (one-shot action).
+    expect(html).toContain('aria-label="Replay Old Show"');
+  });
+
+  it('HTML-escapes the program title in the Replay aria-label', function () {
+    const html = renderAt(CH_ARCH, [mkPrg({ off: -120, title: '<b>Hax</b>', len: 30 })]);
+    expect(html).toContain('aria-label="Replay &lt;b&gt;Hax&lt;/b&gt;"');
+    expect(html).not.toContain('aria-label="Replay <b>Hax</b>"');
+  });
+
+  it('renders NO Replay on a FUTURE row (it carries the Remind toggle path instead, never Replay)', function () {
+    const html = renderAt(CH_ARCH, [futPrg({})]);
+    expect(html).not.toContain('class="ch-replay"');
+  });
+
+  it('renders NO Replay on the currently-airing program (start <= now < stop)', function () {
+    // Airing at REF: spans REF-10min .. REF+20min.
+    const html = renderAt(CH_ARCH, [mkPrg({ off: -10, title: 'On Air', len: 30 })]);
+    expect(html).not.toContain('class="ch-replay"');
+  });
+
+  it('renders NO Replay on a past row of a NON-archive channel (arch:false)', function () {
+    const html = renderAt(CH_NOARCH, [pastPrg({})]);
+    expect(html).not.toContain('class="ch-replay"');
+    // The past row is not even surfaced for a non-archive channel (upcoming-only).
+    expect(html).not.toContain('class="ch-sched-row');
+  });
+
+  it('renders NO Replay when the channel object carries no arch field (M3U/demo) — no throw', function () {
+    expect(function run() {
+      const html = renderAt(CH, [pastPrg({})]); // CH has no arch field
+      expect(html).not.toContain('class="ch-replay"');
+    }).not.toThrow();
+  });
+
+  it('renders NO Replay when archDur > 0 and the program start is older than the archive window', function () {
+    // archDur 7 days; a program ~10 days in the past is out of window.
+    const old = mkPrg({ off: -10 * 24 * 60, title: 'Ancient', len: 30 });
+    const html = renderAt(CH_ARCH, [old]);
+    expect(html).not.toContain('class="ch-replay"');
+  });
+
+  it('renders Replay for a past archive row when archDur === 0 (window check skipped)', function () {
+    const ch  = { id: '5', name: 'Ch', num: 5, img: '', cat: '', arch: true, archDur: 0 };
+    // A program 30 days in the past still gets Replay because the window is skipped.
+    const old = mkPrg({ off: -30 * 24 * 60, title: 'Way Back', len: 30 });
+    const html = renderAt(ch, [old]);
+    expect(html).toContain('class="ch-replay"');
+    expect(html).toContain('aria-label="Replay Way Back"');
+  });
+
+  it('a guide with a past in-window row and a future row renders exactly one Replay and one Remind', function () {
+    const html = renderAt(CH_ARCH, [pastPrg({ title: 'Old Show' }), futPrg({ title: 'Future Show' })]);
+    expect((html.match(/class="ch-replay"/g) || []).length).toBe(1);
+    // Future row's Remind path needs IptvRem; this loadUi has none, so no Remind
+    // renders — but crucially the future row carries NO Replay.
+    expect((html.match(/data-replay=/g) || []).length).toBe(1);
+    expect(html).toContain('>Old Show<');
+    expect(html).toContain('>Future Show<');
   });
 });
