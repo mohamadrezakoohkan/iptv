@@ -270,3 +270,87 @@ test('the back control is keyboard-operable (focus + Enter returns to the list)'
   await expect(page.locator('.ch-card[data-ser]')).toHaveCount(2);
   await expect(page.locator('.ser-back')).toHaveCount(0);
 });
+
+// ---------------------------------------------------------------------------
+// TASK-0082 — On-demand select+play wiring (ADR-0038, specs/vod-library.md §5c).
+// Driven against the offline demo connect (which synthesizes the "Demo Movie"
+// VOD item, §6) with a loadPlay spy recording the played URL so the headless run
+// makes no real media load. Covers: selecting the synthesized demo movie starts
+// playback in the EXISTING player (READY → PLAY, body.is-play, #now-info shows
+// the movie name) with the movie's on-demand URL passed UNCHANGED; selecting an
+// episode entry plays the episode URL; a series card opens the drill-down, not
+// play.
+// ---------------------------------------------------------------------------
+
+/** Install a loadPlay spy on the running page (records URLs, no real media load). */
+async function spyPlay(page) {
+  await page.evaluate(function run() {
+    window.__played = [];
+    window.IptvPlay.loadPlay = function spyLoad(url) { window.__played.push(url); };
+  });
+}
+
+test('selecting the synthesized demo movie starts playback in the existing player', async function ({ page }) {
+  await page.goto(BASE_URL);
+  await page.fill('#f-url', 'demo');
+  await page.click('#btn-conn');
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
+  await page.locator('#content-toggle [data-mode="movies"]').waitFor({ state: 'visible', timeout: 5000 });
+  await spyPlay(page);
+
+  await page.click('#content-toggle [data-mode="movies"]');
+  const card = page.locator('.ch-card[data-id="demo-vod-1"]');
+  await card.waitFor({ state: 'visible', timeout: 5000 });
+  await card.click();
+
+  // The EXISTING select+play arc ran: READY → PLAY, the player is active, and
+  // the now-info bar shows the on-demand item's name.
+  await expect(page.locator('body')).toHaveClass(/is-play/);
+  await expect(page.locator('#now-info')).toHaveText('Demo Movie');
+
+  // Exactly the movie's on-demand URL was played, UNCHANGED (so getEng resolves
+  // the same engine the live path uses).
+  const played = await page.evaluate(function get() { return window.__played; });
+  expect(played.length).toBe(1);
+  expect(played[0]).toBe('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
+});
+
+test('the active-item marker reflects the played movie after play', async function ({ page }) {
+  await page.goto(BASE_URL);
+  await page.fill('#f-url', 'demo');
+  await page.click('#btn-conn');
+  await page.locator('#footer-conn').waitFor({ state: 'visible', timeout: 6000 });
+  await page.locator('#content-toggle [data-mode="movies"]').waitFor({ state: 'visible', timeout: 5000 });
+  await spyPlay(page);
+
+  await page.click('#content-toggle [data-mode="movies"]');
+  const card = page.locator('.ch-card[data-id="demo-vod-1"]');
+  await card.click();
+  // Re-render the movie grid; the played item now carries the ch-active marker.
+  await page.evaluate(function rerender() {
+    const items = window.IptvUi.getModeItems();
+    window.IptvUi.rndGrid(window.IptvSrch.getChs(items, '', 'all', [], window.IptvSt.ST.sort));
+  });
+  await expect(page.locator('.ch-card[data-id="demo-vod-1"]')).toHaveClass(/ch-active/);
+});
+
+test('selecting an episode entry plays the episode stream (not the series card)', async function ({ page }) {
+  await browseSeries(page);
+  await spyPlay(page);
+
+  // A series CARD opens the drill-down; it never plays.
+  await page.click('.ch-card[data-ser="ser-1"]');
+  await page.locator('.ser-back[data-back]').waitFor({ state: 'visible', timeout: 5000 });
+  let played = await page.evaluate(function get() { return window.__played; });
+  expect(played.length).toBe(0);
+
+  // An EPISODE entry (data-id) plays through the same select+play arc.
+  const epi = page.locator('.ch-card.epi-row[data-id="ep-1"]');
+  await epi.waitFor({ state: 'visible', timeout: 5000 });
+  await epi.click();
+  await expect(page.locator('body')).toHaveClass(/is-play/);
+  await expect(page.locator('#now-info')).toHaveText('Mystery Manor · S1E1 Arrival');
+  played = await page.evaluate(function get() { return window.__played; });
+  expect(played.length).toBe(1);
+  expect(played[0]).toBe('u1');
+});

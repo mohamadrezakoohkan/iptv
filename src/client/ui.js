@@ -790,14 +790,48 @@ function onGridClick(evt) {
   const card = evt.target.closest('[data-id]');
   if (!card) return;
   const id = card.getAttribute('data-id');
-  const st = window.IptvSt.ST;
-  const ch = st.chs.find(function byId(c) { return String(c.id) === id; });
-  if (!ch) return;
-  window.IptvSt.setCur(ch);
+  // Movies/series modes (ADR-0038, §5c): a [data-id] card is a Vod item (movie
+  // card or episode entry), resolved from the VOD store, not ST.chs. Live mode
+  // resolves the Ch from ST.chs as before. Both feed the SAME select+play arc.
+  const item = mode === 'live'
+    ? window.IptvSt.ST.chs.find(function byId(c) { return String(c.id) === id; })
+    : getVodItem(id);
+  goPlay(item);
+}
+
+// ---------------------------------------------------------------------------
+// getVodItem — pure: resolve a [data-id] Vod item by id from the active content
+// mode's VOD store (ADR-0038, §5c). Movies → the movie list; series → the open
+// series' episode list (serCur). null when absent (gone / wrong mode / no store)
+// so a stale card degrades to a no-op in goPlay, like goReplay. (CONVENTIONS §9
+// get* pure.)
+// ---------------------------------------------------------------------------
+function getVodItem(id) {
+  const vod = window.IptvVod;
+  if (!vod) return null;
+  const list = mode === 'series'
+    ? (serCur !== null ? vod.episodes(serCur) : [])
+    : vod.movies();
+  const hit = list.find(function byId(v) { return String(v.id) === String(id); });
+  return hit || null;
+}
+
+// ---------------------------------------------------------------------------
+// goPlay — the EXISTING select+play transition for a resolved item (ADR-0038,
+// §5c), shared by live card clicks and on-demand movie/episode selection. Item
+// gone → silent no-op (like goReplay). Mirrors goRemWatch exactly: setCur →
+// saveSt('sel') → go('PLAY') when READY → rndHead → loadPlay(item.url). The
+// on-demand URL preserves its extension, so the UNCHANGED loadPlay → getEng
+// resolves the same engine through the same proxy — no new branch, route, or
+// engine.
+// ---------------------------------------------------------------------------
+function goPlay(item) {
+  if (!item) return;
+  window.IptvSt.setCur(item);
   if (window.IptvSt.saveSt) window.IptvSt.saveSt('sel');
   if (window.IptvSt.ST.phase === 'READY') window.IptvSt.go('PLAY');
   rndHead();
-  if (window.IptvPlay) window.IptvPlay.loadPlay(ch.url);
+  if (window.IptvPlay) window.IptvPlay.loadPlay(item.url);
 }
 
 // ---------------------------------------------------------------------------
@@ -2210,4 +2244,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };

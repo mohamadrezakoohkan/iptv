@@ -561,3 +561,162 @@ describe('series drill-down — empty / failed series-info degrades silently', f
     expect(html).toContain('data-back="1"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// TASK-0082 — On-demand select+play wiring (ADR-0038, specs/vod-library.md §5c).
+// Cover: selecting a movie card (movies mode) or an episode entry (open series
+// drill-down) drives the EXISTING select+play arc — setCur(item) → saveSt('sel')
+// → go('PLAY') when READY → rndHead → loadPlay(item.url) — with the item's
+// on-demand URL passed UNCHANGED so getEng resolves the same engine; selecting a
+// series card opens the drill-down, not play; a missing item is a silent no-op.
+// No DOM attribute mutation is asserted (R-0001 not engaged).
+// ---------------------------------------------------------------------------
+
+const PLAY_MOVS = [
+  { id: 'm1', name: 'Film One', cat: '7', grp: 'Action', num: 1, img: '', url: 'http://h/movie/u/p/m1.mkv', kind: 'movie' },
+  { id: 'm2', name: 'Film Two', cat: '7', grp: 'Action', num: 2, img: '', url: 'http://h/movie/u/p/m2.m3u8', kind: 'movie' },
+];
+
+const PLAY_EPIS = [
+  { id: 'pe1', name: 'My Show · S1E1 Pilot',  grp: 'S1', url: 'http://h/series/u/p/pe1.mp4',  img: '', cat: '1', num: 1, kind: 'episode' },
+  { id: 'pe2', name: 'My Show · S1E2 Second', grp: 'S1', url: 'http://h/series/u/p/pe2.m3u8', img: '', cat: '1', num: 2, kind: 'episode' },
+];
+
+/** Load ui.js with spy IptvSt/IptvPlay capturing the select+play arc. */
+function loadPlayUi(vod, api) {
+  const els = {};
+  const calls = { setCur: [], saveSt: [], go: [], loadPlay: [] };
+  const doc = {
+    getElementById(id) { if (!els[id]) els[id] = mkStub(); return els[id]; },
+    querySelector() { return null; },
+    addEventListener() {},
+    body: { classList: { add() {}, remove() {} } },
+    documentElement: { getAttribute() { return null; }, setAttribute() {}, removeAttribute() {} },
+  };
+  const win = {
+    IptvSt: {
+      ST: { favs: [], cur: null, chs: [], phase: 'READY', flt: 'all', srch: '', sort: 'num-asc', vol: 1.0, muted: false, err: null, host: '', user: '', cats: [] },
+      setFavs() {}, setCur(c) { this.ST.cur = c; calls.setCur.push(c); }, setFlt(c) { this.ST.flt = c; }, setSrch() {},
+      go(p) { this.ST.phase = p; calls.go.push(p); },
+      saveSt(k) { calls.saveSt.push(k); }, saveAct() {}, loadAccts() { return { accts: [], actId: null }; }, getAct() { return null; },
+    },
+    IptvSrch: { getChs(chs) { return chs; }, SORTS: [] },
+    IptvEmpty: { resolveContent() { return { icon: 'list', title: 'No channels', body: '' }; } },
+    IptvVod: vod || null,
+    S: {},
+    IptvPlay: { loadPlay(u) { calls.loadPlay.push(u); } },
+    IptvApi: api || null,
+    document: doc,
+    clearTimeout() {},
+    setTimeout(fn) { return fn; },
+  };
+  const src = readFileSync(UI_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'document', '"use strict";\n' + src)(win, doc);
+  win.IptvUi.mkEL();
+  return { ui: win.IptvUi, els, win, calls };
+}
+
+/** A delegated grid click whose target resolves only the given data-* attr. */
+function mkIdEvt(attr, val) {
+  return { target: { closest(sel) {
+    return sel === attr ? { getAttribute() { return val; } } : null;
+  } } };
+}
+
+describe('on-demand select+play — selecting a movie plays it via the existing arc', function () {
+  it('movie click runs setCur → saveSt(sel) → go(PLAY) → loadPlay(item.url)', function () {
+    const vod = mkVodStub(PLAY_MOVS.slice(), []);
+    const { ui, calls, win } = loadPlayUi(vod, null);
+    ui.goMode('movies');
+    ui.onGridClick(mkIdEvt('[data-id]', 'm1'));
+    expect(calls.setCur.length).toBe(1);
+    expect(calls.setCur[0].id).toBe('m1');
+    expect(calls.saveSt).toEqual(['sel']);
+    expect(calls.go).toEqual(['PLAY']);
+    expect(win.IptvSt.ST.phase).toBe('PLAY');
+    expect(calls.loadPlay).toEqual(['http://h/movie/u/p/m1.mkv']);
+  });
+
+  it('passes the on-demand URL UNCHANGED so getEng resolves the source engine', function () {
+    const vod = mkVodStub(PLAY_MOVS.slice(), []);
+    const { ui, calls } = loadPlayUi(vod, null);
+    ui.goMode('movies');
+    // An .mkv movie keeps its extension (→ mpegts/remux engine downstream)…
+    ui.onGridClick(mkIdEvt('[data-id]', 'm1'));
+    expect(calls.loadPlay[0]).toBe('http://h/movie/u/p/m1.mkv');
+    // …and an .m3u8 movie keeps its extension (→ hls.js engine downstream).
+    ui.onGridClick(mkIdEvt('[data-id]', 'm2'));
+    expect(calls.loadPlay[1]).toBe('http://h/movie/u/p/m2.m3u8');
+  });
+
+  it('does not transition when not READY (PLAY guarded), but still loads', function () {
+    const vod = mkVodStub(PLAY_MOVS.slice(), []);
+    const { ui, calls, win } = loadPlayUi(vod, null);
+    win.IptvSt.ST.phase = 'PLAY';   // already playing — no READY→PLAY edge
+    ui.goMode('movies');
+    ui.onGridClick(mkIdEvt('[data-id]', 'm1'));
+    expect(calls.go).toEqual([]);   // go('PLAY') only fires from READY
+    expect(calls.loadPlay).toEqual(['http://h/movie/u/p/m1.mkv']);
+  });
+
+  it('a movie id no longer present is a silent no-op (like goReplay)', function () {
+    const vod = mkVodStub(PLAY_MOVS.slice(), []);
+    const { ui, calls } = loadPlayUi(vod, null);
+    ui.goMode('movies');
+    ui.onGridClick(mkIdEvt('[data-id]', 'gone'));
+    expect(calls.setCur).toEqual([]);
+    expect(calls.loadPlay).toEqual([]);
+  });
+});
+
+describe('on-demand select+play — selecting an episode plays it; series card opens', function () {
+  it('an episode entry in the open drill-down plays via loadPlay(episode.url)', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: PLAY_EPIS.slice() });
+    const { ui, calls } = loadPlayUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');           // drill into the series → episodes loaded
+    ui.onGridClick(mkIdEvt('[data-id]', 'pe1'));
+    expect(calls.setCur.length).toBe(1);
+    expect(calls.setCur[0].id).toBe('pe1');
+    expect(calls.saveSt).toEqual(['sel']);
+    expect(calls.loadPlay).toEqual(['http://h/series/u/p/pe1.mp4']);
+  });
+
+  it('selecting a series CARD opens the drill-down, never plays', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: PLAY_EPIS.slice() });
+    const { ui, els, calls } = loadPlayUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    ui.onGridClick(mkIdEvt('[data-ser]', 's1'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls.loadPlay).toEqual([]);          // nothing played
+    expect(calls.setCur).toEqual([]);
+    expect(els['ch-list'].innerHTML).toContain('data-back="1"');  // drill-down shown
+  });
+
+  it('an episode id absent from the open series is a silent no-op', async function () {
+    const vod = mkVodStub([], SERS.slice());
+    const api = mkApiStub(vod, { epis: PLAY_EPIS.slice() });
+    const { ui, calls } = loadPlayUi(vod, api);
+    connectVod(ui);
+    ui.goMode('series');
+    await ui.goSerOpen('s1');
+    ui.onGridClick(mkIdEvt('[data-id]', 'nope'));
+    expect(calls.setCur).toEqual([]);
+    expect(calls.loadPlay).toEqual([]);
+  });
+
+  it('getVodItem resolves nothing when no series is open (series list view)', function () {
+    const vod = mkVodStub([], SERS.slice());
+    const { ui, calls } = loadPlayUi(vod, mkApiStub(vod, { epis: PLAY_EPIS.slice() }));
+    connectVod(ui);
+    ui.goMode('series');                 // list view — serCur null, no drill-down open
+    ui.onGridClick(mkIdEvt('[data-id]', 'pe1'));
+    expect(calls.loadPlay).toEqual([]);  // no episode resolvable → no-op
+  });
+});
