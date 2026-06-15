@@ -12,6 +12,7 @@ governs:
   - src/index.html
   - src/tests/unit/remfire.test.js
   - src/tests/ui/reminders.test.js
+  - src/tests/ui/reminders-demo.test.js
 ---
 
 # ADR-0034 — A lightweight client timer fires due reminders as an in-app toast plus a best-effort permission-gated browser Notification, with a jump-to-channel action, degrading silently

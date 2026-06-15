@@ -2,8 +2,8 @@
 id: TASK-0071
 adr: ADR-0034
 evolution: 20
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0068, TASK-0069, TASK-0070]
 ---
 
@@ -45,5 +45,39 @@ This run adds user-interactable behavior, so it is **not** demo-exempt.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/tests/ui/reminders-demo.test.js` — rewritten to capture the full
+  set → fire → notify → watch/jump → clear-individually arc this task owns. The
+  prior version (from TASK-0068) only set + cleared the toggle and never
+  exercised the firing surface; it now drives the complete arc and records the
+  webm. Its ADR comment was corrected from `ADR-0033` to `ADR-0034` (this task's
+  owning ADR).
+- `docs/adrs/ADR-0034-…md` — `governs:` trued up: added
+  `src/tests/ui/reminders-demo.test.js`.
+- `docs/adrs/ADR-0033-…md` — `governs:` trued up: removed
+  `src/tests/ui/reminders-demo.test.js` (it now belongs to ADR-0034).
+
+Non-obvious notes for reviewers / validate-agent:
+
+- The recording is written to `test-results/e20-reminders-demo.webm` (the known
+  run-artifacts dir). validate-agent commits it and writes the PR `### Demo`
+  reference as a clickable link per repo visibility (CORE_FLOW.md §3).
+- Capture is scoped to THIS spec only: a per-spec `chromium.newContext` with
+  `recordVideo` on, the .webm resolved before context close and renamed to the
+  stable path in `afterAll` — same pattern as `epg-demo.test.js` /
+  `log-demo.test.js`. The global UI suite records nothing.
+- The arc drives PRODUCTION code only and asserts along the way (real footer
+  demo connect, real Remind toggle handler, real `window.IptvUi.fireRem` firing
+  surface the timer calls, real toast Watch select+play path). FIRING is driven
+  through `fireRem` (exactly what the `main.js` timer calls per due reminder) so
+  the demo is deterministic without waiting for the coarse ~20s tick or
+  fabricating a past `start`.
+- A granted `Notification` is stubbed via `context.addInitScript` before page
+  scripts load (capturing constructions on `window.__notes`), so the
+  best-effort permission-gated branch is exercised mocked-granted with no real
+  OS prompt — demo fixture only, no live network, no real credentials.
+- After a direct `fireRem`, the toggle DOM is not re-rendered, so the reminder
+  set in INTERACT 1 is still stored and the toggle still reads `aria-pressed`
+  "true"; the clear-individually step therefore presses it once (true → false),
+  faithfully showing individual clearing.
