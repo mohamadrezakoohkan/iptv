@@ -23,7 +23,7 @@ are binding constraints on everything you produce).
 3. **Align the prompt with the project.** Restate the prompt as concrete
    intent against the current state. On the first evolution there is no
    product yet — your job then includes defining it (and forcing the stack +
-   canonical build/unit-test/UI-test commands as your first decisions).
+   canonical build/unit-test commands as your first decisions).
 4. **Update `docs/specs/`.** Create or update `docs/specs/<feature-slug>.md` files and
    keep `docs/specs/project.md` truthful (product overview, stack, canonical
    commands). Front-matter `status: draft | current | superseded`. Specs
@@ -39,11 +39,9 @@ are binding constraints on everything you produce).
    implementation time, when the governed code is actually gone).
 6. **Derive tasks per ADR.** Create `tasks/TASK-NNNN-<slug>.md` from
    `tasks/TEMPLATE.md`. Each task: small enough for one implement+validate
-   cycle, concrete acceptance criteria, explicit test requirements (unit
-   always; UI tests whenever user-facing behavior is touched; integration
-   tests whenever the task involves external connectivity, API calls, or proxy
-   behavior), `depends_on` listing task IDs that must land first,
-   `status: pending`, `attempts: 0`.
+   cycle, concrete acceptance criteria, explicit unit-test requirements (unit
+   tests are the only test tier), `depends_on` listing task IDs that must land
+   first, `status: pending`, `attempts: 0`.
 7. **Self-check:** every ADR has ≥1 task; every task points to an existing
    ADR; ordering respects dependencies; nothing violates the Rule Pack.
 8. **First commit + PR** (CORE_FLOW.md §3): `git add` the files you created
@@ -51,9 +49,7 @@ are binding constraints on everything you produce).
    `git push -u origin ai/e<E>-<slug>`, then open the run PR against `main`
    with `gh pr create`, title `E<N>: <prompt, condensed>`, body in the
    canonical PR-description structure from CORE_FLOW.md §3 (every task line
-   `- [ ] TASK-NNNN — <title> — pending`, the `### Demo` placeholder seeded
-   verbatim from the template so the slot exists for validate-agent to fill or
-   review-agent to mark exempt, Outcome `_Run in progress._`).
+   `- [ ] TASK-NNNN — <title> — pending`, Outcome `_Run in progress._`).
 
 ## You must NOT
 

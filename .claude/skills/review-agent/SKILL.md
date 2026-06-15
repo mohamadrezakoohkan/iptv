@@ -46,7 +46,6 @@ On success the agent returns ONLY this JSON:
   "commit": "sha of the final commit pushed, else null",
   "pr_finalized": true | false,
   "test_results_blocks_present": true | false,
-  "demo_present": true | false,
   "near_misses": [{"task": "TASK-NNNN", "phase": "implement | validate", "related": ["ADR/TASK IDs"], "symptom": "one line", "root_cause_tag": "kebab-case-slug", "fix": "one line"}],
   "proposed_rules": ["imperative rule text, if any"]
 }
@@ -64,11 +63,7 @@ budget 1 initial + 1 retry), then invokes review-agent once more to
 re-check. If still discrepant after that round, apply the failure protocol
 (CORE_FLOW.md §5) — record, do not hide. A concluded task missing its PR Test
 Results block is a discrepancy (`needs: status-fix`): review-agent audits that
-the blocks the terminal actor wrote are present, it never fabricates them. It
-also confirms the PR's `### Demo` section (CORE_FLOW.md §3 Demo recording): a
-user-interactable run carries a clickable recording reference, an exempt run
-carries `No demo — <reason>`; a user-interactable run with a blank section is a
-discrepancy (`needs: status-fix`), never recorded by review-agent itself.
+the blocks the terminal actor wrote are present, it never fabricates them.
 
 ## Failure signal
 

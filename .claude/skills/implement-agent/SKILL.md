@@ -37,7 +37,7 @@ On success the agent returns ONLY this JSON:
   "task": "TASK-NNNN",
   "attempt": N,
   "files_changed": ["..."],
-  "tests_added": {"unit": ["..."], "ui": ["..."], "integration": ["..."]},
+  "tests_added": {"unit": ["..."]},
   "adr_updates": ["ADR-NNNN: governs trued up | marked deleted — else empty list"],
   "summary": "what was built, one short paragraph",
   "concerns": "risks, out-of-scope observations, else empty string"

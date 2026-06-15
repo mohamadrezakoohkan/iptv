@@ -50,14 +50,8 @@ publishes separately on a `backlog/<slug>` branch.
    actor (validate-agent on PASS, the orchestrator on terminal FAIL) wrote
    each block; you audit that they are present, you do not regenerate them. A
    concluded task with no Test Results block is a discrepancy (`needs:
-   status-fix`) — report it, do not fabricate the block. Also confirm the
-   `### Demo` section (CORE_FLOW.md §3 Demo recording): a run that added or
-   changed user-interactable product behavior must carry a clickable recording
-   reference; an exempt run (pure refactor / no user-facing change, headless /
-   non-UI change) must carry `No demo — <reason>`. A user-interactable run with
-   a blank or missing `### Demo` section is a discrepancy (`needs: status-fix`)
-   — report it, do not record the demo yourself. Merging or closing the PR is
-   the human's — never yours.
+   status-fix`) — report it, do not fabricate the block. Merging or closing the
+   PR is the human's — never yours.
 6. **Surface recovered near-misses + propose rules** (CORE_FLOW.md §5): for
    each task that recovered within its retry budget, classify the recovered
    failure as `transient` (a flaky cause retry alone correctly answers —
@@ -97,7 +91,6 @@ If you could not review at all, return a single line starting with
   "commit": "sha of the final commit pushed, else null",
   "pr_finalized": true | false,
   "test_results_blocks_present": true | false,
-  "demo_present": true | false,
   "near_misses": [{"task": "TASK-NNNN", "phase": "implement | validate", "related": ["ADR/TASK IDs"], "symptom": "one line", "root_cause_tag": "kebab-case-slug", "fix": "one line"}],
   "proposed_rules": ["imperative rule text, if any"]
 }
