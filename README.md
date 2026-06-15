@@ -25,7 +25,11 @@ Each channel card also carries a built-in **program guide (EPG)**: a now/next
 line shows what is on now and next, and an expand control reveals that channel's
 upcoming schedule — sourced from the Xtream short-EPG endpoint on the Xtream
 path and an XMLTV guide (matched per channel by `tvg-id`) on the M3U path,
-fetched best-effort through the same proxy.
+fetched best-effort through the same proxy. On any upcoming program — on the
+NOW/NEXT line or in the expanded schedule — a **Remind** toggle marks it; a
+lightweight timer then fires an in-app toast (with a one-click jump to that
+channel) plus a best-effort browser notification when the program is about to
+start, and your reminders persist across reloads.
 
 A built-in **demo mode** (enter `demo` as the portal URL) loads a curated
 playlist of publicly accessible HLS test streams — no real credentials required.
@@ -116,6 +120,17 @@ command.
   demo mode — and is in-memory and session-scoped (not persisted). A channel
   with no loaded guide shows neither the now/next line nor an expand control,
   so cards never break or gain empty placeholders.
+- **Program reminders** — a keyboard-focusable **Remind** toggle on each
+  upcoming program (the NOW/NEXT line's *next* entry and each future schedule
+  row) marks it; the toggle reflects its state with `aria-pressed` and is
+  cleared by pressing it again. Reminders persist in the browser
+  (`localStorage`), and a lightweight client timer checks them against program
+  start times: when one is due it fires an in-app toast — announced to assistive
+  tech, auto-dismissing, with a **Watch** action that jumps to and plays that
+  channel — plus a best-effort, permission-gated browser notification (requested
+  only on your first reminder, never on load). Everything degrades silently when
+  no guide is loaded, storage is unavailable, or notifications are
+  denied/unsupported.
 - **Channel sort** — a "Sort" control in the channel-grid toolbar orders the
   visible channels by number, name (A→Z or Z→A), or favourites-first; the
   choice persists across reloads (global, not per-account).
