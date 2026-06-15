@@ -194,4 +194,5 @@ proposal the orchestrator accepts.
 
 <!-- LEARNED-RULES:START -->
 - **R-0001** (FAIL-0001, E2): Before writing unit tests that assert DOM attribute mutations (`setAttribute` / `removeAttribute`), check the baseline HTML to confirm which attributes are actually present on the element — never assert that an attribute is added back if it was never in the source HTML.
+- **R-0002** (FAIL-0002, E22): When concluding a task as `status: done` on a passing validation, set its `attempts` front-matter to the actual attempt number — a clean first-attempt pass is `attempts: 1`, never `attempts: 0`. The actor making the terminal-success commit (validate-agent on PASS) must true up `attempts` so the task file matches reality before committing.
 <!-- LEARNED-RULES:END -->
