@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030, ADR-0034
+// ADR: ADR-0001, ADR-0003, ADR-0008, ADR-0013, ADR-0017, ADR-0019, ADR-0030, ADR-0034, ADR-0039
 /* global window, document, setInterval */
 
 'use strict';
@@ -76,6 +76,27 @@ function onTick() {
 }
 
 // ---------------------------------------------------------------------------
+// mkCtrls — initialise the in-player controls layer (ADR-0039,
+// specs/player-controls.md §3). Wires IptvCtrl to the resolved <video> and the
+// #player-card region with rndCtrls as the browser state-sync callback, applies
+// the persisted volume/mute preference (loadVol) to ST and the <video>
+// (video.volume / video.muted), then renders the controls chrome (feature-detect
+// hide + current state) before any connect flow. Guarded so a missing IptvCtrl /
+// IptvUi (test isolation) is a silent no-op.
+// ---------------------------------------------------------------------------
+function mkCtrls(vid) {
+  const ctrl = window.IptvCtrl;
+  if (!ctrl) return;
+  const card = document.getElementById('player-card');
+  ctrl.mkCtrl({ vid, card, rnd: window.IptvUi.rndCtrls });
+  const pref = window.IptvSt.loadVol();
+  window.IptvSt.setVol(pref.vol);
+  window.IptvSt.setMuted(pref.muted);
+  if (vid) { vid.volume = pref.vol; vid.muted = pref.muted; }
+  window.IptvUi.rndCtrls();
+}
+
+// ---------------------------------------------------------------------------
 // onReady — DOMContentLoaded entry; initialises all modules
 // ---------------------------------------------------------------------------
 function onReady() {
@@ -86,7 +107,14 @@ function onReady() {
   // Reflect the persisted theme on <html> and the toggle before any connect
   // flow (ADR-0019). Default 'dark' is a visual no-op (baseline = no attribute).
   window.IptvUi.rndTheme(window.IptvSt.loadTheme());
-  mkPlay(document.getElementById('player-video'));
+  const vid = document.getElementById('player-video');
+  mkPlay(vid);
+  // In-player controls layer (ADR-0039, specs/player-controls.md §3): init
+  // IptvCtrl over the resolved <video> / #player-card with rndCtrls as the
+  // browser state-sync callback, apply the persisted volume/mute preference
+  // (loadVol → ST + <video>), and render the controls chrome (feature-detect
+  // hide + state) before any connect flow. All guarded for test isolation.
+  mkCtrls(vid);
   regPhase(rndPhase);
   rndPhase();
   rndFoot();

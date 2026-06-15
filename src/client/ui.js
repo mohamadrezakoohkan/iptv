@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038
+// ADR: ADR-0001, ADR-0003, ADR-0004, ADR-0008, ADR-0010, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039
 /* global window, document, clearTimeout, setTimeout */
 
 'use strict';
@@ -33,6 +33,8 @@ const EL = {
   mm3u: null,   // #mode-m3u radio
   fchp: null,   // #fmt-chip contextual format chip button (ADR-0025)
   fdtl: null,   // #fmt-detail inline engine-detail text (ADR-0025)
+  fsb:  null,   // #fs-btn fullscreen toggle (ADR-0039)
+  pipb: null,   // #pip-btn picture-in-picture toggle (ADR-0039)
   apnl: null,   // #acct-panel aside (ADR-0014)
   abtn: null,   // #acct-btn nav button (ADR-0014)
   ascr: null,   // #acct-scrim backdrop (ADR-0014)
@@ -1253,6 +1255,8 @@ function mkEL() {
   EL.mm3u  = document.getElementById('mode-m3u');
   EL.fchp  = document.getElementById('fmt-chip');
   EL.fdtl  = document.getElementById('fmt-detail');
+  EL.fsb   = document.getElementById('fs-btn');
+  EL.pipb  = document.getElementById('pip-btn');
   EL.apnl  = document.getElementById('acct-panel');
   EL.abtn  = document.getElementById('acct-btn');
   EL.ascr  = document.getElementById('acct-scrim');
@@ -1273,6 +1277,8 @@ function mkEL() {
   EL.ctog  = document.getElementById('content-toggle');
   if (EL.thm)  EL.thm.addEventListener('click', onTheme);
   if (EL.fchp) EL.fchp.addEventListener('click', onFmtChip);
+  if (EL.fsb)  EL.fsb.addEventListener('click', onFsBtn);
+  if (EL.pipb) EL.pipb.addEventListener('click', onPipBtn);
   if (EL.srch) EL.srch.addEventListener('input', onSrch);
   if (EL.nav)  EL.nav.addEventListener('click', onCatClick);
   if (EL.list) EL.list.addEventListener('click', onGridClick);
@@ -2197,6 +2203,58 @@ function onFmtChip() {
 }
 
 // ---------------------------------------------------------------------------
+// setCtrl — pure presentational sync of one control button (ADR-0039,
+// specs/player-controls.md §1, §1a): hide it (hidden attribute → out of tab
+// order) when its capability is unsupported; otherwise show it and mutate its
+// aria-pressed VALUE only — never adding the attribute (it is present in the
+// index.html baseline as "false", Rule R-0001) — plus an is-on class mirroring
+// the pressed state for the accent treatment. opts: { el, ok, on }.
+// ---------------------------------------------------------------------------
+function setCtrl(opts) {
+  const el = opts.el;
+  if (!el) return;
+  if (!opts.ok) { el.hidden = true; return; }
+  el.hidden = false;
+  el.setAttribute('aria-pressed', opts.on ? 'true' : 'false');
+  el.classList.toggle('is-on', opts.on);
+}
+
+// ---------------------------------------------------------------------------
+// rndCtrls — render the in-player controls chrome (ADR-0039,
+// specs/player-controls.md §1, §1a, §2). Feature-detects each control via
+// IptvCtrl (hasFs / hasPip) and hides the unsupported one; for a supported
+// control it syncs aria-pressed + visual state from the ACTUAL browser state
+// (isFs / isPip), so a browser-initiated exit (Escape from fullscreen, closing
+// the PiP window) un-presses the button. Invoked at init and from the IptvCtrl
+// state-sync callback. Guarded to no-op when IptvCtrl is absent (test isolation).
+// ---------------------------------------------------------------------------
+function rndCtrls() {
+  const c = window.IptvCtrl;
+  if (!c) return;
+  setCtrl({ el: EL.fsb,  ok: c.hasFs(),  on: c.isFs() });
+  setCtrl({ el: EL.pipb, ok: c.hasPip(), on: c.isPip() });
+}
+
+// ---------------------------------------------------------------------------
+// onFsBtn — fullscreen toggle click (ADR-0039): delegate to IptvCtrl.toggleFs.
+// The button's pressed state follows the fullscreenchange event via rndCtrls
+// (the state-sync callback), never an optimistic flip here. Guarded no-op when
+// IptvCtrl is absent.
+// ---------------------------------------------------------------------------
+function onFsBtn() {
+  if (window.IptvCtrl) window.IptvCtrl.toggleFs();
+}
+
+// ---------------------------------------------------------------------------
+// onPipBtn — PiP toggle click (ADR-0039): delegate to IptvCtrl.togglePip. The
+// pressed state follows the enter/leave picture-in-picture events via rndCtrls,
+// never an optimistic flip here. Guarded no-op when IptvCtrl is absent.
+// ---------------------------------------------------------------------------
+function onPipBtn() {
+  if (window.IptvCtrl) window.IptvCtrl.togglePip();
+}
+
+// ---------------------------------------------------------------------------
 // rndPlayer — update player-card visibility and render both no-output states
 // from IptvEmpty.resolveSignal (ADR-0023, specs/empty-states.md §3). Idle ("NO
 // SIGNAL" + guidance, optional Connect) shows whenever not playing; the
@@ -2244,4 +2302,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, rndCtrls, onFsBtn, onPipBtn, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };

@@ -1,4 +1,4 @@
-/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038 */
+/* ADR: ADR-0001, ADR-0004, ADR-0005, ADR-0008, ADR-0014, ADR-0016, ADR-0017, ADR-0019, ADR-0022, ADR-0023, ADR-0024, ADR-0028, ADR-0031, ADR-0033, ADR-0034, ADR-0036, ADR-0038, ADR-0039 */
 /* IPTV Player — dark broadcast console */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -100,6 +100,21 @@ body { font-family: var(--font-ui); color: var(--tx); background: var(--bg); ove
 .fmt-chip[hidden] { display: none; }
 .fmt-detail { flex: none; font: 500 11px/1 var(--font-mono); color: var(--dim); white-space: nowrap; }
 .fmt-detail[hidden] { display: none; }
+
+/* ADR: ADR-0039 — in-player controls chrome (#fs-btn / #pip-btn): secondary
+   content-head controls sized via the ADR-0024 spacing tokens and coloured via
+   the ADR-0019 colour tokens, consistent with the format chip and theme toggle.
+   An accent treatment marks the pressed (aria-pressed="true") state; a `hidden`
+   control is removed from the layout (and the tab order); the focus ring is the
+   one global :focus-visible outline shared by every control (ADR-0024). */
+.ctrl-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--ln); border-radius: var(--r1); background: var(--sur2); color: var(--dim); cursor: pointer; }
+.ctrl-btn:hover { border-color: var(--dim); color: var(--tx); }
+.ctrl-btn[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); background: rgba(242,163,60,0.08); }
+.ctrl-btn[hidden] { display: none; }
+.ctrl-btn .ctrl-ico { width: 16px; height: 16px; }
+.ctrl-btn .ctrl-fs-off { display: none; }
+.ctrl-btn[aria-pressed="true"] .ctrl-fs-on { display: none; }
+.ctrl-btn[aria-pressed="true"] .ctrl-fs-off { display: inline-block; }
 
 /* Player */
 .player-wrap { flex: none; padding: var(--s6) var(--s6) 0; }

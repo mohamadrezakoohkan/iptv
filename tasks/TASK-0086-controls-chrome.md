@@ -2,8 +2,8 @@
 id: TASK-0086
 adr: ADR-0039
 evolution: 23
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0085]
 ---
 
@@ -64,5 +64,50 @@ preference is applied to the `<video>` at load.
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Files touched:
+
+- `src/index.html` — added `#fs-btn` and `#pip-btn` as real
+  `<button type="button">` elements in `.content-head` immediately after
+  `#fmt-detail` (alongside the format chip), each with an inline-SVG glyph, an
+  `aria-label`, and `aria-pressed="false"` **present in the baseline** (Rule
+  R-0001) under an `ADR: ADR-0039` HTML comment. `#fs-btn` carries two glyphs
+  (expand / contract) toggled purely by CSS on `aria-pressed`. Also added the
+  missing `<script src="/ctrl.js">` tag (TASK-0085 created the module but never
+  wired its include) before `ui.js`/`main.js`, so `window.IptvCtrl` exists at
+  runtime.
+- `src/client/ui.js` — `EL` gains `fsb` (`#fs-btn`) and `pipb` (`#pip-btn`),
+  set in `mkEL` with click listeners wired to new `onFsBtn` / `onPipBtn`
+  (which delegate to `IptvCtrl.toggleFs` / `togglePip`). New `rndCtrls()`
+  feature-detects (`hasFs` / `hasPip`) to hide an unsupported control via the
+  `hidden` attribute and syncs each visible button's `aria-pressed` **value
+  only** + an `is-on` class from the actual browser state (`isFs` / `isPip`),
+  via a small `setCtrl` helper. All three exported from `IptvUi`. Guarded to
+  no-op when `IptvCtrl` is absent (test isolation).
+- `src/client/main.js` — new `mkCtrls(vid)` in `onReady` (after `mkPlay`):
+  calls `IptvCtrl.mkCtrl({ vid, card, rnd: rndCtrls })`, applies the persisted
+  `loadVol()` preference to `ST` (`setVol`/`setMuted`) and the `<video>`
+  (`video.volume`/`video.muted`), then calls `rndCtrls()` before any connect
+  flow.
+- `src/client/app.css` — `.ctrl-btn` secondary content-head control styling
+  (ADR-0024 spacing tokens, ADR-0019 colour tokens), an accent treatment for
+  `[aria-pressed="true"]`, a `[hidden]` state, the fullscreen enter/exit glyph
+  swap, and reuse of the one global focus ring. `ADR: ADR-0039` CSS comment.
+
+Non-obvious:
+
+- `rndCtrls` reflects the **actual** browser fullscreen/PiP state (via
+  `IptvCtrl.isFs`/`isPip`), never an optimistic flip — `IptvCtrl`'s state-sync
+  callback (`mkCtrl`'s `rnd`) is `rndCtrls`, so a browser-initiated exit
+  (Escape from fullscreen, closing the PiP window) un-presses the button.
+- The content-head cluster orders its right-side controls via CSS `order`
+  (theme=2, log=1, acct=3); `#fs-btn`/`#pip-btn` have the default `order: 0`,
+  so they sit right after the format chip and before the theme/log/acct
+  cluster — exactly "alongside the format chip".
+- Keyboard shortcuts (`onPlayKey`) are TASK-0087, not part of this task.
+- UI state transitions are exercised in the Playwright test by overriding the
+  `IptvCtrl` predicates and re-running `rndCtrls` (the same render path the
+  browser state-change events drive), because headless Chromium cannot reliably
+  enter native fullscreen/PiP without a user gesture.
+
+ADR-0039 `governs:` already listed every file created here (seeded by
+spec-agent); no true-up needed.

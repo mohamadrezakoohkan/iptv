@@ -17,6 +17,7 @@ const __dir      = dirname(__filename);
 const CFG_SRC    = join(__dir, '../../client/cfg.js');
 const ST_SRC     = join(__dir, '../../client/st.js');
 const CTRL_SRC   = join(__dir, '../../client/ctrl.js');
+const UI_SRC     = join(__dir, '../../client/ui.js');
 
 // ---------------------------------------------------------------------------
 // mkVid — a fake <video> recording calls. paused/muted/volume are plain fields
@@ -486,5 +487,230 @@ describe('IptvCtrl — silent degrade when element/APIs absent', function () {
       win.IptvCtrl.volDn();
     } catch (e) { err = e; }
     expect(err).toBeNull();
+  });
+});
+
+// ===========================================================================
+// TASK-0086 — controls chrome wiring in src/client/ui.js: rndCtrls
+// (feature-detect hide + aria-pressed value sync) and the onFsBtn / onPipBtn
+// click handlers. ui.js is loaded into a fabricated window with the #fs-btn /
+// #pip-btn elements carrying their baseline aria-pressed="false" (Rule R-0001),
+// and IptvCtrl is MOCKED so feature support and current state are controllable.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// mkClassList — minimal classList with real state tracking (mirrors the other
+// ui unit tests' stub).
+// ---------------------------------------------------------------------------
+function mkClassList() {
+  const set = new Set();
+  return {
+    add:      function add(c)    { set.add(c); },
+    remove:   function remove(c) { set.delete(c); },
+    contains: function has(c)    { return set.has(c); },
+    toggle:   function toggle(c, on) {
+      const want = on === undefined ? !set.has(c) : on;
+      if (want) { set.add(c); } else { set.delete(c); }
+      return want;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// mkUiEl — element stub. `attrs` seeds the attributes PRESENT in the baseline
+// markup (e.g. aria-pressed="false"); `hidden` mirrors the boolean property the
+// render code reads/writes. setAttribute mutates the value only — it never
+// distinguishes "add" from "set", so a test asserts presence in the baseline
+// before relying on a value change (R-0001 discipline lives in the assertions).
+// ---------------------------------------------------------------------------
+function mkUiEl(attrs) {
+  const a = Object.assign({}, attrs);
+  return {
+    style:        { display: '' },
+    classList:    mkClassList(),
+    dataset:      {},
+    hidden:       false,
+    textContent:  '',
+    innerHTML:    '',
+    _listeners:   {},
+    _attrs:       a,
+    setAttribute: function setAttr(k, v) { a[k] = v; },
+    getAttribute: function getAttr(k)    { return Object.prototype.hasOwnProperty.call(a, k) ? a[k] : null; },
+    hasAttribute: function hasAttr(k)    { return Object.prototype.hasOwnProperty.call(a, k); },
+    addEventListener: function addL(type, fn) { this._listeners[type] = fn; },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// loadUi — execute client/ui.js in a synthetic window with the two control
+// buttons present (aria-pressed="false" baseline) and a MOCK IptvCtrl whose
+// hasFs / hasPip / isFs / isPip / toggleFs / togglePip are controllable. Returns
+// { ui, el, ctrl } so tests can drive rndCtrls / onFsBtn / onPipBtn and assert
+// the buttons' hidden + aria-pressed + is-on state, and the toggle call counts.
+// ---------------------------------------------------------------------------
+function loadUi(opts) {
+  const o = opts || {};
+  const elMap = {};
+  // #fs-btn and #pip-btn ship aria-pressed="false" in the index.html baseline
+  // (Rule R-0001) — seed it so render only mutates the value, never adds it.
+  elMap['fs-btn']  = mkUiEl({ 'aria-pressed': 'false' });
+  elMap['pip-btn'] = mkUiEl({ 'aria-pressed': 'false' });
+
+  const ctrl = {
+    calls: { toggleFs: 0, togglePip: 0 },
+    hasFs:  function hasFs()  { return 'hasFs'  in o ? o.hasFs  : true; },
+    hasPip: function hasPip() { return 'hasPip' in o ? o.hasPip : true; },
+    isFs:   function isFs()   { return 'isFs'   in o ? o.isFs   : false; },
+    isPip:  function isPip()  { return 'isPip'  in o ? o.isPip  : false; },
+    mkCtrl:    function mkCtrl() {},
+    toggleFs:  function toggleFs()  { ctrl.calls.toggleFs  += 1; },
+    togglePip: function togglePip() { ctrl.calls.togglePip += 1; },
+  };
+
+  const docListeners = {};
+  const win = {
+    IptvCtrl: o.noCtrl ? null : ctrl,
+    IptvSt:   { ST: { phase: 'INIT' }, loadVol: function loadVol() { return { vol: 1, muted: false }; } },
+    IptvSrch: { getChs: function getChs() { return []; } },
+    IptvEmpty: { resolveContent: function rc() { return { icon: 'list', title: '', body: '' }; } },
+    S: {},
+    IptvApi:  {},
+    IptvPlay: null,
+    document: {
+      getElementById: function getEl(id) { return elMap[id] || null; },
+      querySelector:  function qSel()    { return null; },
+      addEventListener: function addL(type, fn) { docListeners[type] = fn; },
+      body: { classList: mkClassList() },
+    },
+    clearTimeout: function cTout() {},
+    setTimeout:   function sTout(fn) { return fn; },
+  };
+
+  const src = readFileSync(UI_SRC, 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function('window', 'document', '"use strict";\n' + src)(win, win.document);
+  win.IptvUi.mkEL();
+  return { ui: win.IptvUi, el: elMap, ctrl };
+}
+
+// ---------------------------------------------------------------------------
+// mkEL wiring — the two control buttons get click listeners
+// ---------------------------------------------------------------------------
+describe('mkEL() — controls chrome wiring', function () {
+  it('wires a click listener on #fs-btn and #pip-btn', function () {
+    const { el } = loadUi();
+    expect(typeof el['fs-btn']._listeners.click).toBe('function');
+    expect(typeof el['pip-btn']._listeners.click).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rndCtrls — baseline: aria-pressed is PRESENT in source (R-0001 guard)
+// ---------------------------------------------------------------------------
+describe('rndCtrls() — aria-pressed baseline (R-0001)', function () {
+  it('both buttons carry aria-pressed in the seeded baseline before any render', function () {
+    const { el } = loadUi();
+    expect(el['fs-btn'].hasAttribute('aria-pressed')).toBe(true);
+    expect(el['pip-btn'].hasAttribute('aria-pressed')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rndCtrls — feature-detect hide
+// ---------------------------------------------------------------------------
+describe('rndCtrls() — feature-detect hide', function () {
+  it('hides #pip-btn when hasPip() is false, keeps #fs-btn visible', function () {
+    const { ui, el } = loadUi({ hasPip: false, hasFs: true });
+    ui.rndCtrls();
+    expect(el['pip-btn'].hidden).toBe(true);
+    expect(el['fs-btn'].hidden).toBe(false);
+  });
+
+  it('hides #fs-btn when hasFs() is false, keeps #pip-btn visible', function () {
+    const { ui, el } = loadUi({ hasFs: false, hasPip: true });
+    ui.rndCtrls();
+    expect(el['fs-btn'].hidden).toBe(true);
+    expect(el['pip-btn'].hidden).toBe(false);
+  });
+
+  it('shows both when both are supported', function () {
+    const { ui, el } = loadUi({ hasFs: true, hasPip: true });
+    ui.rndCtrls();
+    expect(el['fs-btn'].hidden).toBe(false);
+    expect(el['pip-btn'].hidden).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rndCtrls — aria-pressed value sync (mutates value only, never adds attribute)
+// ---------------------------------------------------------------------------
+describe('rndCtrls() — aria-pressed value follows browser state', function () {
+  it('sets aria-pressed "true" on #fs-btn when isFs() is true', function () {
+    const { ui, el } = loadUi({ isFs: true });
+    ui.rndCtrls();
+    expect(el['fs-btn'].getAttribute('aria-pressed')).toBe('true');
+    expect(el['fs-btn'].classList.contains('is-on')).toBe(true);
+  });
+
+  it('sets aria-pressed "false" on #fs-btn when isFs() is false (un-press)', function () {
+    const { ui, el } = loadUi({ isFs: false });
+    el['fs-btn'].setAttribute('aria-pressed', 'true');  // pretend it was pressed
+    ui.rndCtrls();
+    expect(el['fs-btn'].getAttribute('aria-pressed')).toBe('false');
+    expect(el['fs-btn'].classList.contains('is-on')).toBe(false);
+  });
+
+  it('sets aria-pressed "true" on #pip-btn when isPip() is true', function () {
+    const { ui, el } = loadUi({ isPip: true });
+    ui.rndCtrls();
+    expect(el['pip-btn'].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('never adds aria-pressed where it was not already present (value-only mutation)', function () {
+    const { ui, el } = loadUi({ isFs: true, isPip: true });
+    // both seeded with aria-pressed present; rndCtrls only changes the value
+    ui.rndCtrls();
+    expect(el['fs-btn'].hasAttribute('aria-pressed')).toBe(true);
+    expect(el['pip-btn'].hasAttribute('aria-pressed')).toBe(true);
+  });
+
+  it('does not throw when IptvCtrl is absent (test isolation)', function () {
+    const { ui, el } = loadUi({ noCtrl: true });
+    let err = null;
+    try { ui.rndCtrls(); } catch (e) { err = e; }
+    expect(err).toBeNull();
+    // a guarded no-op leaves the baseline aria-pressed untouched (not removed)
+    expect(el['fs-btn'].hasAttribute('aria-pressed')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFsBtn / onPipBtn — click handlers route to the right IptvCtrl toggle
+// ---------------------------------------------------------------------------
+describe('onFsBtn() / onPipBtn() — click routing', function () {
+  it('onFsBtn calls IptvCtrl.toggleFs (not togglePip)', function () {
+    const { ui, ctrl } = loadUi();
+    ui.onFsBtn();
+    expect(ctrl.calls.toggleFs).toBe(1);
+    expect(ctrl.calls.togglePip).toBe(0);
+  });
+
+  it('onPipBtn calls IptvCtrl.togglePip (not toggleFs)', function () {
+    const { ui, ctrl } = loadUi();
+    ui.onPipBtn();
+    expect(ctrl.calls.togglePip).toBe(1);
+    expect(ctrl.calls.toggleFs).toBe(0);
+  });
+
+  it('a click on the wired #fs-btn fires onFsBtn → toggleFs', function () {
+    const { el, ctrl } = loadUi();
+    el['fs-btn']._listeners.click();
+    expect(ctrl.calls.toggleFs).toBe(1);
+  });
+
+  it('a click on the wired #pip-btn fires onPipBtn → togglePip', function () {
+    const { el, ctrl } = loadUi();
+    el['pip-btn']._listeners.click();
+    expect(ctrl.calls.togglePip).toBe(1);
   });
 });
