@@ -2,8 +2,8 @@
 id: TASK-0077
 adr: ADR-0037
 evolution: 22
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: []
 ---
 
@@ -61,4 +61,42 @@ playback wiring yet.
 
 ## Implementation notes
 
-_Filled by implement-agent._
+**Files touched**
+
+- `src/client/vod.js` (new) — the VOD data layer. A flat-scope client module
+  mirroring `epg.js`/`errlog.js`/`rem.js`: a Map-backed in-memory store (`VOD`
+  with `movs: Vod[]`, `sers: Series[]`, `epis: Map<seriesId, Vod[]>`), pure
+  normalizers, and pure URL builders. Carries the `ADR: ADR-0037` comment.
+  - **Shared-scope collision avoidance (documented prior near-miss).** Every
+    top-level binding is uniquely prefixed (`VOD`, `VOD_EXT`, `vodGrp`,
+    `vodExt`, `vodMovUrl`, `vodEpiUrl`, `vodMkMov`, `vodGetMovs`, `vodMkSer`,
+    `vodGetSers`, `vodEpiName`, `vodMkEpi`, `vodSeasonKeys`, `vodGetEpis`,
+    `vodSetMovs`, `vodGetMovsStore`, `vodSetSers`, `vodGetSersStore`,
+    `vodSetEpis`, `vodGetEpisStore`, `vodHasMovs`, `vodHasSers`, `vodClear`) so
+    none collide with `epg.js`'s generic `set`/`get`/`has`/`clear`/`count` or
+    `rem.js`'s `rem*` bindings in the shared browser global scope.
+  - **Public API** `window.IptvVod`: normalizers `getMovs`/`getSers`/`getEpis`,
+    URL builders `movUrl`/`epiUrl`, store mutators/accessors
+    `setMovs`/`movies`, `setSers`/`series`, `setEpis(serId)`/`episodes(serId)`,
+    predicates `hasMovies()`/`hasSeries()`, and `clear()`.
+  - Normalizers take a `cmap` (a `category_id → category_name` Map, the same
+    shape `mkCatMap` in `api.js` produces) and resolve `grp` to that name, or
+    `"Uncategorized"` for an unknown id (mirrors `mkXtCh`). Extension is
+    preserved from `container_extension` when present, else the account live
+    extension (`ext` param), else `"ts"`. Episode `name` is
+    `"<series> · S<season>E<episode> <title>"` (title omitted when absent);
+    episodes flatten season→episode with seasons in ascending numeric order and
+    `cat` set to the season number so the grid filter matches a season header.
+  - All helpers are pure except the `vodSet*`/`vodClear` store mutators; nothing
+    reads/writes DOM, `ST`, or localStorage.
+- `src/index.html` — added `<script src="/vod.js"></script>` after `rem.js`,
+  before `play.js` (served by the existing `client/` static mount).
+- `src/tests/unit/vod.test.js` (new) — 24 unit tests (R-0001 honored: no DOM).
+
+**Traceability** — ADR-0037 `governs:` already listed `src/client/vod.js` and
+`src/tests/unit/vod.test.js` (spec-agent seeding); both now exist and carry the
+`ADR: ADR-0037` comment, so no `governs:` edit was needed.
+
+**Out of scope (untouched, per ADR split)** — `src/client/api.js` VOD fetch
+wiring, the demo movie synthesis, and `src/tests/int/vod.test.js` belong to
+TASK-0078; the toggle/cards/drill-down UX belongs to ADR-0038.
