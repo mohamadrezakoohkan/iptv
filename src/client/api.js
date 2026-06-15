@@ -1,4 +1,4 @@
-// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030
+// ADR: ADR-0001, ADR-0005, ADR-0008, ADR-0009, ADR-0020, ADR-0030, ADR-0035
 /* global window, fetch, AbortController, encodeURIComponent, clearTimeout, setTimeout, Promise, URL */
 
 (function runApi() {
@@ -61,13 +61,15 @@
    */
   function mkDemoCh(opts) {
     return {
-      id:  String(opts.cnt),
-      name: opts.name,
-      grp:  opts.grp,
-      url:  opts.cnt % 2 === 0 ? DEMO_SRC2 : DEMO_SRC1,
-      img:  '',
-      cat:  catSlug(opts.grp),
-      num:  opts.cnt,
+      id:      String(opts.cnt),
+      name:    opts.name,
+      grp:     opts.grp,
+      url:     opts.cnt % 2 === 0 ? DEMO_SRC2 : DEMO_SRC1,
+      img:     '',
+      cat:     catSlug(opts.grp),
+      num:     opts.cnt,
+      arch:    false,
+      archDur: 0,
     };
   }
 
@@ -199,18 +201,26 @@
     return m;
   }
 
+  /** Coerce a raw tv_archive_duration to a non-negative day count; 0 on missing/NaN. */
+  function getArchDur(raw) {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   /** Build a Ch object from one raw get_live_streams entry. opts: {raw, cmap, base, user, pass, ext} */
   function mkXtCh(opts) {
     const d = opts.raw;
     const cid = String(d.category_id ?? '');
     return {
-      id:   String(d.stream_id),
-      name: String(d.name ?? ''),
-      grp:  opts.cmap.has(cid) ? opts.cmap.get(cid) : 'Uncategorized',
-      url:  opts.base + '/live/' + opts.user + '/' + opts.pass + '/' + d.stream_id + '.' + opts.ext,
-      img:  typeof d.stream_icon === 'string' ? d.stream_icon : '',
-      cat:  cid,
-      num:  typeof d.num === 'number' ? d.num : 0,
+      id:      String(d.stream_id),
+      name:    String(d.name ?? ''),
+      grp:     opts.cmap.has(cid) ? opts.cmap.get(cid) : 'Uncategorized',
+      url:     opts.base + '/live/' + opts.user + '/' + opts.pass + '/' + d.stream_id + '.' + opts.ext,
+      img:     typeof d.stream_icon === 'string' ? d.stream_icon : '',
+      cat:     cid,
+      num:     typeof d.num === 'number' ? d.num : 0,
+      arch:    Boolean(d.tv_archive),
+      archDur: getArchDur(d.tv_archive_duration),
     };
   }
 
@@ -399,13 +409,15 @@
   function mkM3uCh(opts) {
     const seg = firstSeg(opts.grp);
     return {
-      id:   opts.tvgId || String(opts.num),
-      name: opts.tvgName || opts.chanName,
-      grp:  seg,
-      url:  opts.strUrl,
-      img:  opts.img,
-      cat:  seg,
-      num:  opts.num,
+      id:      opts.tvgId || String(opts.num),
+      name:    opts.tvgName || opts.chanName,
+      grp:     seg,
+      url:     opts.strUrl,
+      img:     opts.img,
+      cat:     seg,
+      num:     opts.num,
+      arch:    false,
+      archDur: 0,
     };
   }
 
