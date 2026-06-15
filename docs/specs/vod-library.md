@@ -133,6 +133,20 @@ content for that source).
   portal): a single `get_vod_streams` / `get_series` call each, and a single
   per-series `get_series_info` call when a series is opened. The proxy and the
   15 s `AbortController` timeout (`loadJson`) are reused unchanged.
+- **Single-connection gate (ADR-0041).** Like the EPG fan-out (`epg.md` §3), the
+  connect-time bulk VOD fan-out (`get_vod_categories`, `get_vod_streams`,
+  `get_series_categories`, `get_series`) is **gated on the portal's advertised
+  connection capacity** so it never starves live playback. The Xtream connect
+  Result carries `maxConns` (`Number(user_info.max_connections)`, coerced;
+  missing / `0` / unparseable = unknown). When `maxConns === 1` (single-connection
+  portal) the bulk VOD fan-out is **skipped entirely** — the VOD store stays
+  empty for that source and the Movies/Series tabs do not appear — so the single
+  allowed connection stays free for live playback. When `maxConns > 1` or unknown
+  (the conservative, non-regressing default) the bulk fan-out runs unchanged. The
+  on-demand per-series `get_series_info` (an explicit user action on drill-down,
+  §5b) is not part of the connect-time burst and is unaffected by the gate. The
+  demo path synthesizes its movie offline and the M3U path leaves the store empty
+  — neither issues a connect-time Xtream burst, so neither is gated.
 - The connect Result for the Xtream path is unchanged in shape; VOD data is
   exposed through a dedicated store/global (`window.IptvVod`) the UI reads at
   render time, exactly as the EPG store (`window.IptvEpg`) is read. M3U/demo

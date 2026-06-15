@@ -102,6 +102,19 @@ already loaded), through the same proxy, on whichever path matched:
   non-blocking**: a failed or empty EPG fetch never fails the connect and never
   blocks browsing — channels render immediately; now/next fills in as guides
   arrive.
+
+  **Single-connection gate (ADR-0041).** The bulk per-channel short-EPG fan-out
+  is **gated on the portal's advertised connection capacity** so it never starves
+  live playback. The connect Result for the Xtream path carries `maxConns`
+  (`Number(user_info.max_connections)` from the no-action `player_api.php`
+  payload, coerced to a non-negative integer; missing / `0` / unparseable =
+  unknown). When `maxConns === 1` (a single-connection portal) the bulk Xtream
+  EPG fan-out is **skipped entirely** — the single allowed connection stays free
+  for the live `.ts` stream, restoring the pre-E19 behavior. When `maxConns > 1`
+  or unknown (the conservative, non-regressing default) the bulk fan-out runs
+  unchanged. The trade-off is explicit: a single-connection source shows no
+  now/next line; never starving playback takes priority. The demo and M3U paths
+  issue no per-channel Xtream burst and are **never** gated.
 - **M3U path.** Fetch the XMLTV guide URL through the proxy (the iptv-org
   companion guide for the community presets, or a guide URL associated with the
   playlist), parse with `parsXmltv`, then `setAll(map)`. Channels are matched by
