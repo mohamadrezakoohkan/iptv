@@ -15,6 +15,7 @@ governs:
   - src/tests/unit/epgfetch.test.js
   - src/tests/ui/catchup.test.js
   - src/tests/ui/catchup-demo.test.js
+  - src/tests/ui/catchup-recording.test.js
 ---
 
 # ADR-0036 — Render a Replay affordance on past archive-capable schedule rows that builds the Xtream timeshift URL and reuses the existing select+play path
