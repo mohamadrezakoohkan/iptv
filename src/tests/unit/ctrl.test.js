@@ -557,20 +557,32 @@ function loadUi(opts) {
   elMap['pip-btn'] = mkUiEl({ 'aria-pressed': 'false' });
 
   const ctrl = {
-    calls: { toggleFs: 0, togglePip: 0 },
+    calls: { toggleFs: 0, togglePip: 0, togglePlay: 0, toggleMute: 0, volUp: 0, volDn: 0 },
     hasFs:  function hasFs()  { return 'hasFs'  in o ? o.hasFs  : true; },
     hasPip: function hasPip() { return 'hasPip' in o ? o.hasPip : true; },
     isFs:   function isFs()   { return 'isFs'   in o ? o.isFs   : false; },
     isPip:  function isPip()  { return 'isPip'  in o ? o.isPip  : false; },
-    mkCtrl:    function mkCtrl() {},
-    toggleFs:  function toggleFs()  { ctrl.calls.toggleFs  += 1; },
-    togglePip: function togglePip() { ctrl.calls.togglePip += 1; },
+    mkCtrl:     function mkCtrl() {},
+    toggleFs:   function toggleFs()   { ctrl.calls.toggleFs   += 1; },
+    togglePip:  function togglePip()  { ctrl.calls.togglePip  += 1; },
+    togglePlay: function togglePlay() { ctrl.calls.togglePlay += 1; },
+    toggleMute: function toggleMute() { ctrl.calls.toggleMute += 1; },
+    volUp:      function volUp()      { ctrl.calls.volUp      += 1; },
+    volDn:      function volDn()      { ctrl.calls.volDn      += 1; },
   };
+
+  // The account panel + log panel elements are present so mkEL registers the
+  // onAcctKey Escape handler too — the keydown tests assert onPlayKey never
+  // collides with it (an Escape keydown must NOT call any IptvCtrl action).
+  elMap['acct-panel']  = mkUiEl({});
+  elMap['acct-scrim']  = mkUiEl({});
+  elMap['acct-btn']    = mkUiEl({});
+  elMap['log-panel']   = mkUiEl({});
 
   const docListeners = {};
   const win = {
     IptvCtrl: o.noCtrl ? null : ctrl,
-    IptvSt:   { ST: { phase: 'INIT' }, loadVol: function loadVol() { return { vol: 1, muted: false }; } },
+    IptvSt:   { ST: { phase: 'phase' in o ? o.phase : 'INIT' }, loadVol: function loadVol() { return { vol: 1, muted: false }; } },
     IptvSrch: { getChs: function getChs() { return []; } },
     IptvEmpty: { resolveContent: function rc() { return { icon: 'list', title: '', body: '' }; } },
     S: {},
@@ -590,7 +602,23 @@ function loadUi(opts) {
   // eslint-disable-next-line no-new-func
   new Function('window', 'document', '"use strict";\n' + src)(win, win.document);
   win.IptvUi.mkEL();
-  return { ui: win.IptvUi, el: elMap, ctrl };
+  return { ui: win.IptvUi, el: elMap, ctrl, docListeners };
+}
+
+// ---------------------------------------------------------------------------
+// mkKeyEvt — a minimal keydown event: the `key`, an optional `target`, and a
+// preventDefault spy recording invocation. Mirrors the shape onPlayKey reads.
+// opts: { key, target }.
+// ---------------------------------------------------------------------------
+function mkKeyEvt(opts) {
+  const o = opts || {};
+  const evt = {
+    key: o.key,
+    target: 'target' in o ? o.target : null,
+    prevented: 0,
+    preventDefault: function preventDefault() { evt.prevented += 1; },
+  };
+  return evt;
 }
 
 // ---------------------------------------------------------------------------
@@ -712,5 +740,173 @@ describe('onFsBtn() / onPipBtn() — click routing', function () {
     const { el, ctrl } = loadUi();
     el['pip-btn']._listeners.click();
     expect(ctrl.calls.togglePip).toBe(1);
+  });
+});
+
+// ===========================================================================
+// TASK-0087 — keyboard shortcuts (onPlayKey) in src/client/ui.js. A SEPARATE
+// document keydown handler from onAcctKey, active ONLY while playing
+// (ST.phase === 'PLAY'), never on a typing target, never intercepting Escape.
+// ui.js is loaded with IptvCtrl MOCKED (the loadUi spies record each action
+// call) so each key's delegation, the phase / typing / Escape guards, and the
+// preventDefault-only-when-consumed contract are all observable.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// onPlayKey wiring — registered as its OWN document keydown listener, distinct
+// from onAcctKey (the two handlers do not merge — both are document keydowns).
+// ---------------------------------------------------------------------------
+describe('mkEL() — onPlayKey is a separate document keydown listener', function () {
+  it('exposes onPlayKey on the public API', function () {
+    const { ui } = loadUi();
+    expect(typeof ui.onPlayKey).toBe('function');
+  });
+
+  it('registers a keydown listener that is the onPlayKey handler', function () {
+    const { ui, docListeners } = loadUi();
+    expect(docListeners.keydown).toBe(ui.onPlayKey);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Key → IptvCtrl action mapping in PLAY, non-typing target
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — key map in PLAY (non-typing target)', function () {
+  const cases = [
+    { key: 'f',         act: 'toggleFs' },
+    { key: 'F',         act: 'toggleFs' },
+    { key: 'p',         act: 'togglePip' },
+    { key: 'P',         act: 'togglePip' },
+    { key: ' ',         act: 'togglePlay' },
+    { key: 'k',         act: 'togglePlay' },
+    { key: 'K',         act: 'togglePlay' },
+    { key: 'm',         act: 'toggleMute' },
+    { key: 'M',         act: 'toggleMute' },
+    { key: 'ArrowUp',   act: 'volUp' },
+    { key: 'ArrowDown', act: 'volDn' },
+  ];
+  cases.forEach(function chk(c) {
+    it('maps ' + JSON.stringify(c.key) + ' → IptvCtrl.' + c.act, function () {
+      const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+      ui.onPlayKey(mkKeyEvt({ key: c.key, target: { tagName: 'BODY' } }));
+      expect(ctrl.calls[c.act]).toBe(1);
+    });
+  });
+
+  it('an unhandled key (e.g. "a") fires no IptvCtrl action and no preventDefault', function () {
+    const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+    const evt = mkKeyEvt({ key: 'a', target: { tagName: 'BODY' } });
+    ui.onPlayKey(evt);
+    const total = ctrl.calls.toggleFs + ctrl.calls.togglePip + ctrl.calls.togglePlay
+      + ctrl.calls.toggleMute + ctrl.calls.volUp + ctrl.calls.volDn;
+    expect(total).toBe(0);
+    expect(evt.prevented).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Active only in PLAY — every non-PLAY phase is a full no-op (no action, no
+// preventDefault), so the keystroke passes through untouched.
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — active only while playing (ST.phase === PLAY)', function () {
+  ['INIT', 'LOAD', 'READY', 'SRCH', 'ERR'].forEach(function chk(ph) {
+    it('does nothing in phase ' + ph + ' (no action, no preventDefault)', function () {
+      const { ui, ctrl } = loadUi({ phase: ph });
+      const evt = mkKeyEvt({ key: 'm', target: { tagName: 'BODY' } });
+      ui.onPlayKey(evt);
+      expect(ctrl.calls.toggleMute).toBe(0);
+      expect(evt.prevented).toBe(0);
+    });
+  });
+
+  it('Space does not preventDefault when not playing (page scroll preserved)', function () {
+    const { ui, ctrl } = loadUi({ phase: 'READY' });
+    const evt = mkKeyEvt({ key: ' ', target: { tagName: 'BODY' } });
+    ui.onPlayKey(evt);
+    expect(ctrl.calls.togglePlay).toBe(0);
+    expect(evt.prevented).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Typing-context guard — never hijack input / textarea / select /
+// contenteditable, even in PLAY.
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — never fires on a typing target', function () {
+  ['INPUT', 'TEXTAREA', 'SELECT'].forEach(function chk(tag) {
+    it('ignores a ' + tag + ' target (search / login typing not hijacked)', function () {
+      const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+      const evt = mkKeyEvt({ key: 'm', target: { tagName: tag } });
+      ui.onPlayKey(evt);
+      expect(ctrl.calls.toggleMute).toBe(0);
+      expect(evt.prevented).toBe(0);
+    });
+  });
+
+  it('ignores a contenteditable target', function () {
+    const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+    const evt = mkKeyEvt({ key: 'k', target: { tagName: 'DIV', isContentEditable: true } });
+    ui.onPlayKey(evt);
+    expect(ctrl.calls.togglePlay).toBe(0);
+    expect(evt.prevented).toBe(0);
+  });
+
+  it('fires on a non-typing DIV target (e.g. focused player region)', function () {
+    const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+    const evt = mkKeyEvt({ key: 'k', target: { tagName: 'DIV', isContentEditable: false } });
+    ui.onPlayKey(evt);
+    expect(ctrl.calls.togglePlay).toBe(1);
+    expect(evt.prevented).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// preventDefault discipline — only for a CONSUMED key (in PLAY, non-typing)
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — preventDefault only when consumed', function () {
+  [' ', 'ArrowUp', 'ArrowDown'].forEach(function chk(key) {
+    it('preventDefaults ' + JSON.stringify(key) + ' when consumed in PLAY', function () {
+      const { ui } = loadUi({ phase: 'PLAY' });
+      const evt = mkKeyEvt({ key, target: { tagName: 'BODY' } });
+      ui.onPlayKey(evt);
+      expect(evt.prevented).toBe(1);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Escape collision-safety — onPlayKey NEVER handles Escape; the onAcctKey
+// Escape panel-close behavior stays the sole Escape owner.
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — never intercepts Escape (collision-safe)', function () {
+  it('Escape in PLAY fires no IptvCtrl action and no preventDefault', function () {
+    const { ui, ctrl } = loadUi({ phase: 'PLAY' });
+    const evt = mkKeyEvt({ key: 'Escape', target: { tagName: 'BODY' } });
+    ui.onPlayKey(evt);
+    const total = ctrl.calls.toggleFs + ctrl.calls.togglePip + ctrl.calls.togglePlay
+      + ctrl.calls.toggleMute + ctrl.calls.volUp + ctrl.calls.volDn;
+    expect(total).toBe(0);
+    expect(evt.prevented).toBe(0);
+  });
+
+  it('onAcctKey still closes an open account panel on Escape (unchanged)', function () {
+    const { ui, el } = loadUi({ phase: 'PLAY' });
+    el['acct-panel'].classList.add('is-open');
+    ui.onAcctKey({ key: 'Escape' });
+    expect(el['acct-panel'].classList.contains('is-open')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test isolation — a missing IptvCtrl is a safe no-op even in PLAY
+// ---------------------------------------------------------------------------
+describe('onPlayKey() — guarded no-op when IptvCtrl is absent', function () {
+  it('does not throw and does not preventDefault when IptvCtrl is null', function () {
+    const { ui } = loadUi({ phase: 'PLAY', noCtrl: true });
+    const evt = mkKeyEvt({ key: 'm', target: { tagName: 'BODY' } });
+    let err = null;
+    try { ui.onPlayKey(evt); } catch (e) { err = e; }
+    expect(err).toBeNull();
+    expect(evt.prevented).toBe(0);
   });
 });

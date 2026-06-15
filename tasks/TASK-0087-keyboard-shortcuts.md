@@ -2,8 +2,8 @@
 id: TASK-0087
 adr: ADR-0039
 evolution: 23
-status: pending
-attempts: 0
+status: done
+attempts: 1
 depends_on: [TASK-0086]
 ---
 
@@ -55,5 +55,36 @@ when the event target is a typing context, and never intercepting `Escape`
 
 ## Implementation notes
 
-_Filled by implement-agent: files touched, anything non-obvious for reviewers
-or future tasks._
+Implemented entirely in `src/client/ui.js` (already governed by ADR-0039, no new
+files — `governs:` unchanged):
+
+- **`onPlayKey(evt)`** — the new, SEPARATE document `keydown` handler. Returns
+  immediately (no `preventDefault`) unless `window.IptvSt.ST.phase === 'PLAY'`,
+  unless the target is a typing context, when `IptvCtrl` is absent (test
+  isolation), or when the key is unmapped. Only on a consumed key does it call
+  `evt.preventDefault()` and then the mapped `IptvCtrl` action — so page scroll
+  (Space) and caret/scroll movement (Arrows) are unaffected elsewhere.
+- **`getPlayAct(evt)`** — pure key→action map: `f/F`→`toggleFs`, `p/P`→`togglePip`,
+  `Space (' '/'Spacebar')`/`k/K`→`togglePlay`, `m/M`→`toggleMute`,
+  `ArrowUp`→`volUp`, `ArrowDown`→`volDn`. `Escape` is deliberately NOT mapped,
+  so the existing `onAcctKey` panel-close (ADR-0014/0028) remains the sole
+  Escape owner. Letter keys are matched case-insensitively (Shift/CapsLock).
+- **`isTyping(tgt)`** — pure predicate: `INPUT`/`TEXTAREA`/`SELECT` or
+  `isContentEditable`.
+- **Wiring:** `mkEL` adds an unconditional `document.addEventListener('keydown',
+  onPlayKey)` — a second, independent document keydown listener registered
+  alongside (never merged into) the `onAcctKey` registration. `onPlayKey` is
+  exported on `window.IptvUi`.
+
+Non-obvious for reviewers/future tasks:
+- The unconditional `document.addEventListener('keydown', onPlayKey)` in `mkEL`
+  required three pre-existing unit harnesses (`foot.test.js`, `m3u-ui.test.js`,
+  `persist.test.js`) to gain an `addEventListener` stub on their fabricated
+  `document` — they previously never reached a `document.addEventListener` call
+  because the only prior one (`onAcctKey`) was guarded by panel presence those
+  harnesses omitted. This is a harness-completeness fix, not a test-logic change.
+- Tests: `src/tests/unit/ctrl.test.js` extended (the `loadUi` mock gained
+  `togglePlay`/`toggleMute`/`volUp`/`volDn` spies, a `phase` opt, the account/log
+  panel elements so `onAcctKey` registers, and now returns `docListeners`); a
+  `mkKeyEvt` helper simulates keydown. `src/tests/ui/keys.test.js` (new) drives
+  the real `onPlayKey` in demo PLAY via `page.keyboard`.

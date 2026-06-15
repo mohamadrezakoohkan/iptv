@@ -896,6 +896,63 @@ function onAcctKey(evt) {
 }
 
 // ---------------------------------------------------------------------------
+// isTyping — pure predicate: the keydown target is a typing context (a text
+// INPUT / TEXTAREA / SELECT or any contenteditable element), so the player
+// shortcuts must NOT hijack search / login typing (ADR-0039,
+// specs/player-controls.md §2c). Reads the event target's tagName /
+// isContentEditable; a null/undefined target is treated as non-typing.
+// ---------------------------------------------------------------------------
+function isTyping(tgt) {
+  if (!tgt) return false;
+  const tag = tgt.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return tgt.isContentEditable === true;
+}
+
+// ---------------------------------------------------------------------------
+// getPlayAct — pure: map a keydown event's key to the IptvCtrl action name it
+// triggers, or '' for an unhandled key (ADR-0039, specs/player-controls.md
+// §2c). F→toggleFs, P→togglePip, Space/K→togglePlay, M→toggleMute,
+// ArrowUp→volUp, ArrowDown→volDn. Escape is deliberately NOT mapped — it stays
+// with onAcctKey (ADR-0014/ADR-0028). Letter keys are matched case-insensitively
+// (evt.key is 'f'/'F' depending on Shift/CapsLock); Space matches both ' ' and
+// the named 'Spacebar' some engines emit.
+// ---------------------------------------------------------------------------
+function getPlayAct(evt) {
+  const k = evt.key;
+  if (k === ' ' || k === 'Spacebar' || k === 'k' || k === 'K') return 'togglePlay';
+  if (k === 'f' || k === 'F') return 'toggleFs';
+  if (k === 'p' || k === 'P') return 'togglePip';
+  if (k === 'm' || k === 'M') return 'toggleMute';
+  if (k === 'ArrowUp') return 'volUp';
+  if (k === 'ArrowDown') return 'volDn';
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// onPlayKey — the player keyboard-shortcut handler (ADR-0039,
+// specs/player-controls.md §2c). A SEPARATE document keydown listener from
+// onAcctKey (the two concerns never merge), active ONLY while a stream is
+// playing (IptvSt.ST.phase === 'PLAY'). It returns immediately — with no
+// preventDefault — when not in PLAY, when the target is a typing context
+// (search / login fields), when IptvCtrl is absent (test isolation), or when
+// the key is not one it consumes. It NEVER handles Escape (getPlayAct never
+// maps it), so the existing onAcctKey panel-close behavior is untouched.
+// preventDefault is called ONLY for a consumed key (so Space does not scroll
+// the page and the Arrows do not move the caret / scroll), never otherwise.
+// ---------------------------------------------------------------------------
+function onPlayKey(evt) {
+  if (window.IptvSt.ST.phase !== 'PLAY') return;
+  if (isTyping(evt.target)) return;
+  const c = window.IptvCtrl;
+  if (!c) return;
+  const act = getPlayAct(evt);
+  if (!act) return;
+  evt.preventDefault();
+  c[act]();
+}
+
+// ---------------------------------------------------------------------------
 // setLog — set log panel open/closed presentational state (ADR-0028). No ST
 // phase, no boolean flag (CONVENTIONS §6): the is-open class on panel + scrim
 // plus the aria attributes are the single source of truth (mirrors setAcct).
@@ -1294,6 +1351,7 @@ function mkEL() {
   if (EL.acls) EL.acls.addEventListener('click', onAcctClose);
   if (EL.ascr) EL.ascr.addEventListener('click', onAcctClose);
   if (EL.apnl || EL.lpnl) document.addEventListener('keydown', onAcctKey);
+  document.addEventListener('keydown', onPlayKey);
   if (EL.alst) EL.alst.addEventListener('click', onAcctList);
   if (EL.apst) EL.apst.addEventListener('click', onPstList);
   if (EL.aadd) EL.aadd.addEventListener('click', onAcctAdd);
@@ -2302,4 +2360,4 @@ function rndPhase() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, rndCtrls, onFsBtn, onPipBtn, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };
+window.IptvUi = { mkEL, mkCard, mkSched, mkSort, toggleFav, toggleSched, toggleRem, fireRem, goRemWatch, goReplay, rndSide, rndGrid, rndSort, onSort, rndHead, rndFoot, rndPhase, rndPlayer, rndMode, rndChip, onFmtChip, rndCtrls, onFsBtn, onPipBtn, onPlayKey, getMode, onAcctBtn, onAcctClose, onAcctKey, goSwitch, onAcctRm, rndAcct, onAcctList, onAcctAdd, mkPst, rndPsts, onPstList, rndTheme, onTheme, setLog, onLogBtn, onLogClose, onLogClear, rndLog, goEpg, rndGuide, getCMode, setCMode, resetMode, goMode, onToggle, mkToggle, rndToggle, rndVod, goVod, rndMode2, getModeItems, getModeCats, onCatClick, onSrch, fireSrch, onGridClick, mkSerCard, mkEpiRow, mkDrill, rndSerList, rndDrill, goSerOpen, goSerBack, groupBySeason, getSerName, getVodItem, goPlay };
